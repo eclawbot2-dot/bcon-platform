@@ -48,7 +48,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   // Membership check: user must belong to the project's tenant.
   const membership = await prisma.membership.findFirst({
-    where: { userId: session.userId, entity: { tenantId: project.tenantId } },
+    where: { userId: session.userId, tenantId: project.tenantId },
     select: { id: true },
   });
   if (!membership && !session.superAdmin) {
