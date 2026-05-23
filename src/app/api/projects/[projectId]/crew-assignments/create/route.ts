@@ -5,8 +5,8 @@ import { requireEditor } from "@/lib/permissions";
 import { recordAudit } from "@/lib/audit";
 import { publicRedirect } from "@/lib/redirect";
 
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const { id: projectId } = await ctx.params;
+export async function POST(req: Request, ctx: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await ctx.params;
   const tenant = await requireTenant();
   const actor = await requireEditor(tenant.id);
 
@@ -19,15 +19,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!crewName || !assignedDateRaw) {
     return NextResponse.json({ error: "crewName and assignedDate required" }, { status: 400 });
   }
-  // Schema defaults costCode to "" so the unique index is well-defined.
-  // Empty string here means "not assigned to any cost code"; storing ""
-  // (rather than null) keeps Postgres + SQLite unique-index semantics
-  // consistent because both providers treat null as distinct in unique
-  // constraints.
   const costCode = form.get("costCode") ? String(form.get("costCode")) : "";
 
-  // Upsert prevents duplicates when the same crew is rebooked for the same
-  // day/cost-code combo (the @@unique on the schema).
   const ca = await prisma.crewAssignment.upsert({
     where: {
       projectId_assignedDate_crewName_costCode: {

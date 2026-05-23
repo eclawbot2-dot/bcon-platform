@@ -456,8 +456,8 @@ async function main() {
 
   // Additional tenants — one Simple-first (residential remodel focused), one Heavy Civil-first (infrastructure).
   await seedExtraTenant({
-    name: "Brownstone Custom Homes",
-    slug: "brownstone",
+    name: "Velocity Demo Co.",
+    slug: "velocity-demo",
     primaryMode: ProjectMode.SIMPLE,
     enabledModes: [ProjectMode.SIMPLE, ProjectMode.VERTICAL],
     brandingTheme: "charcoal-teal",

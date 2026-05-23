@@ -7,11 +7,11 @@ import { publicRedirect } from "@/lib/redirect";
 
 const ORDER: ProjectStage[] = [ProjectStage.PRECONSTRUCTION, ProjectStage.ACTIVE, ProjectStage.CLOSEOUT, ProjectStage.WARRANTY];
 
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params;
+export async function POST(req: Request, ctx: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await ctx.params;
   const tenant = await requireTenant();
   const actor = await requireManager(tenant.id);
-  const project = await prisma.project.findFirst({ where: { id, tenantId: tenant.id } });
+  const project = await prisma.project.findFirst({ where: { id: projectId, tenantId: tenant.id } });
   if (!project) return NextResponse.json({ error: "project not found" }, { status: 404 });
 
   const form = await req.formData();
@@ -21,7 +21,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   await prisma.project.update({ where: { id: project.id }, data: { stage: next } });
 
-  // On CLOSEOUT → auto-spawn closeout punch items if none exist.
   if (next === ProjectStage.CLOSEOUT) {
     const existing = await prisma.punchItem.count({ where: { projectId: project.id } });
     if (existing < 3) {
@@ -38,7 +37,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
-  // On WARRANTY → ensure at least one warranty placeholder exists and open-warranty alert gets generated.
   if (next === ProjectStage.WARRANTY) {
     const open = await prisma.warrantyItem.count({ where: { projectId: project.id } });
     if (open === 0) {

@@ -153,7 +153,7 @@ These are real product gaps the customer will hit. Plan around them:
 - [ ] (Optional but recommended) Demote `admin@construction.local` from
       super-admin if you have a different super-admin user; the seeded
       one is meant for dev-only.
-- [ ] Confirm the demo tenants (`brownstone`, `palmetto-civil`) are
+- [ ] Confirm the demo tenants (`velocity-demo`, `palmetto-civil`) are
       either deleted or clearly marked as demos so the customer doesn't
       wander into them. Default tenant cookie falls back to the first
       tenant alphabetically — set the customer's slug as default by
