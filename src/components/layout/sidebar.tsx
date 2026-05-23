@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, Bot, Briefcase, Building2, BriefcaseBusiness, ClipboardList, Coins, Crown, FileStack, Gauge, Gavel, HardHat, LayoutDashboard, Mail, Search, ShieldAlert, ShieldCheck, Timer, Truck, Upload, Users } from "lucide-react";
+import { Bell, Bot, Briefcase, Building2, BriefcaseBusiness, CalendarDays, ClipboardCheck, ClipboardList, Coins, Crown, FileStack, Gauge, Gavel, HardHat, LayoutDashboard, Mail, Search, ShieldAlert, ShieldCheck, Timer, Truck, Upload, Users } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getTenantContext } from "@/lib/dashboard";
@@ -26,6 +26,8 @@ const navGroups: NavGroup[] = [
       { href: "/operations", label: "Operations", icon: HardHat },
       { href: "/safety", label: "Safety", icon: ShieldAlert },
       { href: "/permits", label: "Permits", icon: ShieldCheck },
+      { href: "/inspections", label: "Inspections", icon: ClipboardCheck },
+      { href: "/inspections/calendar", label: "Inspection calendar", icon: CalendarDays },
       { href: "/workflows", label: "Workflows", icon: ClipboardList },
     ],
   },

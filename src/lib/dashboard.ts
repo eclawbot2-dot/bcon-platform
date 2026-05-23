@@ -12,7 +12,7 @@ export type TenantContext = Awaited<ReturnType<typeof getTenantContext>>;
  * dozens of joins per request when the page itself doesn't need projects.
  */
 export async function getTenantContext() {
-  const slug = await currentTenantSlug();
+  const slug = (await currentTenantSlug()) ?? process.env.DEFAULT_TENANT_SLUG ?? null;
   const tenant = await prisma.tenant.findFirst({
     where: slug ? { slug } : undefined,
     orderBy: { createdAt: "asc" },
@@ -52,7 +52,7 @@ function parseJsonObject<T>(value: string | null | undefined, fallback: T): T {
 }
 
 export async function getDashboardData() {
-  const slug = await currentTenantSlug();
+  const slug = (await currentTenantSlug()) ?? process.env.DEFAULT_TENANT_SLUG ?? null;
   const tenant = await prisma.tenant.findFirst({
     where: slug ? { slug } : undefined,
     orderBy: { createdAt: "asc" },

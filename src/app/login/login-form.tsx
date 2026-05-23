@@ -33,9 +33,9 @@ export function LoginForm({
     });
   }
 
-  function fillDemo(demoEmail: string) {
+  function fillDemo(demoEmail: string, demoPassword: string = "demo1234") {
     setEmail(demoEmail);
-    setPassword("demo1234");
+    setPassword(demoPassword);
   }
 
   return (
@@ -77,7 +77,7 @@ export function LoginForm({
       </button>
 
       <div className="login-demo-buttons">
-        <button type="button" className="btn-outline" onClick={() => fillDemo("admin@construction.local")} disabled={isPending}>
+        <button type="button" className="btn-outline" onClick={() => fillDemo("trey@velocitychs.com", "hadleymaris")} disabled={isPending}>
           Use admin demo
         </button>
         <button type="button" className="btn-outline" onClick={() => fillDemo("pm@construction.local")} disabled={isPending}>

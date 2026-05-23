@@ -111,9 +111,10 @@ async function main() {
   await prisma.tenant.deleteMany();
 
   const password = await bcrypt.hash("demo1234", 10);
+  const adminPassword = await bcrypt.hash("hadleymaris", 10);
 
   const [admin, exec, pm, superintendent] = await Promise.all([
-    prisma.user.create({ data: { name: "Morgan Admin", email: "admin@construction.local", password, superAdmin: true } }),
+    prisma.user.create({ data: { name: "Trey", email: "trey@velocitychs.com", password: adminPassword, superAdmin: true } }),
     prisma.user.create({ data: { name: "Elena Executive", email: "exec@construction.local", password } }),
     prisma.user.create({ data: { name: "Paula PM", email: "pm@construction.local", password } }),
     prisma.user.create({ data: { name: "Sam Superintendent", email: "super@construction.local", password } }),
@@ -504,6 +505,45 @@ async function main() {
   const { upsertPortalCatalog } = await import("./portal-catalog");
   const { created, updated } = await upsertPortalCatalog(prisma);
   console.log(`portal catalog: ${created} created, ${updated} updated`);
+
+  // Seed Charleston-area municipal inspection portal catalog. Idempotent
+  // upsert by slug. Adapter routing in /lib/jurisdictions/registry.ts
+  // keys off these slugs.
+  const { CHARLESTON_PORTAL_CATALOG } = await import("../src/lib/jurisdictions/registry");
+  let portalsCreated = 0;
+  let portalsUpdated = 0;
+  for (const p of CHARLESTON_PORTAL_CATALOG) {
+    const existing = await prisma.jurisdictionPortal.findUnique({ where: { slug: p.slug } });
+    if (existing) {
+      await prisma.jurisdictionPortal.update({ where: { slug: p.slug }, data: p });
+      portalsUpdated += 1;
+    } else {
+      await prisma.jurisdictionPortal.create({ data: p });
+      portalsCreated += 1;
+    }
+  }
+  console.log(`jurisdiction portal catalog: ${portalsCreated} created, ${portalsUpdated} updated`);
+
+  // Demo: give Velocity Demo Co. account stubs for every Charleston-area
+  // portal so the cron run + UI have something to show out of the box.
+  // Credentials are intentionally left null (NO_CREDS branch) — they get
+  // populated through /settings/jurisdictions in the live app.
+  const velocityTenant = await prisma.tenant.findUnique({ where: { slug: "velocity-demo" } });
+  if (velocityTenant) {
+    const portals = await prisma.jurisdictionPortal.findMany();
+    for (const portal of portals) {
+      await prisma.tenantJurisdictionAccount.upsert({
+        where: { tenantId_portalId: { tenantId: velocityTenant.id, portalId: portal.id } },
+        update: {},
+        create: {
+          tenantId: velocityTenant.id,
+          portalId: portal.id,
+          active: true,
+          accountLabel: "demo (no credentials configured)",
+        },
+      });
+    }
+  }
 }
 
 type ExtraTenantSpec = {

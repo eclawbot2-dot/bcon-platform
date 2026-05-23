@@ -36,6 +36,11 @@ export async function getCurrentTenant() {
       const t = await prisma.tenant.findUnique({ where: { slug } });
       if (t) return t;
     }
+    const defaultSlug = process.env.DEFAULT_TENANT_SLUG;
+    if (defaultSlug) {
+      const t = await prisma.tenant.findUnique({ where: { slug: defaultSlug } });
+      if (t) return t;
+    }
     return prisma.tenant.findFirst({ orderBy: { createdAt: "asc" } });
   }
 

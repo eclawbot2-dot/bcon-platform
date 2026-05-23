@@ -36,12 +36,12 @@ export default async function LoginPage({
         <LoginForm callbackUrl={callbackUrl} initialError={errorMessage} />
         {process.env.NODE_ENV !== "production" ? (
           <footer>
-            <p>Demo accounts (password: <code>demo1234</code>)</p>
+            <p>Demo accounts</p>
             <ul>
-              <li>admin@construction.local</li>
-              <li>exec@construction.local</li>
-              <li>pm@construction.local</li>
-              <li>super@construction.local</li>
+              <li>trey@velocitychs.com (super-admin, password <code>hadleymaris</code>)</li>
+              <li>exec@construction.local (password <code>demo1234</code>)</li>
+              <li>pm@construction.local (password <code>demo1234</code>)</li>
+              <li>super@construction.local (password <code>demo1234</code>)</li>
             </ul>
             <p style={{ marginTop: "0.75rem", fontSize: "0.625rem", opacity: 0.5 }}>Hidden in production builds.</p>
           </footer>

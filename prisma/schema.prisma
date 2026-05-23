@@ -465,6 +465,11 @@ model Tenant {
   companyBonds              CompanyBond[]
   companyCertifications     CompanyCertification[]
   companySafetyMetrics      CompanySafetyMetric[]
+  // Municipal-inspection portal integration (Charleston-area cities/
+  // counties). One credential row per (tenant, portal). Sync runs are
+  // logged per cron invocation.
+  jurisdictionAccounts      TenantJurisdictionAccount[]
+  inspectionSyncRuns        InspectionSyncRun[]
 }
 
 model BusinessUnit {
@@ -4611,4 +4616,92 @@ model ProjectComplianceLink {
   @@index([companyInsuranceId])
   @@index([companyBondId])
   @@index([companyCertificationId])
+}
+
+/// Global catalog of city/county permit portals we can scrape inspections
+/// from. Seeded with Charleston-area jurisdictions; new portals are added
+/// here (not per-tenant). Adapter code is keyed off `adapter`.
+model JurisdictionPortal {
+  id           String                       @id @default(cuid())
+  /// Stable machine key — referenced by adapter code (e.g. "charleston-city",
+  /// "charleston-county", "berkeley-county", "mt-pleasant",
+  /// "north-charleston", "dorchester-county").
+  slug         String                       @unique
+  /// Human name shown in the UI ("City of Charleston, SC").
+  name         String
+  city         String?
+  county       String?
+  state        String                       @default("SC")
+  /// Public landing page (helpful for ops). Login URL is on the adapter.
+  baseUrl      String?
+  /// Adapter key — chooses which scraper module runs at sync time.
+  /// Same as `slug` today, but kept separate so two portals could share
+  /// one adapter (e.g. both Mt Pleasant and Dorchester run on Tyler
+  /// EnerGov). Allowed values are whitelisted in the adapter registry.
+  adapter      String
+  /// Free-form notes about the platform ("Tyler EnerGov", "Accela ACA",
+  /// "CitizenServe"). Informational only.
+  platformNote String?
+  active       Boolean                      @default(true)
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+
+  accounts TenantJurisdictionAccount[]
+  syncRuns InspectionSyncRun[]
+}
+
+/// Per-tenant credentials + sync config for a single portal. Credentials
+/// are encrypted at rest with `BCON_VAULT_KEY` using the same AES-256-GCM
+/// helper used for RFP source secrets.
+model TenantJurisdictionAccount {
+  id            String             @id @default(cuid())
+  tenantId      String
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  portalId      String
+  portal        JurisdictionPortal @relation(fields: [portalId], references: [id], onDelete: Cascade)
+  /// Public account identifier — typically a contractor license # or
+  /// portal username. Safe to display in the UI.
+  accountLabel  String?
+  /// Encrypted username + password blob. Decrypted only inside the
+  /// adapter at sync time. Null means "creds not yet provided — adapter
+  /// runs in stub/demo mode."
+  usernameEnc   String?
+  passwordEnc   String?
+  active        Boolean            @default(true)
+  /// Last successful sync watermark. Adapters can use this to fetch
+  /// only inspections updated/scheduled since then.
+  lastSyncedAt  DateTime?
+  lastSyncOk    Boolean?
+  lastSyncNote  String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@unique([tenantId, portalId])
+  @@index([tenantId])
+}
+
+/// Log of every inspection-sync cron run for audit + ops dashboards.
+/// One row per (tenant, portal) per run; the cron writes a single row
+/// after the adapter completes (or fails).
+model InspectionSyncRun {
+  id                  String             @id @default(cuid())
+  tenantId            String
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  portalId            String
+  portal              JurisdictionPortal @relation(fields: [portalId], references: [id], onDelete: Cascade)
+  startedAt           DateTime           @default(now())
+  finishedAt          DateTime?
+  status              String             @default("RUNNING") // RUNNING | OK | PARTIAL | ERROR | NO_CREDS
+  inspectionsFetched  Int                @default(0)
+  inspectionsCreated  Int                @default(0)
+  inspectionsUpdated  Int                @default(0)
+  alertsCreated       Int                @default(0)
+  errorMessage        String?
+  /// JSON array of per-record warnings (e.g. "permit not matched").
+  warningsJson        String             @default("[]")
+  /// Wall-clock duration in ms; helpful for spotting slow scrapers.
+  durationMs          Int?
+
+  @@index([tenantId, startedAt])
+  @@index([portalId, startedAt])
 }

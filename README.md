@@ -224,12 +224,10 @@ Tenant operations:
 
 ## Demo login users
 
-All seeded users use password `demo1234`:
-
-- `admin@construction.local` — Morgan Admin (super-admin, can switch tenants and access `/admin/*`)
-- `exec@construction.local` — Elena Executive
-- `pm@construction.local` — Paula PM
-- `super@construction.local` — Sam Superintendent
+- `trey@velocitychs.com` — Trey (super-admin, can switch tenants and access `/admin/*`) — password `hadleymaris`
+- `exec@construction.local` — Elena Executive — password `demo1234`
+- `pm@construction.local` — Paula PM — password `demo1234`
+- `super@construction.local` — Sam Superintendent — password `demo1234`
 
 ## Important files
 
