@@ -10,14 +10,14 @@ Set-Location $root
 $node = 'C:\Program Files\nodejs\node.exe'
 $npm = 'C:\Program Files\nodejs\npm.cmd'
 $cloudflared = 'C:\Program Files (x86)\cloudflared\cloudflared.exe'
-$tunnelConfig = 'C:\Windows\system32\config\systemprofile\.cloudflared\config.yml'
-$tunnelId = '961777bf-69af-4a40-aabc-60f5dc6d36e6'
-$publicUrl = 'https://bcon.jahdev.com'
+$tunnelTokenFile = Join-Path $root '.tunnel-token'
+$tunnelId = 'debe5119-05cc-4c58-83cb-4bbdf065fe8e'
+$publicUrl = 'https://bcon.velocitychs.com'
 $localPort = 3101
 
 if (-not (Test-Path $node)) { throw "Node not found at $node" }
 if (-not (Test-Path $cloudflared)) { throw "cloudflared not found at $cloudflared" }
-if (-not (Test-Path $tunnelConfig)) { throw "Tunnel config not found at $tunnelConfig" }
+if (-not (Test-Path $tunnelTokenFile)) { throw "Tunnel token not found at $tunnelTokenFile" }
 
 Write-Host 'Installing dependencies if needed...'
 & $npm install --no-audit --no-fund
@@ -87,7 +87,8 @@ if ($RestartTunnel) {
 
   Start-Sleep -Seconds 2
 
-  Start-Process -FilePath $cloudflared -ArgumentList 'tunnel','--config',$tunnelConfig,'run',$tunnelId -WindowStyle Hidden | Out-Null
+  $tunnelToken = (Get-Content -Raw -Path $tunnelTokenFile).Trim()
+  Start-Process -FilePath $cloudflared -ArgumentList 'tunnel','run','--token',$tunnelToken -WindowStyle Hidden | Out-Null
   Start-Sleep -Seconds 5
 }
 

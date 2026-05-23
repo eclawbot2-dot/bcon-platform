@@ -2,6 +2,7 @@ node_modules/
 .next/
 tsconfig.tsbuildinfo
 uploads/
+.tunnel-token
 .env
 .env.local
 .env.*.local

@@ -1,21 +1,9 @@
 /**
- * GET /api/projects/[id]/burndown
+ * GET /api/projects/[projectId]/burndown
  *
  * Project financial burndown snapshot. Combines budget, billings,
  * and progress into one response so the project dashboard widget
  * doesn't have to compute it client-side from 3 separate fetches.
- *
- * Returns:
- *   - contractValue            (from Project.contractValue)
- *   - originalBudget           (sum of Budget.originalValue)
- *   - currentBudget            (sum of Budget.currentValue — incl. change orders)
- *   - forecastFinal            (sum of Budget.forecastFinal, fallback to current)
- *   - totalBilled              (sum of PayApplicationLine.totalCompleted)
- *   - retainageHeld            (sum of PayApplicationLine.retainage)
- *   - balanceToFinish          (sum of PayApplicationLine.balanceToFinish)
- *   - percentBilled            (totalBilled / currentBudget)
- *   - progressPct              (from Project.progressPct, manually reported)
- *   - varianceForecastVsCurrent
  *
  * Tenant-scoped via auth().userId membership; 404 on cross-tenant
  * to avoid leaking that the project exists.
@@ -26,13 +14,13 @@ import { prisma } from "@/lib/prisma";
 import { toNum, sumMoney } from "@/lib/money";
 import { noStore } from "@/lib/http-cache";
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   const session = await auth();
   if (!session?.userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const { id } = await params;
+  const { projectId } = await params;
 
   const project = await prisma.project.findUnique({
-    where: { id },
+    where: { id: projectId },
     select: {
       id: true,
       tenantId: true,
@@ -46,7 +34,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   });
   if (!project) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  // Membership check: user must belong to the project's tenant.
   const membership = await prisma.membership.findFirst({
     where: { userId: session.userId, tenantId: project.tenantId },
     select: { id: true },
@@ -57,11 +44,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const [budgets, payAppLines] = await Promise.all([
     prisma.budget.findMany({
-      where: { projectId: id },
+      where: { projectId },
       select: { originalValue: true, currentValue: true, forecastFinal: true },
     }),
     prisma.payApplicationLine.findMany({
-      where: { payApplication: { projectId: id } },
+      where: { payApplication: { projectId } },
       select: {
         scheduledValue: true,
         totalCompleted: true,
