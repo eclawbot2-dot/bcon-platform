@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatTile } from "@/components/ui/stat-tile";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { sumMoney } from "@/lib/money";
+import { sumMoney, toNum } from "@/lib/money";
 
 export default async function SubInvoicesPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -34,40 +35,44 @@ export default async function SubInvoicesPage({ params }: { params: Promise<{ pr
         </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Vendor</th>
-                  <th className="table-header">Invoice #</th>
-                  <th className="table-header">Amount</th>
-                  <th className="table-header">Retainage</th>
-                  <th className="table-header">Net due</th>
-                  <th className="table-header">Invoiced</th>
-                  <th className="table-header">Due</th>
-                  <th className="table-header">Waiver</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.subInvoices.map((i) => (
-                  <tr key={i.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell">
-                      <div className="font-medium text-white">{i.vendor.name}</div>
-                      <div className="text-xs text-slate-500">{i.description}</div>
-                    </td>
-                    <td className="table-cell font-mono text-xs"><Link href={`/projects/${project.id}/sub-invoices/${i.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{i.invoiceNumber}</Link></td>
-                    <td className="table-cell">{formatCurrency(i.amount)}</td>
-                    <td className="table-cell">{formatCurrency(i.retainageHeld)}</td>
-                    <td className="table-cell">{formatCurrency(i.netDue)}</td>
-                    <td className="table-cell text-slate-400">{formatDate(i.invoiceDate)}</td>
-                    <td className="table-cell text-slate-400">{formatDate(i.dueDate)}</td>
-                    <td className="table-cell">{i.waiverReceived ? <StatusBadge tone="good" label="Received" /> : <StatusBadge tone="warn" label="Pending" />}</td>
-                    <td className="table-cell"><StatusBadge status={i.status} /></td>
-                  </tr>
-                ))}
-                {project.subInvoices.length === 0 ? <tr><td colSpan={9} className="table-cell text-center text-slate-500">No sub invoices.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No sub invoices."
+              columns={[
+                { header: "Vendor" },
+                { header: "Invoice #" },
+                { header: "Amount" },
+                { header: "Retainage" },
+                { header: "Net due" },
+                { header: "Invoiced" },
+                { header: "Due" },
+                { header: "Waiver" },
+                { header: "Status" },
+              ]}
+              rows={project.subInvoices.map((i) => ({
+                key: i.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  {
+                    sort: i.vendor.name,
+                    node: (
+                      <>
+                        <div className="font-medium text-white">{i.vendor.name}</div>
+                        <div className="text-xs text-slate-500">{i.description}</div>
+                      </>
+                    ),
+                  },
+                  { sort: i.invoiceNumber, node: <Link href={`/projects/${project.id}/sub-invoices/${i.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{i.invoiceNumber}</Link>, tdClassName: "font-mono text-xs" },
+                  { sort: toNum(i.amount), node: formatCurrency(i.amount) },
+                  { sort: toNum(i.retainageHeld), node: formatCurrency(i.retainageHeld) },
+                  { sort: toNum(i.netDue), node: formatCurrency(i.netDue) },
+                  { sort: i.invoiceDate ? new Date(i.invoiceDate).getTime() : null, node: formatDate(i.invoiceDate), tdClassName: "text-slate-400" },
+                  { sort: i.dueDate ? new Date(i.dueDate).getTime() : null, node: formatDate(i.dueDate), tdClassName: "text-slate-400" },
+                  { sort: i.waiverReceived ? 1 : 0, node: i.waiverReceived ? <StatusBadge tone="good" label="Received" /> : <StatusBadge tone="warn" label="Pending" /> },
+                  { sort: i.status, node: <StatusBadge status={i.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

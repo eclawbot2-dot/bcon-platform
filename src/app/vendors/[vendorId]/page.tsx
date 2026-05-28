@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import { DetailShell, DetailGrid, DetailField } from "@/components/layout/detail-shell";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { sumMoney } from "@/lib/money";
+import { sumMoney, toNum } from "@/lib/money";
 
 export default async function VendorDetailPage({ params }: { params: Promise<{ vendorId: string }> }) {
   const { vendorId } = await params;
@@ -75,130 +76,124 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ v
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Insurance certificates</div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Type</th>
-                <th className="table-header">Carrier</th>
-                <th className="table-header">Policy #</th>
-                <th className="table-header">Limits</th>
-                <th className="table-header">Effective</th>
-                <th className="table-header">Expires</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {vendor.insuranceCerts.map((c) => {
-                const expiring = new Date(c.expirationDate).getTime() - Date.now() < 60 * 24 * 3600 * 1000;
-                const expired = new Date(c.expirationDate) < new Date();
-                return (
-                  <tr key={c.id}>
-                    <td className="table-cell">{c.type.replaceAll("_", " ")}</td>
-                    <td className="table-cell text-slate-400">{c.carrier}</td>
-                    <td className="table-cell font-mono text-xs">{c.policyNumber}</td>
-                    <td className="table-cell">{formatCurrency(c.limitEach)} / {formatCurrency(c.limitAggregate)}</td>
-                    <td className="table-cell text-slate-400">{formatDate(c.effectiveDate)}</td>
-                    <td className="table-cell">
+          <SortableTable
+            emptyMessage="No certificates on file."
+            columns={[
+              { header: "Type" },
+              { header: "Carrier" },
+              { header: "Policy #" },
+              { header: "Limits" },
+              { header: "Effective" },
+              { header: "Expires" },
+            ]}
+            rows={vendor.insuranceCerts.map((c) => {
+              const expiring = new Date(c.expirationDate).getTime() - Date.now() < 60 * 24 * 3600 * 1000;
+              const expired = new Date(c.expirationDate) < new Date();
+              return {
+                key: c.id,
+                cells: [
+                  { sort: c.type, node: c.type.replaceAll("_", " ") },
+                  { sort: c.carrier, node: c.carrier, tdClassName: "text-slate-400" },
+                  { sort: c.policyNumber, node: c.policyNumber, tdClassName: "font-mono text-xs" },
+                  { sort: toNum(c.limitEach), node: `${formatCurrency(c.limitEach)} / ${formatCurrency(c.limitAggregate)}` },
+                  { sort: new Date(c.effectiveDate).getTime(), node: formatDate(c.effectiveDate), tdClassName: "text-slate-400" },
+                  {
+                    sort: new Date(c.expirationDate).getTime(),
+                    node: (
                       <span className={expired ? "text-rose-300" : expiring ? "text-amber-300" : "text-slate-400"}>
                         {formatDate(c.expirationDate)}
                       </span>
-                    </td>
-                  </tr>
-                );
-              })}
-              {vendor.insuranceCerts.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500">No certificates on file.</td></tr> : null}
-            </tbody>
-          </table>
+                    ),
+                  },
+                ],
+              };
+            })}
+          />
         </div>
       </section>
 
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Bid history</div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Project</th>
-                <th className="table-header">Package</th>
-                <th className="table-header">Amount</th>
-                <th className="table-header">Days</th>
-                <th className="table-header">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {vendor.subBids.map((b) => (
-                <tr key={b.id} className="transition hover:bg-white/5">
-                  <td className="table-cell"><Link href={`/projects/${b.bidPackage.project.id}/bids`} className="text-cyan-300 hover:underline">{b.bidPackage.project.code}</Link></td>
-                  <td className="table-cell">{b.bidPackage.name}</td>
-                  <td className="table-cell">{formatCurrency(b.bidAmount)}</td>
-                  <td className="table-cell text-slate-400">{b.daysToComplete ? `${b.daysToComplete}d` : "—"}</td>
-                  <td className="table-cell"><StatusBadge status={b.status} /></td>
-                </tr>
-              ))}
-              {vendor.subBids.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-slate-500">No bid history.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No bid history."
+            columns={[
+              { header: "Project" },
+              { header: "Package" },
+              { header: "Amount" },
+              { header: "Days" },
+              { header: "Status" },
+            ]}
+            rows={vendor.subBids.map((b) => ({
+              key: b.id,
+              className: "transition hover:bg-white/5",
+              cells: [
+                { sort: b.bidPackage.project.code, node: <Link href={`/projects/${b.bidPackage.project.id}/bids`} className="text-cyan-300 hover:underline">{b.bidPackage.project.code}</Link> },
+                { sort: b.bidPackage.name, node: b.bidPackage.name },
+                { sort: toNum(b.bidAmount), node: formatCurrency(b.bidAmount) },
+                { sort: b.daysToComplete ?? undefined, node: b.daysToComplete ? `${b.daysToComplete}d` : "—", tdClassName: "text-slate-400" },
+                { sort: b.status, node: <StatusBadge status={b.status} /> },
+              ],
+            }))}
+          />
         </div>
       </section>
 
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Invoices</div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Project</th>
-                <th className="table-header">Invoice #</th>
-                <th className="table-header">Amount</th>
-                <th className="table-header">Net due</th>
-                <th className="table-header">Invoiced</th>
-                <th className="table-header">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {vendor.subInvoices.map((i) => (
-                <tr key={i.id} className="transition hover:bg-white/5">
-                  <td className="table-cell"><Link href={`/projects/${i.project.id}/sub-invoices`} className="text-cyan-300 hover:underline">{i.project.code}</Link></td>
-                  <td className="table-cell font-mono text-xs">{i.invoiceNumber}</td>
-                  <td className="table-cell">{formatCurrency(i.amount)}</td>
-                  <td className="table-cell">{formatCurrency(i.netDue)}</td>
-                  <td className="table-cell text-slate-400">{formatDate(i.invoiceDate)}</td>
-                  <td className="table-cell"><StatusBadge status={i.status} /></td>
-                </tr>
-              ))}
-              {vendor.subInvoices.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500">No invoices.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No invoices."
+            columns={[
+              { header: "Project" },
+              { header: "Invoice #" },
+              { header: "Amount" },
+              { header: "Net due" },
+              { header: "Invoiced" },
+              { header: "Status" },
+            ]}
+            rows={vendor.subInvoices.map((i) => ({
+              key: i.id,
+              className: "transition hover:bg-white/5",
+              cells: [
+                { sort: i.project.code, node: <Link href={`/projects/${i.project.id}/sub-invoices`} className="text-cyan-300 hover:underline">{i.project.code}</Link> },
+                { sort: i.invoiceNumber, node: i.invoiceNumber, tdClassName: "font-mono text-xs" },
+                { sort: toNum(i.amount), node: formatCurrency(i.amount) },
+                { sort: toNum(i.netDue), node: formatCurrency(i.netDue) },
+                { sort: i.invoiceDate ? new Date(i.invoiceDate).getTime() : undefined, node: formatDate(i.invoiceDate), tdClassName: "text-slate-400" },
+                { sort: i.status, node: <StatusBadge status={i.status} /> },
+              ],
+            }))}
+          />
         </div>
       </section>
 
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Purchase orders</div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Project</th>
-                <th className="table-header">PO #</th>
-                <th className="table-header">Description</th>
-                <th className="table-header">Amount</th>
-                <th className="table-header">Invoiced</th>
-                <th className="table-header">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {vendor.purchaseOrders.map((p) => (
-                <tr key={p.id} className="transition hover:bg-white/5">
-                  <td className="table-cell"><Link href={`/projects/${p.project.id}/purchase-orders`} className="text-cyan-300 hover:underline">{p.project.code}</Link></td>
-                  <td className="table-cell font-mono text-xs">{p.poNumber}</td>
-                  <td className="table-cell">{p.description}</td>
-                  <td className="table-cell">{formatCurrency(p.amount)}</td>
-                  <td className="table-cell">{formatCurrency(p.invoicedToDate)}</td>
-                  <td className="table-cell"><StatusBadge status={p.status} /></td>
-                </tr>
-              ))}
-              {vendor.purchaseOrders.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500">No POs.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No POs."
+            columns={[
+              { header: "Project" },
+              { header: "PO #" },
+              { header: "Description" },
+              { header: "Amount" },
+              { header: "Invoiced" },
+              { header: "Status" },
+            ]}
+            rows={vendor.purchaseOrders.map((p) => ({
+              key: p.id,
+              className: "transition hover:bg-white/5",
+              cells: [
+                { sort: p.project.code, node: <Link href={`/projects/${p.project.id}/purchase-orders`} className="text-cyan-300 hover:underline">{p.project.code}</Link> },
+                { sort: p.poNumber, node: p.poNumber, tdClassName: "font-mono text-xs" },
+                { sort: p.description, node: p.description },
+                { sort: toNum(p.amount), node: formatCurrency(p.amount) },
+                { sort: toNum(p.invoicedToDate), node: formatCurrency(p.invoicedToDate) },
+                { sort: p.status, node: <StatusBadge status={p.status} /> },
+              ],
+            }))}
+          />
         </div>
       </section>
     </DetailShell>

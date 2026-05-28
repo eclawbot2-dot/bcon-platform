@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { DetailShell, DetailField, DetailGrid } from "@/components/layout/detail-shell";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -78,47 +79,49 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Parsed rows (first 500)</div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10 text-sm">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">#</th>
-                <th className="table-header">Raw</th>
-                <th className="table-header">Extracted</th>
-                <th className="table-header">Confidence</th>
-                <th className="table-header">Issues</th>
-                <th className="table-header">Accepted</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {imp.rows.map((r) => {
-                let issues: string[] = [];
-                try { issues = JSON.parse(r.issuesJson); } catch { issues = []; }
-                let data: string[] = [];
-                try { data = JSON.parse(r.dataJson); } catch { data = []; }
-                let extracted: Record<string, unknown> = {};
-                try { extracted = JSON.parse(r.extractedJson); } catch { extracted = {}; }
-                return (
-                  <tr key={r.id}>
-                    <td className="table-cell font-mono text-xs text-slate-500">{r.rowIndex + 1}</td>
-                    <td className="table-cell max-w-[260px]"><span className="text-xs text-slate-400">{data.slice(0, 6).join(" · ")}</span></td>
-                    <td className="table-cell max-w-[260px]">
+          <SortableTable
+            emptyMessage="No rows parsed."
+            columns={[
+              { header: "#" },
+              { header: "Raw" },
+              { header: "Extracted" },
+              { header: "Confidence" },
+              { header: "Issues" },
+              { header: "Accepted" },
+            ]}
+            rows={imp.rows.map((r) => {
+              let issues: string[] = [];
+              try { issues = JSON.parse(r.issuesJson); } catch { issues = []; }
+              let data: string[] = [];
+              try { data = JSON.parse(r.dataJson); } catch { data = []; }
+              let extracted: Record<string, unknown> = {};
+              try { extracted = JSON.parse(r.extractedJson); } catch { extracted = {}; }
+              return {
+                key: r.id,
+                cells: [
+                  { sort: r.rowIndex + 1, node: r.rowIndex + 1, tdClassName: "font-mono text-xs text-slate-500" },
+                  { sort: data.slice(0, 6).join(" · "), node: <span className="text-xs text-slate-400">{data.slice(0, 6).join(" · ")}</span>, tdClassName: "max-w-[260px]" },
+                  {
+                    sort: Object.entries(extracted).slice(0, 4).map(([k, v]) => `${k}:${String(v ?? "")}`).join(" "),
+                    node: (
                       <div className="grid gap-1 text-xs">
                         {Object.entries(extracted).slice(0, 4).map(([k, v]) => (<div key={k}><span className="text-slate-500">{k}:</span> {String(v ?? "—")}</div>))}
                       </div>
-                    </td>
-                    <td className="table-cell">{r.confidence}%</td>
-                    <td className="table-cell">
-                      {issues.length === 0 ? <span className="text-emerald-300">clean</span> : (
-                        <ul className="text-xs text-rose-200">{issues.map((i, k) => <li key={k}>{i}</li>)}</ul>
-                      )}
-                    </td>
-                    <td className="table-cell">{r.accepted ? <StatusBadge tone="good" label="Imported" /> : <StatusBadge tone="warn" label="Pending" />}</td>
-                  </tr>
-                );
-              })}
-              {imp.rows.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500">No rows parsed.</td></tr> : null}
-            </tbody>
-          </table>
+                    ),
+                    tdClassName: "max-w-[260px]",
+                  },
+                  { sort: r.confidence, node: `${r.confidence}%` },
+                  {
+                    sort: issues.length,
+                    node: issues.length === 0 ? <span className="text-emerald-300">clean</span> : (
+                      <ul className="text-xs text-rose-200">{issues.map((i, k) => <li key={k}>{i}</li>)}</ul>
+                    ),
+                  },
+                  { sort: r.accepted ? "Imported" : "Pending", node: r.accepted ? <StatusBadge tone="good" label="Imported" /> : <StatusBadge tone="warn" label="Pending" /> },
+                ],
+              };
+            })}
+          />
         </div>
       </section>
     </DetailShell>

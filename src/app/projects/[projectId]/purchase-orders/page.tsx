@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatTile } from "@/components/ui/stat-tile";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { sumMoney, subtractMoney } from "@/lib/money";
+import { sumMoney, subtractMoney, toNum } from "@/lib/money";
 
 export default async function PurchaseOrdersPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -32,35 +33,34 @@ export default async function PurchaseOrdersPage({ params }: { params: Promise<{
         </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">PO #</th>
-                  <th className="table-header">Vendor</th>
-                  <th className="table-header">Description</th>
-                  <th className="table-header">Amount</th>
-                  <th className="table-header">Invoiced</th>
-                  <th className="table-header">Remaining</th>
-                  <th className="table-header">Expected</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.purchaseOrders.map((p) => (
-                  <tr key={p.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell font-mono text-xs"><Link href={`/projects/${project.id}/purchase-orders/${p.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{p.poNumber}</Link></td>
-                    <td className="table-cell">{p.vendor.name}</td>
-                    <td className="table-cell">{p.description}</td>
-                    <td className="table-cell">{formatCurrency(p.amount)}</td>
-                    <td className="table-cell">{formatCurrency(p.invoicedToDate)}</td>
-                    <td className="table-cell">{formatCurrency(subtractMoney(p.amount, p.invoicedToDate))}</td>
-                    <td className="table-cell text-slate-400">{formatDate(p.expectedDelivery)}</td>
-                    <td className="table-cell"><StatusBadge status={p.status} /></td>
-                  </tr>
-                ))}
-                {project.purchaseOrders.length === 0 ? <tr><td colSpan={8} className="table-cell text-center text-slate-500">No purchase orders.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No purchase orders."
+              columns={[
+                { header: "PO #" },
+                { header: "Vendor" },
+                { header: "Description" },
+                { header: "Amount" },
+                { header: "Invoiced" },
+                { header: "Remaining" },
+                { header: "Expected" },
+                { header: "Status" },
+              ]}
+              rows={project.purchaseOrders.map((p) => ({
+                key: p.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  { sort: p.poNumber, node: <Link href={`/projects/${project.id}/purchase-orders/${p.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{p.poNumber}</Link>, tdClassName: "font-mono text-xs" },
+                  { sort: p.vendor.name, node: p.vendor.name },
+                  { sort: p.description, node: p.description },
+                  { sort: toNum(p.amount), node: formatCurrency(p.amount) },
+                  { sort: toNum(p.invoicedToDate), node: formatCurrency(p.invoicedToDate) },
+                  { sort: subtractMoney(p.amount, p.invoicedToDate), node: formatCurrency(subtractMoney(p.amount, p.invoicedToDate)) },
+                  { sort: p.expectedDelivery ? new Date(p.expectedDelivery).getTime() : null, node: formatDate(p.expectedDelivery), tdClassName: "text-slate-400" },
+                  { sort: p.status, node: <StatusBadge status={p.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

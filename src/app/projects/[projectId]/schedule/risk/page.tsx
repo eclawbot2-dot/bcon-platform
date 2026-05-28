@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { DetailShell } from "@/components/layout/detail-shell";
+import { SortableTable } from "@/components/SortableTable";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
@@ -29,27 +30,24 @@ export default async function ScheduleRiskPage({ params }: { params: Promise<{ p
         <StatTile label="Tasks flagged" value={flags.length} />
       </section>
       <section className="card p-0 overflow-hidden">
-        <table className="min-w-full divide-y divide-white/10 text-sm">
-          <thead className="bg-white/5">
-            <tr>
-              <th className="table-header">Task</th>
-              <th className="table-header">Risk</th>
-              <th className="table-header">Predicted slip (days)</th>
-              <th className="table-header">Why</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/10 bg-slate-950/40">
-            {flags.map((f, i) => (
-              <tr key={i}>
-                <td className="table-cell">{f.taskTitle}</td>
-                <td className="table-cell"><StatusBadge status={f.risk} /></td>
-                <td className="table-cell">{f.daysSlipPredicted}</td>
-                <td className="table-cell text-xs text-slate-400">{f.reason}</td>
-              </tr>
-            ))}
-            {flags.length === 0 ? <tr><td colSpan={4} className="table-cell text-center text-slate-500">No tasks at risk — schedule trending on baseline.</td></tr> : null}
-          </tbody>
-        </table>
+        <SortableTable
+          emptyMessage="No tasks at risk — schedule trending on baseline."
+          columns={[
+            { header: "Task" },
+            { header: "Risk" },
+            { header: "Predicted slip (days)" },
+            { header: "Why" },
+          ]}
+          rows={flags.map((f, i) => ({
+            key: String(i),
+            cells: [
+              { sort: f.taskTitle, node: f.taskTitle },
+              { sort: f.risk, node: <StatusBadge status={f.risk} /> },
+              { sort: f.daysSlipPredicted, node: f.daysSlipPredicted },
+              { sort: f.reason, node: f.reason, tdClassName: "text-xs text-slate-400" },
+            ],
+          }))}
+        />
       </section>
       <Link href={`/projects/${projectId}/schedule`} className="btn-outline text-xs">← back</Link>
     </DetailShell>

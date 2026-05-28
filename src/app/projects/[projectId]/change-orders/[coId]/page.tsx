@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { DetailShell, DetailGrid, DetailField } from "@/components/layout/detail-shell";
+import { SortableTable } from "@/components/SortableTable";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ApprovalSection, ActivityTrail } from "@/components/approval-section";
@@ -110,30 +111,32 @@ export default async function ChangeOrderDetailPage({ params }: { params: Promis
           ))}
         </div>
         <div className="mt-6 overflow-hidden rounded-2xl border border-white/10">
+          <SortableTable
+            emptyMessage="No line items."
+            columns={[
+              { header: "Cost code" },
+              { header: "Description" },
+              { header: "Category" },
+              { header: "Qty" },
+              { header: "Unit" },
+              { header: "Unit cost" },
+              { header: "Amount" },
+            ]}
+            rows={co.lines.map((l) => ({
+              key: l.id,
+              cells: [
+                { sort: l.costCode ?? "", node: l.costCode ?? "—", tdClassName: "font-mono text-xs text-slate-400" },
+                { sort: l.description, node: l.description },
+                { sort: l.category, node: l.category },
+                { sort: l.quantity, node: l.quantity },
+                { sort: l.unit ?? "", node: l.unit ?? "—", tdClassName: "text-slate-400" },
+                { sort: toNum(l.unitCost), node: formatCurrency(l.unitCost) },
+                { sort: toNum(l.amount), node: formatCurrency(l.amount), tdClassName: "font-medium text-white" },
+              ],
+            }))}
+          />
           <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Cost code</th>
-                <th className="table-header">Description</th>
-                <th className="table-header">Category</th>
-                <th className="table-header">Qty</th>
-                <th className="table-header">Unit</th>
-                <th className="table-header">Unit cost</th>
-                <th className="table-header">Amount</th>
-              </tr>
-            </thead>
             <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {co.lines.map((l) => (
-                <tr key={l.id}>
-                  <td className="table-cell font-mono text-xs text-slate-400">{l.costCode ?? "—"}</td>
-                  <td className="table-cell">{l.description}</td>
-                  <td className="table-cell">{l.category}</td>
-                  <td className="table-cell">{l.quantity}</td>
-                  <td className="table-cell text-slate-400">{l.unit ?? "—"}</td>
-                  <td className="table-cell">{formatCurrency(l.unitCost)}</td>
-                  <td className="table-cell font-medium text-white">{formatCurrency(l.amount)}</td>
-                </tr>
-              ))}
               <tr className="bg-white/5">
                 <td className="table-cell" colSpan={6}><span className="text-slate-400">Subtotal</span></td>
                 <td className="table-cell font-semibold text-white">{formatCurrency(subtotal)}</td>

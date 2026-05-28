@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { DetailShell, DetailGrid, DetailField } from "@/components/layout/detail-shell";
+import { SortableTable } from "@/components/SortableTable";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ApprovalSection, ActivityTrail } from "@/components/approval-section";
@@ -92,91 +93,91 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Commitments</div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Cost code</th>
-                <th className="table-header">Description</th>
-                <th className="table-header">Committed</th>
-                <th className="table-header">Invoiced</th>
-                <th className="table-header">Paid</th>
-                <th className="table-header">Remaining</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {contract.commitments.map((c) => (
-                <tr key={c.id}>
-                  <td className="table-cell font-mono text-xs text-slate-400">{c.costCode ?? "—"}</td>
-                  <td className="table-cell">{c.description}</td>
-                  <td className="table-cell">{formatCurrency(c.committedAmount)}</td>
-                  <td className="table-cell">{formatCurrency(c.invoicedToDate)}</td>
-                  <td className="table-cell">{formatCurrency(c.paidToDate)}</td>
-                  <td className="table-cell">{formatCurrency(subtractMoney(c.committedAmount, c.invoicedToDate))}</td>
-                </tr>
-              ))}
-              {contract.commitments.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500">No commitments.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No commitments."
+            columns={[
+              { header: "Cost code" },
+              { header: "Description" },
+              { header: "Committed" },
+              { header: "Invoiced" },
+              { header: "Paid" },
+              { header: "Remaining" },
+            ]}
+            rows={contract.commitments.map((c) => ({
+              key: c.id,
+              cells: [
+                { sort: c.costCode ?? "", node: c.costCode ?? "—", tdClassName: "font-mono text-xs text-slate-400" },
+                { sort: c.description, node: c.description },
+                { sort: toNum(c.committedAmount), node: formatCurrency(c.committedAmount) },
+                { sort: toNum(c.invoicedToDate), node: formatCurrency(c.invoicedToDate) },
+                { sort: toNum(c.paidToDate), node: formatCurrency(c.paidToDate) },
+                { sort: toNum(subtractMoney(c.committedAmount, c.invoicedToDate)), node: formatCurrency(subtractMoney(c.committedAmount, c.invoicedToDate)) },
+              ],
+            }))}
+          />
         </div>
       </section>
 
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Pay applications against this contract</div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Period</th>
-                <th className="table-header">Range</th>
-                <th className="table-header">Work completed</th>
-                <th className="table-header">Retainage</th>
-                <th className="table-header">Payment due</th>
-                <th className="table-header">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {contract.payApplications.map((p) => (
-                <tr key={p.id} className="transition hover:bg-white/5">
-                  <td className="table-cell font-mono text-xs"><Link href={`/projects/${contract.project.id}/pay-apps/${p.id}`} className="text-cyan-300 hover:underline">#{p.periodNumber}</Link></td>
-                  <td className="table-cell text-slate-400">{formatDate(p.periodFrom)} → {formatDate(p.periodTo)}</td>
-                  <td className="table-cell">{formatCurrency(p.workCompletedToDate)}</td>
-                  <td className="table-cell">{formatCurrency(p.retainageHeld)}</td>
-                  <td className="table-cell">{formatCurrency(p.currentPaymentDue)}</td>
-                  <td className="table-cell"><StatusBadge status={p.status} /></td>
-                </tr>
-              ))}
-              {contract.payApplications.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500">No pay apps filed.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No pay apps filed."
+            columns={[
+              { header: "Period" },
+              { header: "Range" },
+              { header: "Work completed" },
+              { header: "Retainage" },
+              { header: "Payment due" },
+              { header: "Status" },
+            ]}
+            rows={contract.payApplications.map((p) => ({
+              key: p.id,
+              className: "transition hover:bg-white/5",
+              cells: [
+                {
+                  sort: p.periodNumber,
+                  node: <Link href={`/projects/${contract.project.id}/pay-apps/${p.id}`} className="text-cyan-300 hover:underline">#{p.periodNumber}</Link>,
+                  tdClassName: "font-mono text-xs",
+                },
+                {
+                  sort: p.periodFrom ? new Date(p.periodFrom).getTime() : null,
+                  node: <>{formatDate(p.periodFrom)} → {formatDate(p.periodTo)}</>,
+                  tdClassName: "text-slate-400",
+                },
+                { sort: toNum(p.workCompletedToDate), node: formatCurrency(p.workCompletedToDate) },
+                { sort: toNum(p.retainageHeld), node: formatCurrency(p.retainageHeld) },
+                { sort: toNum(p.currentPaymentDue), node: formatCurrency(p.currentPaymentDue) },
+                { sort: p.status, node: <StatusBadge status={p.status} /> },
+              ],
+            }))}
+          />
         </div>
       </section>
 
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Lien waivers</div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Party</th>
-                <th className="table-header">Type</th>
-                <th className="table-header">Through</th>
-                <th className="table-header">Amount</th>
-                <th className="table-header">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {contract.lienWaivers.map((w) => (
-                <tr key={w.id}>
-                  <td className="table-cell">{w.partyName}</td>
-                  <td className="table-cell">{w.waiverType.replaceAll("_", " ")}</td>
-                  <td className="table-cell text-slate-400">{formatDate(w.throughDate)}</td>
-                  <td className="table-cell">{formatCurrency(w.amount)}</td>
-                  <td className="table-cell"><StatusBadge status={w.status} /></td>
-                </tr>
-              ))}
-              {contract.lienWaivers.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-slate-500">No lien waivers.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No lien waivers."
+            columns={[
+              { header: "Party" },
+              { header: "Type" },
+              { header: "Through" },
+              { header: "Amount" },
+              { header: "Status" },
+            ]}
+            rows={contract.lienWaivers.map((w) => ({
+              key: w.id,
+              cells: [
+                { sort: w.partyName, node: w.partyName },
+                { sort: w.waiverType, node: w.waiverType.replaceAll("_", " ") },
+                { sort: w.throughDate ? new Date(w.throughDate).getTime() : null, node: formatDate(w.throughDate), tdClassName: "text-slate-400" },
+                { sort: toNum(w.amount), node: formatCurrency(w.amount) },
+                { sort: w.status, node: <StatusBadge status={w.status} /> },
+              ],
+            }))}
+          />
         </div>
       </section>
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatTile } from "@/components/ui/stat-tile";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate, modeLabel } from "@/lib/utils";
@@ -31,68 +32,68 @@ export default async function BidsHubPage() {
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Opportunity pipeline</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Name</th>
-                  <th className="table-header">Client</th>
-                  <th className="table-header">Mode</th>
-                  <th className="table-header">Stage</th>
-                  <th className="table-header">Value</th>
-                  <th className="table-header">Prob.</th>
-                  <th className="table-header">Weighted</th>
-                  <th className="table-header">Due</th>
-                  <th className="table-header">Owner</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {opportunities.map((o) => (
-                  <tr key={o.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell font-medium"><Link href={`/opportunities/${o.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{o.name}</Link></td>
-                    <td className="table-cell text-slate-400">{o.clientName ?? "—"}</td>
-                    <td className="table-cell">{modeLabel(o.mode)}</td>
-                    <td className="table-cell"><StatusBadge status={o.stage} /></td>
-                    <td className="table-cell">{formatCurrency(o.estimatedValue)}</td>
-                    <td className="table-cell">{o.probability}%</td>
-                    <td className="table-cell">{formatCurrency(multiplyMoney(o.estimatedValue, o.probability / 100))}</td>
-                    <td className="table-cell text-slate-400">{formatDate(o.dueDate)}</td>
-                    <td className="table-cell text-slate-400">{o.ownerName ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No opportunities yet."
+              columns={[
+                { header: "Name" },
+                { header: "Client" },
+                { header: "Mode" },
+                { header: "Stage" },
+                { header: "Value" },
+                { header: "Prob." },
+                { header: "Weighted" },
+                { header: "Due" },
+                { header: "Owner" },
+              ]}
+              rows={opportunities.map((o) => ({
+                key: o.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  { sort: o.name, tdClassName: "font-medium", node: <Link href={`/opportunities/${o.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{o.name}</Link> },
+                  { sort: o.clientName ?? "", tdClassName: "text-slate-400", node: o.clientName ?? "—" },
+                  { sort: modeLabel(o.mode), node: modeLabel(o.mode) },
+                  { sort: o.stage, node: <StatusBadge status={o.stage} /> },
+                  { sort: toNum(o.estimatedValue), node: formatCurrency(o.estimatedValue) },
+                  { sort: o.probability, node: `${o.probability}%` },
+                  { sort: toNum(multiplyMoney(o.estimatedValue, o.probability / 100)), node: formatCurrency(multiplyMoney(o.estimatedValue, o.probability / 100)) },
+                  { sort: o.dueDate ? new Date(o.dueDate).getTime() : null, tdClassName: "text-slate-400", node: formatDate(o.dueDate) },
+                  { sort: o.ownerName ?? "", tdClassName: "text-slate-400", node: o.ownerName ?? "—" },
+                ],
+              }))}
+            />
           </div>
         </section>
 
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Active bid packages</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Project</th>
-                  <th className="table-header">Package</th>
-                  <th className="table-header">Trade</th>
-                  <th className="table-header">Est. value</th>
-                  <th className="table-header">Invitees</th>
-                  <th className="table-header">Due</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {bidPackages.map((p) => (
-                  <tr key={p.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell"><Link href={`/projects/${p.project.id}/bids`} className="text-cyan-300 hover:underline">{p.project.code}</Link></td>
-                    <td className="table-cell font-medium text-white">{p.name}</td>
-                    <td className="table-cell">{p.trade}</td>
-                    <td className="table-cell">{formatCurrency(p.estimatedValue)}</td>
-                    <td className="table-cell">{p.subBids.length}</td>
-                    <td className="table-cell text-slate-400">{formatDate(p.dueDate)}</td>
-                    <td className="table-cell"><StatusBadge status={p.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No bid packages."
+              columns={[
+                { header: "Project" },
+                { header: "Package" },
+                { header: "Trade" },
+                { header: "Est. value" },
+                { header: "Invitees" },
+                { header: "Due" },
+                { header: "Status" },
+              ]}
+              rows={bidPackages.map((p) => ({
+                key: p.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  { sort: p.project.code, node: <Link href={`/projects/${p.project.id}/bids`} className="text-cyan-300 hover:underline">{p.project.code}</Link> },
+                  { sort: p.name, tdClassName: "font-medium text-white", node: p.name },
+                  { sort: p.trade, node: p.trade },
+                  { sort: toNum(p.estimatedValue), node: formatCurrency(p.estimatedValue) },
+                  { sort: p.subBids.length, node: p.subBids.length },
+                  { sort: p.dueDate ? new Date(p.dueDate).getTime() : null, tdClassName: "text-slate-400", node: formatDate(p.dueDate) },
+                  { sort: p.status, node: <StatusBadge status={p.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

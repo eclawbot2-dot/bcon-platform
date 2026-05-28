@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -59,45 +60,39 @@ export default async function ApAgingPage() {
         </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Vendor</th>
-                  <th className="table-header">Project</th>
-                  <th className="table-header">Invoice #</th>
-                  <th className="table-header">Invoice date</th>
-                  <th className="table-header">Due</th>
-                  <th className="table-header">Days past due</th>
-                  <th className="table-header">Bucket</th>
-                  <th className="table-header">Amount</th>
-                  <th className="table-header">Net due</th>
-                  <th className="table-header">Waiver</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {rows.map((r) => (
-                  <tr key={r.id} className="transition hover:bg-white/5">
-                    <td className="table-cell"><Link href={`/vendors/${r.vendor.id}`} className="text-cyan-300 hover:underline">{r.vendor.name}</Link></td>
-                    <td className="table-cell"><Link href={`/projects/${r.project.id}/sub-invoices/${r.id}`} className="text-cyan-300 hover:underline">{r.project.code}</Link></td>
-                    <td className="table-cell font-mono text-xs">{r.invoiceNumber}</td>
-                    <td className="table-cell text-slate-400">{formatDate(r.invoiceDate)}</td>
-                    <td className="table-cell">{formatDate(r.dueDate)}</td>
-                    <td className="table-cell">
-                      <span className={r.daysPast > 60 ? "text-rose-300" : r.daysPast > 30 ? "text-amber-300" : r.daysPast > 0 ? "text-slate-300" : "text-emerald-300"}>{r.daysPast}d</span>
-                    </td>
-                    <td className="table-cell">
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-slate-300">{r.bucket}</span>
-                    </td>
-                    <td className="table-cell">{formatCurrency(r.amount)}</td>
-                    <td className="table-cell">{formatCurrency(r.netDue)}</td>
-                    <td className="table-cell">{r.waiverReceived ? <StatusBadge tone="good" label="Received" /> : <StatusBadge tone="warn" label="Pending" />}</td>
-                    <td className="table-cell"><StatusBadge status={r.status} /></td>
-                  </tr>
-                ))}
-                {rows.length === 0 ? <tr><td colSpan={11} className="table-cell text-center text-slate-500">No outstanding sub invoices.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No outstanding sub invoices."
+              columns={[
+                { header: "Vendor" },
+                { header: "Project" },
+                { header: "Invoice #" },
+                { header: "Invoice date" },
+                { header: "Due" },
+                { header: "Days past due" },
+                { header: "Bucket" },
+                { header: "Amount" },
+                { header: "Net due" },
+                { header: "Waiver" },
+                { header: "Status" },
+              ]}
+              rows={rows.map((r) => ({
+                key: r.id,
+                className: "transition hover:bg-white/5",
+                cells: [
+                  { sort: r.vendor.name, node: <Link href={`/vendors/${r.vendor.id}`} className="text-cyan-300 hover:underline">{r.vendor.name}</Link> },
+                  { sort: r.project.code, node: <Link href={`/projects/${r.project.id}/sub-invoices/${r.id}`} className="text-cyan-300 hover:underline">{r.project.code}</Link> },
+                  { sort: r.invoiceNumber, node: r.invoiceNumber, tdClassName: "font-mono text-xs" },
+                  { sort: new Date(r.invoiceDate).getTime(), node: formatDate(r.invoiceDate), tdClassName: "text-slate-400" },
+                  { sort: r.dueDate ? new Date(r.dueDate).getTime() : null, node: formatDate(r.dueDate) },
+                  { sort: r.daysPast, node: <span className={r.daysPast > 60 ? "text-rose-300" : r.daysPast > 30 ? "text-amber-300" : r.daysPast > 0 ? "text-slate-300" : "text-emerald-300"}>{r.daysPast}d</span> },
+                  { sort: r.bucket, node: <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-slate-300">{r.bucket}</span> },
+                  { sort: toNum(r.amount), node: formatCurrency(r.amount) },
+                  { sort: toNum(r.netDue), node: formatCurrency(r.netDue) },
+                  { sort: r.waiverReceived ? "Received" : "Pending", node: r.waiverReceived ? <StatusBadge tone="good" label="Received" /> : <StatusBadge tone="warn" label="Pending" /> },
+                  { sort: r.status, node: <StatusBadge status={r.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { DetailShell, DetailGrid, DetailField } from "@/components/layout/detail-shell";
+import { SortableTable } from "@/components/SortableTable";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { PrintButton } from "@/components/ui/print-button";
@@ -97,38 +98,42 @@ export default async function PayAppDetailPage({ params }: { params: Promise<{ p
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Schedule of values (G703)</div>
         <div className="overflow-x-auto">
+          <SortableTable
+            className="min-w-full divide-y divide-white/10"
+            columns={[
+              { header: "Line" },
+              { header: "Cost code" },
+              { header: "Description" },
+              { header: "Scheduled value" },
+              { header: "Prior work" },
+              { header: "This period" },
+              { header: "Materials stored" },
+              { header: "Total completed" },
+              { header: "% complete" },
+              { header: "Balance to finish" },
+              { header: "Retainage" },
+            ]}
+            rows={app.lines.map((l) => ({
+              key: l.id,
+              className: "transition hover:bg-white/5",
+              cells: [
+                { sort: l.lineNumber, node: l.lineNumber, tdClassName: "font-mono text-xs text-slate-400" },
+                { sort: l.costCode ?? "", node: l.costCode ?? "—", tdClassName: "font-mono text-xs text-slate-400" },
+                { sort: l.description, node: l.description },
+                { sort: toNum(l.scheduledValue), node: formatCurrency(l.scheduledValue) },
+                { sort: toNum(l.workCompletedPrev), node: formatCurrency(l.workCompletedPrev), tdClassName: "text-slate-400" },
+                { sort: toNum(l.workCompletedThis), node: formatCurrency(l.workCompletedThis), tdClassName: "font-medium text-white" },
+                { sort: toNum(l.materialsStored), node: formatCurrency(l.materialsStored) },
+                { sort: toNum(l.totalCompleted), node: formatCurrency(l.totalCompleted) },
+                { sort: toNum(l.percentComplete), node: formatPercent(l.percentComplete) },
+                { sort: toNum(l.balanceToFinish), node: formatCurrency(l.balanceToFinish), tdClassName: "text-slate-400" },
+                { sort: toNum(l.retainage), node: formatCurrency(l.retainage) },
+              ],
+            }))}
+          />
+          {/* Non-record totals row preserved as a separate summary table below the sortable data. */}
           <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Line</th>
-                <th className="table-header">Cost code</th>
-                <th className="table-header">Description</th>
-                <th className="table-header">Scheduled value</th>
-                <th className="table-header">Prior work</th>
-                <th className="table-header">This period</th>
-                <th className="table-header">Materials stored</th>
-                <th className="table-header">Total completed</th>
-                <th className="table-header">% complete</th>
-                <th className="table-header">Balance to finish</th>
-                <th className="table-header">Retainage</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {app.lines.map((l) => (
-                <tr key={l.id} className="transition hover:bg-white/5">
-                  <td className="table-cell font-mono text-xs text-slate-400">{l.lineNumber}</td>
-                  <td className="table-cell font-mono text-xs text-slate-400">{l.costCode ?? "—"}</td>
-                  <td className="table-cell">{l.description}</td>
-                  <td className="table-cell">{formatCurrency(l.scheduledValue)}</td>
-                  <td className="table-cell text-slate-400">{formatCurrency(l.workCompletedPrev)}</td>
-                  <td className="table-cell font-medium text-white">{formatCurrency(l.workCompletedThis)}</td>
-                  <td className="table-cell">{formatCurrency(l.materialsStored)}</td>
-                  <td className="table-cell">{formatCurrency(l.totalCompleted)}</td>
-                  <td className="table-cell">{formatPercent(l.percentComplete)}</td>
-                  <td className="table-cell text-slate-400">{formatCurrency(l.balanceToFinish)}</td>
-                  <td className="table-cell">{formatCurrency(l.retainage)}</td>
-                </tr>
-              ))}
+            <tbody>
               <tr className="bg-white/5">
                 <td className="table-cell" colSpan={3}><span className="text-slate-400">Total</span></td>
                 <td className="table-cell font-semibold text-white">{formatCurrency(totalScheduled)}</td>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
@@ -36,42 +37,41 @@ export default async function InspectionsPage({ params }: { params: Promise<{ pr
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Inspection log</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Kind</th>
-                  <th className="table-header">Title</th>
-                  <th className="table-header">Location</th>
-                  <th className="table-header">Inspector</th>
-                  <th className="table-header">Scheduled</th>
-                  <th className="table-header">Completed</th>
-                  <th className="table-header">Result</th>
-                  <th className="table-header">Follow-up</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.inspections.map((i) => (
-                  <tr key={i.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell">{inspectionKindLabel(i.kind)}</td>
-                    <td className="table-cell">
+            <SortableTable
+              emptyMessage="No inspections scheduled."
+              columns={[
+                { header: "Kind" },
+                { header: "Title" },
+                { header: "Location" },
+                { header: "Inspector" },
+                { header: "Scheduled" },
+                { header: "Completed" },
+                { header: "Result" },
+                { header: "Follow-up" },
+              ]}
+              rows={project.inspections.map((i) => ({
+                key: i.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  { sort: inspectionKindLabel(i.kind), node: inspectionKindLabel(i.kind) },
+                  {
+                    sort: i.title,
+                    node: (
                       <Link href={`/projects/${project.id}/inspections/${i.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">
                         <div className="font-medium">{i.title}</div>
                         {i.followUpNotes ? <div className="text-xs text-slate-500">{i.followUpNotes}</div> : null}
                       </Link>
-                    </td>
-                    <td className="table-cell text-slate-400">{i.location ?? "—"}</td>
-                    <td className="table-cell text-slate-400">{i.inspector ?? "—"}</td>
-                    <td className="table-cell text-slate-400">{formatDate(i.scheduledAt)}</td>
-                    <td className="table-cell text-slate-400">{formatDate(i.completedAt)}</td>
-                    <td className="table-cell"><StatusBadge status={i.result} /></td>
-                    <td className="table-cell">{i.followUpNeeded ? <StatusBadge tone="warn" label="Yes" /> : <span className="text-slate-500">—</span>}</td>
-                  </tr>
-                ))}
-                {project.inspections.length === 0 ? (
-                  <tr><td colSpan={8} className="table-cell text-center text-slate-500">No inspections scheduled.</td></tr>
-                ) : null}
-              </tbody>
-            </table>
+                    ),
+                  },
+                  { sort: i.location ?? "", node: i.location ?? "—", tdClassName: "text-slate-400" },
+                  { sort: i.inspector ?? "", node: i.inspector ?? "—", tdClassName: "text-slate-400" },
+                  { sort: i.scheduledAt ? new Date(i.scheduledAt).getTime() : null, node: formatDate(i.scheduledAt), tdClassName: "text-slate-400" },
+                  { sort: i.completedAt ? new Date(i.completedAt).getTime() : null, node: formatDate(i.completedAt), tdClassName: "text-slate-400" },
+                  { sort: i.result ?? "", node: <StatusBadge status={i.result} /> },
+                  { sort: i.followUpNeeded ? 1 : 0, node: i.followUpNeeded ? <StatusBadge tone="warn" label="Yes" /> : <span className="text-slate-500">—</span> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

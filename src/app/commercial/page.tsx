@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate, formatPercent, contractTypeLabel, changeOrderKindLabel } from "@/lib/utils";
-import { sumMoney } from "@/lib/money";
+import { sumMoney, toNum } from "@/lib/money";
 
 export default async function CommercialPage() {
   const tenant = await requireTenant();
@@ -45,103 +46,106 @@ export default async function CommercialPage() {
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Contract ledger</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Contract</th>
-                  <th className="table-header">Project</th>
-                  <th className="table-header">Type</th>
-                  <th className="table-header">Counterparty</th>
-                  <th className="table-header">Current value</th>
-                  <th className="table-header">Retainage</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {contracts.map((c) => (
-                  <tr key={c.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell">
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No contracts."
+              columns={[
+                { header: "Contract" },
+                { header: "Project" },
+                { header: "Type" },
+                { header: "Counterparty" },
+                { header: "Current value" },
+                { header: "Retainage" },
+                { header: "Status" },
+              ]}
+              rows={contracts.map((c) => ({
+                key: c.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  {
+                    sort: c.contractNumber,
+                    node: (
                       <Link href={`/projects/${c.project.id}/contracts/${c.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">
                         <div className="font-medium">{c.contractNumber}</div>
                         <div className="text-xs text-slate-500">{c.title}</div>
                       </Link>
-                    </td>
-                    <td className="table-cell"><Link href={`/projects/${c.project.id}`} className="text-cyan-300 hover:underline">{c.project.code}</Link></td>
-                    <td className="table-cell">{contractTypeLabel(c.type)}</td>
-                    <td className="table-cell text-slate-400">{c.counterparty}</td>
-                    <td className="table-cell">{formatCurrency(c.currentValue)}</td>
-                    <td className="table-cell">{formatPercent(c.retainagePct)}</td>
-                    <td className="table-cell"><StatusBadge status={c.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    ),
+                  },
+                  { sort: c.project.code, node: <Link href={`/projects/${c.project.id}`} className="text-cyan-300 hover:underline">{c.project.code}</Link> },
+                  { sort: contractTypeLabel(c.type), node: contractTypeLabel(c.type) },
+                  { sort: c.counterparty, tdClassName: "text-slate-400", node: c.counterparty },
+                  { sort: toNum(c.currentValue), node: formatCurrency(c.currentValue) },
+                  { sort: c.retainagePct, node: formatPercent(c.retainagePct) },
+                  { sort: c.status, node: <StatusBadge status={c.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
 
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Change order ledger</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">#</th>
-                  <th className="table-header">Project</th>
-                  <th className="table-header">Kind</th>
-                  <th className="table-header">Title</th>
-                  <th className="table-header">Amount</th>
-                  <th className="table-header">Schedule</th>
-                  <th className="table-header">Status</th>
-                  <th className="table-header">Requested</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {changeOrders.map((co) => (
-                  <tr key={co.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell font-mono text-xs text-slate-400">{co.coNumber}</td>
-                    <td className="table-cell"><Link href={`/projects/${co.project.id}/change-orders`} className="text-cyan-300 hover:underline">{co.project.code}</Link></td>
-                    <td className="table-cell">{changeOrderKindLabel(co.kind)}</td>
-                    <td className="table-cell"><Link href={`/projects/${co.project.id}/change-orders/${co.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{co.title}</Link></td>
-                    <td className="table-cell">{formatCurrency(co.amount)}</td>
-                    <td className="table-cell">{co.scheduleImpactDays ? `${co.scheduleImpactDays}d` : "—"}</td>
-                    <td className="table-cell"><StatusBadge status={co.status} /></td>
-                    <td className="table-cell text-slate-400">{formatDate(co.requestedAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No change orders."
+              columns={[
+                { header: "#" },
+                { header: "Project" },
+                { header: "Kind" },
+                { header: "Title" },
+                { header: "Amount" },
+                { header: "Schedule" },
+                { header: "Status" },
+                { header: "Requested" },
+              ]}
+              rows={changeOrders.map((co) => ({
+                key: co.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  { sort: co.coNumber, tdClassName: "font-mono text-xs text-slate-400", node: co.coNumber },
+                  { sort: co.project.code, node: <Link href={`/projects/${co.project.id}/change-orders`} className="text-cyan-300 hover:underline">{co.project.code}</Link> },
+                  { sort: changeOrderKindLabel(co.kind), node: changeOrderKindLabel(co.kind) },
+                  { sort: co.title, node: <Link href={`/projects/${co.project.id}/change-orders/${co.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{co.title}</Link> },
+                  { sort: toNum(co.amount), node: formatCurrency(co.amount) },
+                  { sort: co.scheduleImpactDays ?? null, node: co.scheduleImpactDays ? `${co.scheduleImpactDays}d` : "—" },
+                  { sort: co.status, node: <StatusBadge status={co.status} /> },
+                  { sort: co.requestedAt ? new Date(co.requestedAt).getTime() : null, tdClassName: "text-slate-400", node: formatDate(co.requestedAt) },
+                ],
+              }))}
+            />
           </div>
         </section>
 
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Pay application pipeline</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Project</th>
-                  <th className="table-header">Period</th>
-                  <th className="table-header">Range</th>
-                  <th className="table-header">Work completed</th>
-                  <th className="table-header">Retainage</th>
-                  <th className="table-header">Payment due</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {payApps.map((p) => (
-                  <tr key={p.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell"><Link href={`/projects/${p.project.id}/pay-apps`} className="text-cyan-300 hover:underline">{p.project.code}</Link></td>
-                    <td className="table-cell font-mono text-xs"><Link href={`/projects/${p.project.id}/pay-apps/${p.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">#{p.periodNumber}</Link></td>
-                    <td className="table-cell text-slate-400">{formatDate(p.periodFrom)} → {formatDate(p.periodTo)}</td>
-                    <td className="table-cell">{formatCurrency(p.workCompletedToDate)}</td>
-                    <td className="table-cell">{formatCurrency(p.retainageHeld)}</td>
-                    <td className="table-cell">{formatCurrency(p.currentPaymentDue)}</td>
-                    <td className="table-cell"><StatusBadge status={p.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No pay applications."
+              columns={[
+                { header: "Project" },
+                { header: "Period" },
+                { header: "Range" },
+                { header: "Work completed" },
+                { header: "Retainage" },
+                { header: "Payment due" },
+                { header: "Status" },
+              ]}
+              rows={payApps.map((p) => ({
+                key: p.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  { sort: p.project.code, node: <Link href={`/projects/${p.project.id}/pay-apps`} className="text-cyan-300 hover:underline">{p.project.code}</Link> },
+                  { sort: p.periodNumber, tdClassName: "font-mono text-xs", node: <Link href={`/projects/${p.project.id}/pay-apps/${p.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">#{p.periodNumber}</Link> },
+                  { sort: p.periodFrom ? new Date(p.periodFrom).getTime() : null, tdClassName: "text-slate-400", node: `${formatDate(p.periodFrom)} → ${formatDate(p.periodTo)}` },
+                  { sort: toNum(p.workCompletedToDate), node: formatCurrency(p.workCompletedToDate) },
+                  { sort: toNum(p.retainageHeld), node: formatCurrency(p.retainageHeld) },
+                  { sort: toNum(p.currentPaymentDue), node: formatCurrency(p.currentPaymentDue) },
+                  { sort: p.status, node: <StatusBadge status={p.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

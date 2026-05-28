@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatTile } from "@/components/ui/stat-tile";
 import { prisma } from "@/lib/prisma";
@@ -52,36 +53,41 @@ export default async function BidsPage({ params }: { params: Promise<{ projectId
                 <StatusBadge status={pkg.status} />
               </div>
               <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                <table className="min-w-full divide-y divide-white/10">
-                  <thead className="bg-white/5">
-                    <tr>
-                      <th className="table-header">Vendor</th>
-                      <th className="table-header">Amount</th>
-                      <th className="table-header">Δ vs. low</th>
-                      <th className="table-header">Duration</th>
-                      <th className="table-header">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                    {pkg.subBids.map((b) => {
-                      const delta = b.bidAmount && isFinite(low) ? subtractMoney(b.bidAmount, low) : null;
-                      return (
-                        <tr key={b.id} className="cursor-pointer transition hover:bg-white/5">
-                          <td className="table-cell">
+                <SortableTable
+                  emptyMessage="No bidders invited."
+                  columns={[
+                    { header: "Vendor" },
+                    { header: "Amount" },
+                    { header: "Δ vs. low" },
+                    { header: "Duration" },
+                    { header: "Status" },
+                  ]}
+                  rows={pkg.subBids.map((b) => {
+                    const delta = b.bidAmount && isFinite(low) ? subtractMoney(b.bidAmount, low) : null;
+                    return {
+                      key: b.id,
+                      className: "cursor-pointer transition hover:bg-white/5",
+                      cells: [
+                        {
+                          sort: b.vendor.name,
+                          node: (
                             <Link href={`/vendors/${b.vendor.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">
                               <div className="font-medium">{b.vendor.name}</div>
                               <div className="text-xs text-slate-500">{b.vendor.trade ?? "—"}</div>
                             </Link>
-                          </td>
-                          <td className="table-cell">{b.bidAmount ? formatCurrency(b.bidAmount) : "—"}</td>
-                          <td className="table-cell">{delta == null ? "—" : delta === 0 ? <span className="text-emerald-300">Low bid</span> : `+${formatCurrency(delta)}`}</td>
-                          <td className="table-cell text-slate-400">{b.daysToComplete ? `${b.daysToComplete}d` : "—"}</td>
-                          <td className="table-cell"><StatusBadge status={b.status} /></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          ),
+                        },
+                        { sort: b.bidAmount ? toNum(b.bidAmount) : null, node: b.bidAmount ? formatCurrency(b.bidAmount) : "—" },
+                        {
+                          sort: delta,
+                          node: delta == null ? "—" : delta === 0 ? <span className="text-emerald-300">Low bid</span> : `+${formatCurrency(delta)}`,
+                        },
+                        { sort: b.daysToComplete ?? null, node: b.daysToComplete ? `${b.daysToComplete}d` : "—", tdClassName: "text-slate-400" },
+                        { sort: b.status, node: <StatusBadge status={b.status} /> },
+                      ],
+                    };
+                  })}
+                />
               </div>
             </section>
           );

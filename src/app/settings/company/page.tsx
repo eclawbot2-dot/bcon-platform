@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -189,31 +190,29 @@ export default async function CompanyCompliancePage() {
             <input name="laborHours" type="number" placeholder="Labor hours" className="form-input" />
             <button className="btn-primary text-xs">Add year</button>
           </form>
-          <table className="mt-4 min-w-full divide-y divide-white/10 text-sm">
-            <thead className="text-xs uppercase tracking-[0.16em] text-slate-500">
-              <tr>
-                <th className="py-2 pr-4 text-left">Year</th>
-                <th className="py-2 pr-4 text-right">EMR</th>
-                <th className="py-2 pr-4 text-right">TRIR</th>
-                <th className="py-2 pr-4 text-right">DART</th>
-                <th className="py-2 pr-4 text-right">Labor hrs</th>
-                <th className="py-2 pr-4 text-right">Recordable</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {safetyMetrics.map((s) => (
-                <tr key={s.id}>
-                  <td className="py-2 pr-4 text-white">{s.reportingYear}</td>
-                  <td className="py-2 pr-4 text-right">{s.emrRate?.toFixed(2) ?? "—"}</td>
-                  <td className="py-2 pr-4 text-right">{s.trirRate?.toFixed(2) ?? "—"}</td>
-                  <td className="py-2 pr-4 text-right">{s.dartRate?.toFixed(2) ?? "—"}</td>
-                  <td className="py-2 pr-4 text-right">{s.laborHours?.toLocaleString() ?? "—"}</td>
-                  <td className="py-2 pr-4 text-right">{s.recordableCount}</td>
-                </tr>
-              ))}
-              {safetyMetrics.length === 0 ? <tr><td colSpan={6} className="py-3 text-center text-slate-500">No years recorded yet.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            className="mt-4 min-w-full divide-y divide-white/10 text-sm"
+            emptyMessage="No years recorded yet."
+            columns={[
+              { header: "Year", thClassName: "py-2 pr-4" },
+              { header: "EMR", align: "right", thClassName: "py-2 pr-4" },
+              { header: "TRIR", align: "right", thClassName: "py-2 pr-4" },
+              { header: "DART", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Labor hrs", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Recordable", align: "right", thClassName: "py-2 pr-4" },
+            ]}
+            rows={safetyMetrics.map((s) => ({
+              key: s.id,
+              cells: [
+                { sort: s.reportingYear, node: s.reportingYear, tdClassName: "py-2 pr-4 text-white" },
+                { sort: s.emrRate ?? undefined, node: s.emrRate?.toFixed(2) ?? "—", tdClassName: "py-2 pr-4" },
+                { sort: s.trirRate ?? undefined, node: s.trirRate?.toFixed(2) ?? "—", tdClassName: "py-2 pr-4" },
+                { sort: s.dartRate ?? undefined, node: s.dartRate?.toFixed(2) ?? "—", tdClassName: "py-2 pr-4" },
+                { sort: s.laborHours ?? undefined, node: s.laborHours?.toLocaleString() ?? "—", tdClassName: "py-2 pr-4" },
+                { sort: s.recordableCount, node: s.recordableCount, tdClassName: "py-2 pr-4" },
+              ],
+            }))}
+          />
         </section>
       </div>
     </AppLayout>
@@ -245,36 +244,46 @@ function CompanySection({ id, title, description, rows, createPath, createFields
         ))}
         <button className="btn-primary text-xs">Add</button>
       </form>
-      <table className="mt-4 min-w-full divide-y divide-white/10 text-sm">
-        <thead className="text-xs uppercase tracking-[0.16em] text-slate-500">
-          <tr>
-            <th className="py-2 pr-4 text-left">Type</th>
-            <th className="py-2 pr-4 text-left">Detail</th>
-            <th className="py-2 pr-4 text-left">Expires</th>
-            <th className="py-2 pr-4 text-left">Status</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/5">
-          {rows.map((r) => {
-            const expSoon = r.expires && r.expires < soon;
-            return (
-              <tr key={r.id}>
-                <td className="py-2 pr-4 text-white">{r.primary}</td>
-                <td className="py-2 pr-4 text-slate-300">
-                  <div>{r.secondary}</div>
-                  {r.notes ? <div className="text-xs text-slate-500">{r.notes}</div> : null}
-                </td>
-                <td className={`py-2 pr-4 text-xs ${expSoon ? "text-amber-300" : "text-slate-400"}`}>
-                  {r.expires ? formatDate(r.expires) : "—"}
-                  {expSoon ? <span className="ml-1">⚠</span> : null}
-                </td>
-                <td className="py-2 pr-4 text-xs">{r.status}</td>
-              </tr>
-            );
-          })}
-          {rows.length === 0 ? <tr><td colSpan={4} className="py-3 text-center text-slate-500">No records yet — add above.</td></tr> : null}
-        </tbody>
-      </table>
+      <SortableTable
+        className="mt-4 min-w-full divide-y divide-white/10 text-sm"
+        emptyMessage="No records yet — add above."
+        columns={[
+          { header: "Type", thClassName: "py-2 pr-4" },
+          { header: "Detail", thClassName: "py-2 pr-4" },
+          { header: "Expires", thClassName: "py-2 pr-4" },
+          { header: "Status", thClassName: "py-2 pr-4" },
+        ]}
+        rows={rows.map((r) => {
+          const expSoon = r.expires && r.expires < soon;
+          return {
+            key: r.id,
+            cells: [
+              { sort: r.primary, node: r.primary, tdClassName: "py-2 pr-4 text-white" },
+              {
+                sort: r.secondary,
+                node: (
+                  <>
+                    <div>{r.secondary}</div>
+                    {r.notes ? <div className="text-xs text-slate-500">{r.notes}</div> : null}
+                  </>
+                ),
+                tdClassName: "py-2 pr-4 text-slate-300",
+              },
+              {
+                sort: r.expires ? r.expires.getTime() : undefined,
+                node: (
+                  <>
+                    {r.expires ? formatDate(r.expires) : "—"}
+                    {expSoon ? <span className="ml-1">⚠</span> : null}
+                  </>
+                ),
+                tdClassName: `py-2 pr-4 text-xs ${expSoon ? "text-amber-300" : "text-slate-400"}`,
+              },
+              { sort: r.status, node: r.status, tdClassName: "py-2 pr-4 text-xs" },
+            ],
+          };
+        })}
+      />
     </section>
   );
 }

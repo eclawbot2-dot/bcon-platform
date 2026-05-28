@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { DetailShell } from "@/components/layout/detail-shell";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { ProjectMode } from "@prisma/client";
 import { formatDate, modeLabel } from "@/lib/utils";
@@ -108,31 +109,34 @@ export default async function AdminTenantDetailPage({
           <div className="flex items-end"><button className="btn-primary w-full">+ Add</button></div>
           <div className="md:col-span-4"><label className="form-label">Region (optional)</label><input name="region" className="form-input" /></div>
         </form>
-        <table className="min-w-full divide-y divide-white/10 text-sm mt-6">
-          <thead className="bg-white/5"><tr>
-            <th className="table-header">Name</th>
-            <th className="table-header">Code</th>
-            <th className="table-header">Mode</th>
-            <th className="table-header">Region</th>
-            <th className="table-header"></th>
-          </tr></thead>
-          <tbody className="divide-y divide-white/10 bg-slate-950/40">
-            {tenant.businessUnits.map((b) => (
-              <tr key={b.id}>
-                <td className="table-cell">{b.name}</td>
-                <td className="table-cell font-mono text-xs">{b.code}</td>
-                <td className="table-cell">{modeLabel(b.defaultMode)}</td>
-                <td className="table-cell text-slate-400">{b.region ?? "—"}</td>
-                <td className="table-cell">
-                  <form action={`/api/admin/tenants/${tenant.id}/business-units/${b.id}/delete`} method="post">
-                    <button className="btn-outline text-xs">Delete</button>
-                  </form>
-                </td>
-              </tr>
-            ))}
-            {tenant.businessUnits.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-slate-500">No business units.</td></tr> : null}
-          </tbody>
-        </table>
+        <div className="mt-6">
+          <SortableTable
+            emptyMessage="No business units."
+            columns={[
+              { header: "Name" },
+              { header: "Code" },
+              { header: "Mode" },
+              { header: "Region" },
+              { header: "", sortable: false },
+            ]}
+            rows={tenant.businessUnits.map((b) => ({
+              key: b.id,
+              cells: [
+                { sort: b.name, node: b.name },
+                { sort: b.code, tdClassName: "font-mono text-xs", node: b.code },
+                { sort: modeLabel(b.defaultMode), node: modeLabel(b.defaultMode) },
+                { sort: b.region ?? "", tdClassName: "text-slate-400", node: b.region ?? "—" },
+                {
+                  node: (
+                    <form action={`/api/admin/tenants/${tenant.id}/business-units/${b.id}/delete`} method="post">
+                      <button className="btn-outline text-xs">Delete</button>
+                    </form>
+                  ),
+                },
+              ],
+            }))}
+          />
+        </div>
       </section>
 
       <section className="card p-6">
@@ -161,40 +165,54 @@ export default async function AdminTenantDetailPage({
           </div>
           <div className="md:col-span-4"><button className="btn-primary">Add member</button></div>
         </form>
-        <table className="min-w-full divide-y divide-white/10 text-sm mt-6">
-          <thead className="bg-white/5"><tr>
-            <th className="table-header">User</th>
-            <th className="table-header">Email</th>
-            <th className="table-header">Role</th>
-            <th className="table-header">Business unit</th>
-            <th className="table-header">Joined</th>
-            <th className="table-header"></th>
-          </tr></thead>
-          <tbody className="divide-y divide-white/10 bg-slate-950/40">
-            {tenant.memberships.map((m) => (
-              <tr key={m.id}>
-                <td className="table-cell"><Link href={`/admin/users/${m.userId}`} className="text-cyan-300 hover:underline">{m.user.name}</Link>{m.user.superAdmin ? <span className="ml-2 rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] text-rose-200">SUPER</span> : null}</td>
-                <td className="table-cell text-xs">{m.user.email}</td>
-                <td className="table-cell">
-                  <form action={`/api/admin/tenants/${tenant.id}/memberships/${m.id}/role`} method="post" className="flex gap-1">
-                    <select name="role" defaultValue={m.roleTemplate} className="form-select text-xs">
-                      {ROLE_TEMPLATES.map((r) => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                    <button className="btn-outline text-xs">Save</button>
-                  </form>
-                </td>
-                <td className="table-cell text-xs">{m.businessUnit?.name ?? "—"}</td>
-                <td className="table-cell text-xs text-slate-400">{formatDate(m.createdAt)}</td>
-                <td className="table-cell">
-                  <form action={`/api/admin/tenants/${tenant.id}/memberships/${m.id}/delete`} method="post">
-                    <button className="btn-outline text-xs">Remove</button>
-                  </form>
-                </td>
-              </tr>
-            ))}
-            {tenant.memberships.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500">No members yet.</td></tr> : null}
-          </tbody>
-        </table>
+        <div className="mt-6">
+          <SortableTable
+            emptyMessage="No members yet."
+            columns={[
+              { header: "User" },
+              { header: "Email" },
+              { header: "Role" },
+              { header: "Business unit" },
+              { header: "Joined" },
+              { header: "", sortable: false },
+            ]}
+            rows={tenant.memberships.map((m) => ({
+              key: m.id,
+              cells: [
+                {
+                  sort: m.user.name ?? "",
+                  node: (
+                    <>
+                      <Link href={`/admin/users/${m.userId}`} className="text-cyan-300 hover:underline">{m.user.name}</Link>
+                      {m.user.superAdmin ? <span className="ml-2 rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] text-rose-200">SUPER</span> : null}
+                    </>
+                  ),
+                },
+                { sort: m.user.email ?? "", tdClassName: "text-xs", node: m.user.email },
+                {
+                  sort: m.roleTemplate,
+                  node: (
+                    <form action={`/api/admin/tenants/${tenant.id}/memberships/${m.id}/role`} method="post" className="flex gap-1">
+                      <select name="role" defaultValue={m.roleTemplate} className="form-select text-xs">
+                        {ROLE_TEMPLATES.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <button className="btn-outline text-xs">Save</button>
+                    </form>
+                  ),
+                },
+                { sort: m.businessUnit?.name ?? "", tdClassName: "text-xs", node: m.businessUnit?.name ?? "—" },
+                { sort: new Date(m.createdAt).getTime(), tdClassName: "text-xs text-slate-400", node: formatDate(m.createdAt) },
+                {
+                  node: (
+                    <form action={`/api/admin/tenants/${tenant.id}/memberships/${m.id}/delete`} method="post">
+                      <button className="btn-outline text-xs">Remove</button>
+                    </form>
+                  ),
+                },
+              ],
+            }))}
+          />
+        </div>
       </section>
 
       <section className="card p-6">

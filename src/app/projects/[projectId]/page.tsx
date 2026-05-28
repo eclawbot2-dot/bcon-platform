@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { getProjectWorkspace } from "@/lib/dashboard";
 import { formatCurrency, formatDate, formatDateTime, modeLabel, workflowStatusLabel } from "@/lib/utils";
 
@@ -108,29 +109,30 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
             <div className="card p-5">
               <CardTitle title="Tasks and execution" href={`/projects/${project.id}/tasks`} />
               <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                <table className="min-w-full divide-y divide-white/10">
-                  <thead className="bg-white/5">
-                    <tr>
-                      <th className="table-header">Task</th>
-                      <th className="table-header">Priority</th>
-                      <th className="table-header">Due</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                    {project.upcomingTasks.map((task) => (
-                      <tr key={task.id} className="cursor-pointer transition hover:bg-white/5">
-                        <td className="table-cell">
+                <SortableTable
+                  columns={[
+                    { header: "Task" },
+                    { header: "Priority" },
+                    { header: "Due" },
+                  ]}
+                  rows={project.upcomingTasks.map((task) => ({
+                    key: task.id,
+                    className: "cursor-pointer transition hover:bg-white/5",
+                    cells: [
+                      {
+                        sort: task.title,
+                        node: (
                           <Link href={`/projects/${project.id}/tasks`} className="block">
                             <div className="font-medium text-white">{task.title}</div>
                             <div className="text-xs text-slate-500">{task.status.replaceAll("_", " ")}</div>
                           </Link>
-                        </td>
-                        <td className="table-cell">{task.priority}</td>
-                        <td className="table-cell">{formatDate(task.dueDate)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        ),
+                      },
+                      { sort: task.priority, node: task.priority },
+                      { sort: task.dueDate ? new Date(task.dueDate).getTime() : null, node: formatDate(task.dueDate) },
+                    ],
+                  }))}
+                />
               </div>
             </div>
 

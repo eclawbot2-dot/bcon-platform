@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { clientLtvPredict } from "@/lib/client-ai";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency } from "@/lib/utils";
@@ -21,31 +22,28 @@ export default async function ClvPage() {
         <StatTile label="DROP" value={clients.filter((c) => c.strategy === "DROP").length} tone="warn" />
       </section>
       <section className="card p-0 overflow-hidden">
-        <table className="min-w-full divide-y divide-white/10 text-sm">
-          <thead className="bg-white/5">
-            <tr>
-              <th className="table-header">Client</th>
-              <th className="table-header">Past value</th>
-              <th className="table-header">5y projected</th>
-              <th className="table-header">Retention</th>
-              <th className="table-header">Strategy</th>
-              <th className="table-header">Why</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/10 bg-slate-950/40">
-            {clients.map((c) => (
-              <tr key={c.clientName}>
-                <td className="table-cell font-medium text-white">{c.clientName}</td>
-                <td className="table-cell">{formatCurrency(c.past5Y)}</td>
-                <td className="table-cell font-semibold text-white">{formatCurrency(c.projected5Y)}</td>
-                <td className="table-cell">{c.retention}%</td>
-                <td className="table-cell"><StatusBadge status={c.strategy} /></td>
-                <td className="table-cell text-xs text-slate-400">{c.rationale}</td>
-              </tr>
-            ))}
-            {clients.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500">No clients on file yet.</td></tr> : null}
-          </tbody>
-        </table>
+        <SortableTable
+          emptyMessage="No clients on file yet."
+          columns={[
+            { header: "Client" },
+            { header: "Past value" },
+            { header: "5y projected" },
+            { header: "Retention" },
+            { header: "Strategy" },
+            { header: "Why" },
+          ]}
+          rows={clients.map((c) => ({
+            key: c.clientName,
+            cells: [
+              { sort: c.clientName, tdClassName: "font-medium text-white", node: c.clientName },
+              { sort: c.past5Y, node: formatCurrency(c.past5Y) },
+              { sort: c.projected5Y, tdClassName: "font-semibold text-white", node: formatCurrency(c.projected5Y) },
+              { sort: c.retention, node: `${c.retention}%` },
+              { sort: c.strategy, node: <StatusBadge status={c.strategy} /> },
+              { sort: c.rationale, tdClassName: "text-xs text-slate-400", node: c.rationale },
+            ],
+          }))}
+        />
       </section>
     </AppLayout>
   );

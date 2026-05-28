@@ -2,9 +2,11 @@ import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { toNum } from "@/lib/money";
 
 export default async function RfpListingsPage({ searchParams }: { searchParams: Promise<{ status?: string; sourceId?: string; showBlocked?: string; q?: string }> }) {
   const tenant = await requireTenant();
@@ -90,48 +92,57 @@ export default async function RfpListingsPage({ searchParams }: { searchParams: 
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Score</th>
-                  <th className="table-header">Agency</th>
-                  <th className="table-header">Title</th>
-                  <th className="table-header">Value</th>
-                  <th className="table-header">NAICS</th>
-                  <th className="table-header">Set-aside</th>
-                  <th className="table-header">Due</th>
-                  <th className="table-header">Status</th>
-                  <th className="table-header">Drafts</th>
-                  <th className="table-header" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {listings.map((l) => (
-                  <tr key={l.id} className="transition hover:bg-white/5">
-                    <td className="table-cell text-xs">
-                      {l.score == null ? (
-                        <span className="text-slate-500">—</span>
-                      ) : (
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${l.score >= 70 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200" : l.score >= 50 ? "border-amber-500/40 bg-amber-500/10 text-amber-200" : "border-slate-500/40 bg-slate-500/10 text-slate-300"}`}
-                          title={l.scoreExplanation ?? undefined}
-                        >
-                          {l.score}{l.autoDrafted ? " · auto" : ""}
-                        </span>
-                      )}
-                    </td>
-                    <td className="table-cell text-slate-400">{l.agency}</td>
-                    <td className="table-cell">
-                      <Link href={`/bids/listings/${l.id}`} className="font-medium text-white hover:text-cyan-200">{l.title}</Link>
-                      {l.solicitationNo ? <div className="font-mono text-xs text-slate-500">{l.solicitationNo}</div> : null}
-                    </td>
-                    <td className="table-cell">{formatCurrency(l.estimatedValue)}</td>
-                    <td className="table-cell font-mono text-xs text-slate-400">{l.naicsCode ?? "—"}</td>
-                    <td className="table-cell text-xs text-slate-400">{l.setAside ?? "—"}</td>
-                    <td className="table-cell text-slate-400">{formatDate(l.dueAt)}</td>
-                    <td className="table-cell"><StatusBadge status={l.status} /></td>
-                    <td className="table-cell text-xs text-slate-400">{l.bidDrafts.length}</td>
-                    <td className="table-cell">
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No listings yet. Refresh a source from /bids/sources or discover new portals."
+              columns={[
+                { header: "Score" },
+                { header: "Agency" },
+                { header: "Title" },
+                { header: "Value" },
+                { header: "NAICS" },
+                { header: "Set-aside" },
+                { header: "Due" },
+                { header: "Status" },
+                { header: "Drafts" },
+                { header: "", sortable: false },
+              ]}
+              rows={listings.map((l) => ({
+                key: l.id,
+                className: "transition hover:bg-white/5",
+                cells: [
+                  {
+                    sort: l.score ?? null,
+                    tdClassName: "text-xs",
+                    node: l.score == null ? (
+                      <span className="text-slate-500">—</span>
+                    ) : (
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${l.score >= 70 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200" : l.score >= 50 ? "border-amber-500/40 bg-amber-500/10 text-amber-200" : "border-slate-500/40 bg-slate-500/10 text-slate-300"}`}
+                        title={l.scoreExplanation ?? undefined}
+                      >
+                        {l.score}{l.autoDrafted ? " · auto" : ""}
+                      </span>
+                    ),
+                  },
+                  { sort: l.agency, tdClassName: "text-slate-400", node: l.agency },
+                  {
+                    sort: l.title,
+                    node: (
+                      <>
+                        <Link href={`/bids/listings/${l.id}`} className="font-medium text-white hover:text-cyan-200">{l.title}</Link>
+                        {l.solicitationNo ? <div className="font-mono text-xs text-slate-500">{l.solicitationNo}</div> : null}
+                      </>
+                    ),
+                  },
+                  { sort: toNum(l.estimatedValue) ?? null, node: formatCurrency(l.estimatedValue) },
+                  { sort: l.naicsCode ?? "", tdClassName: "font-mono text-xs text-slate-400", node: l.naicsCode ?? "—" },
+                  { sort: l.setAside ?? "", tdClassName: "text-xs text-slate-400", node: l.setAside ?? "—" },
+                  { sort: l.dueAt ? new Date(l.dueAt).getTime() : null, tdClassName: "text-slate-400", node: formatDate(l.dueAt) },
+                  { sort: l.status, node: <StatusBadge status={l.status} /> },
+                  { sort: l.bidDrafts.length, tdClassName: "text-xs text-slate-400", node: l.bidDrafts.length },
+                  {
+                    node: (
                       <div className="flex flex-wrap gap-1">
                         <Link href={`/bids/listings/${l.id}/score`} className="btn-outline text-xs" title="Go/no-go AI scorer">Score</Link>
                         <form action={`/api/rfp/listings/${l.id}/draft`} method="post">
@@ -141,12 +152,11 @@ export default async function RfpListingsPage({ searchParams }: { searchParams: 
                           <button className="btn-primary text-xs" title="Draft + estimate + compliance in one click">AI autopilot</button>
                         </form>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-                {listings.length === 0 ? <tr><td colSpan={10} className="table-cell text-center text-slate-500">No listings yet. Refresh a source from /bids/sources or discover new portals.</td></tr> : null}
-              </tbody>
-            </table>
+                    ),
+                  },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

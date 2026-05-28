@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { changeOrderKindLabel, formatCurrency, formatDate } from "@/lib/utils";
-import { sumMoney } from "@/lib/money";
+import { sumMoney, toNum } from "@/lib/money";
 
 export default async function ChangeOrdersPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -42,40 +43,39 @@ export default async function ChangeOrdersPage({ params }: { params: Promise<{ p
             <Link href={`/projects/${project.id}`} className="btn-outline text-xs">← Back to project</Link>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">#</th>
-                  <th className="table-header">Kind</th>
-                  <th className="table-header">Title</th>
-                  <th className="table-header">Amount</th>
-                  <th className="table-header">Sched. impact</th>
-                  <th className="table-header">Status</th>
-                  <th className="table-header">Requested</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.changeOrders.map((co) => (
-                  <tr key={co.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell font-mono text-xs text-slate-400">{co.coNumber}</td>
-                    <td className="table-cell">{changeOrderKindLabel(co.kind)}</td>
-                    <td className="table-cell">
+            <SortableTable
+              emptyMessage="No change orders yet."
+              columns={[
+                { header: "#" },
+                { header: "Kind" },
+                { header: "Title" },
+                { header: "Amount" },
+                { header: "Sched. impact" },
+                { header: "Status" },
+                { header: "Requested" },
+              ]}
+              rows={project.changeOrders.map((co) => ({
+                key: co.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  { sort: co.coNumber, node: co.coNumber, tdClassName: "font-mono text-xs text-slate-400" },
+                  { sort: changeOrderKindLabel(co.kind), node: changeOrderKindLabel(co.kind) },
+                  {
+                    sort: co.title,
+                    node: (
                       <Link href={`/projects/${project.id}/change-orders/${co.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">
                         <div className="font-medium">{co.title}</div>
                         {co.description ? <div className="text-xs text-slate-500">{co.description}</div> : null}
                       </Link>
-                    </td>
-                    <td className="table-cell font-medium text-white">{formatCurrency(co.amount)}</td>
-                    <td className="table-cell">{co.scheduleImpactDays ? `${co.scheduleImpactDays}d` : "—"}</td>
-                    <td className="table-cell"><StatusBadge status={co.status} /></td>
-                    <td className="table-cell text-slate-400">{formatDate(co.requestedAt)}</td>
-                  </tr>
-                ))}
-                {project.changeOrders.length === 0 ? (
-                  <tr><td colSpan={7} className="table-cell text-center text-slate-500">No change orders yet.</td></tr>
-                ) : null}
-              </tbody>
-            </table>
+                    ),
+                  },
+                  { sort: toNum(co.amount), node: formatCurrency(co.amount), tdClassName: "font-medium text-white" },
+                  { sort: co.scheduleImpactDays, node: co.scheduleImpactDays ? `${co.scheduleImpactDays}d` : "—" },
+                  { sort: co.status, node: <StatusBadge status={co.status} /> },
+                  { sort: co.requestedAt ? new Date(co.requestedAt).getTime() : null, node: formatDate(co.requestedAt), tdClassName: "text-slate-400" },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

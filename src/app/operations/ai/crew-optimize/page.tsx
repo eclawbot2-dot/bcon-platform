@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { crewAssignmentOptimizer } from "@/lib/ops-ai";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
@@ -23,19 +24,24 @@ export default async function CrewOptimizePage({ searchParams }: { searchParams:
       </form>
       {suggestions.length > 0 ? (
         <section className="card p-0 overflow-hidden">
-          <table className="min-w-full divide-y divide-white/10 text-sm">
-            <thead className="bg-white/5"><tr><th className="table-header">Task</th><th className="table-header">Crew</th><th className="table-header">Confidence</th><th className="table-header">Why</th></tr></thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {suggestions.map((s, i) => (
-                <tr key={i}>
-                  <td className="table-cell">{s.taskName}</td>
-                  <td className="table-cell font-semibold text-white">{s.suggestedCrew}</td>
-                  <td className="table-cell">{s.confidence}%</td>
-                  <td className="table-cell text-xs text-slate-400">{s.rationale}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No suggestions."
+            columns={[
+              { header: "Task" },
+              { header: "Crew" },
+              { header: "Confidence" },
+              { header: "Why" },
+            ]}
+            rows={suggestions.map((s, i) => ({
+              key: String(i),
+              cells: [
+                { sort: s.taskName, node: s.taskName },
+                { sort: s.suggestedCrew, node: s.suggestedCrew, tdClassName: "font-semibold text-white" },
+                { sort: s.confidence, node: `${s.confidence}%` },
+                { sort: s.rationale, node: s.rationale, tdClassName: "text-xs text-slate-400" },
+              ],
+            }))}
+          />
         </section>
       ) : null}
     </AppLayout>

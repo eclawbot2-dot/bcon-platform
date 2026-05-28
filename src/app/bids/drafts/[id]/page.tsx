@@ -3,6 +3,7 @@ import Link from "next/link";
 import { DetailShell, DetailGrid, DetailField } from "@/components/layout/detail-shell";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -172,26 +173,25 @@ export default async function BidDraftDetailPage({ params }: { params: Promise<{
             <StatusBadge status={latestRun.overall} />
           </div>
           <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Category</th>
-                  <th className="table-header">Requirement</th>
-                  <th className="table-header">Outcome</th>
-                  <th className="table-header">Evidence</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {latestRun.items.map((i) => (
-                  <tr key={i.id}>
-                    <td className="table-cell">{i.category}</td>
-                    <td className="table-cell">{i.requirement}</td>
-                    <td className="table-cell"><StatusBadge status={i.outcome} /></td>
-                    <td className="table-cell text-xs text-slate-400">{i.evidence ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No items."
+              columns={[
+                { header: "Category" },
+                { header: "Requirement" },
+                { header: "Outcome" },
+                { header: "Evidence" },
+              ]}
+              rows={latestRun.items.map((i) => ({
+                key: i.id,
+                cells: [
+                  { sort: i.category, node: i.category },
+                  { sort: i.requirement, node: i.requirement },
+                  { sort: i.outcome, node: <StatusBadge status={i.outcome} /> },
+                  { sort: i.evidence ?? "", tdClassName: "text-xs text-slate-400", node: i.evidence ?? "—" },
+                ],
+              }))}
+            />
           </div>
         </section>
       ) : null}

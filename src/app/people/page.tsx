@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate, roleLabel } from "@/lib/utils";
@@ -23,28 +24,35 @@ export default async function PeoplePage() {
         </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Name</th>
-                  <th className="table-header">Email</th>
-                  <th className="table-header">Roles</th>
-                  <th className="table-header">Business units</th>
-                  <th className="table-header">Active since</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {users.map((u) => (
-                  <tr key={u.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell font-medium"><Link href={`/people/${u.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{u.name}</Link></td>
-                    <td className="table-cell text-slate-400">{u.email}</td>
-                    <td className="table-cell">{Array.from(new Set(u.memberships.map((m) => roleLabel(m.roleTemplate)))).join(", ") || "—"}</td>
-                    <td className="table-cell text-slate-400">{u.memberships.map((m) => m.businessUnit?.name).filter(Boolean).join(", ") || "—"}</td>
-                    <td className="table-cell text-slate-400">{formatDate(u.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No team members yet."
+              columns={[
+                { header: "Name" },
+                { header: "Email" },
+                { header: "Roles" },
+                { header: "Business units" },
+                { header: "Active since" },
+              ]}
+              rows={users.map((u) => {
+                const roles = Array.from(new Set(u.memberships.map((m) => roleLabel(m.roleTemplate)))).join(", ");
+                const bus = u.memberships.map((m) => m.businessUnit?.name).filter(Boolean).join(", ");
+                return {
+                  key: u.id,
+                  className: "cursor-pointer transition hover:bg-white/5",
+                  cells: [
+                    {
+                      sort: u.name,
+                      node: <Link href={`/people/${u.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{u.name}</Link>,
+                      tdClassName: "font-medium",
+                    },
+                    { sort: u.email, node: u.email, tdClassName: "text-slate-400" },
+                    { sort: roles, node: roles || "—" },
+                    { sort: bus, node: bus || "—", tdClassName: "text-slate-400" },
+                    { sort: new Date(u.createdAt).getTime(), node: formatDate(u.createdAt), tdClassName: "text-slate-400" },
+                  ],
+                };
+              })}
+            />
           </div>
         </section>
       </div>

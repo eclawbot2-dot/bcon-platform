@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDateTime } from "@/lib/utils";
@@ -49,40 +50,38 @@ export default async function ApiTokensPage() {
 
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Active tokens</div>
-          <table className="min-w-full divide-y divide-white/10 text-sm">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Name</th>
-                <th className="table-header">Prefix</th>
-                <th className="table-header">Scopes</th>
-                <th className="table-header">Created</th>
-                <th className="table-header">Last used</th>
-                <th className="table-header" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {tokens.map((t) => {
-                const scopes = (() => { try { return JSON.parse(t.scopesJson) as string[]; } catch { return []; } })();
-                return (
-                  <tr key={t.id} className={t.revokedAt ? "opacity-50" : ""}>
-                    <td className="table-cell">{t.name}</td>
-                    <td className="table-cell font-mono text-xs">{t.prefix}</td>
-                    <td className="table-cell text-xs">{scopes.join(", ")}</td>
-                    <td className="table-cell text-xs">{formatDateTime(t.createdAt)}</td>
-                    <td className="table-cell text-xs">{t.lastUsedAt ? formatDateTime(t.lastUsedAt) : "—"}</td>
-                    <td className="table-cell">
-                      {!t.revokedAt ? (
-                        <form action={`/api/tenant/api-tokens/${t.id}/revoke`} method="post">
-                          <button className="btn-outline text-xs text-rose-300">Revoke</button>
-                        </form>
-                      ) : <span className="text-xs text-rose-400">revoked</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-              {tokens.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500 py-4">No tokens issued yet.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No tokens issued yet."
+            columns={[
+              { header: "Name" },
+              { header: "Prefix" },
+              { header: "Scopes" },
+              { header: "Created" },
+              { header: "Last used" },
+              { header: "", sortable: false },
+            ]}
+            rows={tokens.map((t) => {
+              const scopes = (() => { try { return JSON.parse(t.scopesJson) as string[]; } catch { return []; } })();
+              return {
+                key: t.id,
+                className: t.revokedAt ? "opacity-50" : "",
+                cells: [
+                  { sort: t.name, node: t.name },
+                  { sort: t.prefix, node: t.prefix, tdClassName: "font-mono text-xs" },
+                  { sort: scopes.join(", "), node: scopes.join(", "), tdClassName: "text-xs" },
+                  { sort: t.createdAt ? new Date(t.createdAt).getTime() : undefined, node: formatDateTime(t.createdAt), tdClassName: "text-xs" },
+                  { sort: t.lastUsedAt ? new Date(t.lastUsedAt).getTime() : undefined, node: t.lastUsedAt ? formatDateTime(t.lastUsedAt) : "—", tdClassName: "text-xs" },
+                  {
+                    node: !t.revokedAt ? (
+                      <form action={`/api/tenant/api-tokens/${t.id}/revoke`} method="post">
+                        <button className="btn-outline text-xs text-rose-300">Revoke</button>
+                      </form>
+                    ) : <span className="text-xs text-rose-400">revoked</span>,
+                  },
+                ],
+              };
+            })}
+          />
         </section>
 
         <section className="card p-5">
@@ -96,36 +95,36 @@ export default async function ApiTokensPage() {
         </section>
 
         <section className="card p-0 overflow-hidden">
-          <table className="min-w-full divide-y divide-white/10 text-sm">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">URL</th>
-                <th className="table-header">Events</th>
-                <th className="table-header">Last delivery</th>
-                <th className="table-header">Failures</th>
-                <th className="table-header" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {webhooks.map((w) => {
-                const events = (() => { try { return JSON.parse(w.eventsJson) as string[]; } catch { return []; } })();
-                return (
-                  <tr key={w.id} className={w.active ? "" : "opacity-50"}>
-                    <td className="table-cell font-mono text-xs truncate max-w-[280px]">{w.url}</td>
-                    <td className="table-cell text-xs">{events.join(", ")}</td>
-                    <td className="table-cell text-xs">{w.lastDeliveryAt ? formatDateTime(w.lastDeliveryAt) : "—"}</td>
-                    <td className={`table-cell text-xs ${w.failureCount > 0 ? "text-rose-300" : ""}`}>{w.failureCount}</td>
-                    <td className="table-cell">
+          <SortableTable
+            emptyMessage="No webhook endpoints registered."
+            columns={[
+              { header: "URL" },
+              { header: "Events" },
+              { header: "Last delivery" },
+              { header: "Failures" },
+              { header: "", sortable: false },
+            ]}
+            rows={webhooks.map((w) => {
+              const events = (() => { try { return JSON.parse(w.eventsJson) as string[]; } catch { return []; } })();
+              return {
+                key: w.id,
+                className: w.active ? "" : "opacity-50",
+                cells: [
+                  { sort: w.url, node: w.url, tdClassName: "font-mono text-xs truncate max-w-[280px]" },
+                  { sort: events.join(", "), node: events.join(", "), tdClassName: "text-xs" },
+                  { sort: w.lastDeliveryAt ? new Date(w.lastDeliveryAt).getTime() : undefined, node: w.lastDeliveryAt ? formatDateTime(w.lastDeliveryAt) : "—", tdClassName: "text-xs" },
+                  { sort: w.failureCount, node: w.failureCount, tdClassName: `text-xs ${w.failureCount > 0 ? "text-rose-300" : ""}` },
+                  {
+                    node: (
                       <form action={`/api/tenant/webhooks/${w.id}/toggle`} method="post">
                         <button className="btn-outline text-xs">{w.active ? "Disable" : "Enable"}</button>
                       </form>
-                    </td>
-                  </tr>
-                );
-              })}
-              {webhooks.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-slate-500 py-4">No webhook endpoints registered.</td></tr> : null}
-            </tbody>
-          </table>
+                    ),
+                  },
+                ],
+              };
+            })}
+          />
         </section>
 
         <section className="card p-5 text-xs text-slate-400">

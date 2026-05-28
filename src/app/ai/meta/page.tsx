@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
+import { SortableTable } from "@/components/SortableTable";
 import { generateFixtures, releaseNotesFromCommits } from "@/lib/meta-ai";
 import { isLlmEnabled } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
@@ -46,33 +47,47 @@ export default async function MetaAiPage() {
       {byKind.length > 0 ? (
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Usage by feature</div>
-          <table className="min-w-full divide-y divide-white/10 text-sm">
-            <thead className="bg-white/5"><tr><th className="table-header">Kind</th><th className="table-header">Source</th><th className="table-header">Runs</th></tr></thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {byKind.sort((a, b) => (b._count?._all ?? 0) - (a._count?._all ?? 0)).map((b, i) => (
-                <tr key={i}><td className="table-cell font-mono text-xs">{b.kind}</td><td className="table-cell text-xs">{b.source}</td><td className="table-cell">{b._count?._all ?? 0}</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No usage yet."
+            columns={[
+              { header: "Kind" },
+              { header: "Source" },
+              { header: "Runs" },
+            ]}
+            rows={byKind.sort((a, b) => (b._count?._all ?? 0) - (a._count?._all ?? 0)).map((b, i) => ({
+              key: String(i),
+              cells: [
+                { sort: b.kind, tdClassName: "font-mono text-xs", node: b.kind },
+                { sort: b.source, tdClassName: "text-xs", node: b.source },
+                { sort: b._count?._all ?? 0, node: b._count?._all ?? 0 },
+              ],
+            }))}
+          />
         </section>
       ) : null}
       {recent.length > 0 ? (
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Recent AI runs (20)</div>
-          <table className="min-w-full divide-y divide-white/10 text-sm">
-            <thead className="bg-white/5"><tr><th className="table-header">When</th><th className="table-header">Kind</th><th className="table-header">Entity</th><th className="table-header">Source</th><th className="table-header">Feedback</th></tr></thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {recent.map((r) => (
-                <tr key={r.id}>
-                  <td className="table-cell text-xs text-slate-400">{formatDate(r.createdAt)}</td>
-                  <td className="table-cell font-mono text-xs">{r.kind}</td>
-                  <td className="table-cell text-xs">{r.entityType ? `${r.entityType}:${r.entityId?.slice(0, 8) ?? ""}` : "—"}</td>
-                  <td className="table-cell text-xs">{r.source}</td>
-                  <td className="table-cell text-xs">{r.userFeedback ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No recent runs."
+            columns={[
+              { header: "When" },
+              { header: "Kind" },
+              { header: "Entity" },
+              { header: "Source" },
+              { header: "Feedback" },
+            ]}
+            rows={recent.map((r) => ({
+              key: r.id,
+              cells: [
+                { sort: new Date(r.createdAt).getTime(), tdClassName: "text-xs text-slate-400", node: formatDate(r.createdAt) },
+                { sort: r.kind, tdClassName: "font-mono text-xs", node: r.kind },
+                { sort: r.entityType ?? "", tdClassName: "text-xs", node: r.entityType ? `${r.entityType}:${r.entityId?.slice(0, 8) ?? ""}` : "—" },
+                { sort: r.source, tdClassName: "text-xs", node: r.source },
+                { sort: r.userFeedback ?? "", tdClassName: "text-xs", node: r.userFeedback ?? "—" },
+              ],
+            }))}
+          />
         </section>
       ) : null}
       <section className="card p-6">

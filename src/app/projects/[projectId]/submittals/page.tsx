@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 
@@ -29,29 +30,27 @@ export default async function SubmittalsPage({ params }: { params: Promise<{ pro
         </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">#</th>
-                  <th className="table-header">Title</th>
-                  <th className="table-header">Spec section</th>
-                  <th className="table-header">Long-lead</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.submittals.map((s) => (
-                  <tr key={s.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell font-mono text-xs text-slate-400">{s.number}</td>
-                    <td className="table-cell"><Link href={`/projects/${project.id}/submittals/${s.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{s.title}</Link></td>
-                    <td className="table-cell text-slate-400">{s.specSection ?? "—"}</td>
-                    <td className="table-cell">{s.longLead ? <StatusBadge tone="warn" label="Long lead" /> : "—"}</td>
-                    <td className="table-cell"><StatusBadge status={s.status} /></td>
-                  </tr>
-                ))}
-                {project.submittals.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-slate-500">No submittals on file.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No submittals on file."
+              columns={[
+                { header: "#" },
+                { header: "Title" },
+                { header: "Spec section" },
+                { header: "Long-lead" },
+                { header: "Status" },
+              ]}
+              rows={project.submittals.map((s) => ({
+                key: s.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  { sort: s.number, node: s.number, tdClassName: "font-mono text-xs text-slate-400" },
+                  { sort: s.title, node: <Link href={`/projects/${project.id}/submittals/${s.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{s.title}</Link> },
+                  { sort: s.specSection ?? "", node: s.specSection ?? "—", tdClassName: "text-slate-400" },
+                  { sort: s.longLead ? 1 : 0, node: s.longLead ? <StatusBadge tone="warn" label="Long lead" /> : "—" },
+                  { sort: s.status, node: <StatusBadge status={s.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

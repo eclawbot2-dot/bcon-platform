@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { validateLienWaiver } from "@/lib/compliance-ai";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
@@ -29,14 +30,22 @@ export default async function LienWaiverValidatorPage({ searchParams }: { search
             <div className="mt-2 text-lg font-semibold text-white">{validation.recommendation}</div>
           </section>
           <section className="card p-0 overflow-hidden">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5"><tr><th className="table-header">Field</th><th className="table-header">Status</th><th className="table-header">Note</th></tr></thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {validation.findings.map((f, i) => (
-                  <tr key={i}><td className="table-cell">{f.field}</td><td className="table-cell"><StatusBadge status={f.status} /></td><td className="table-cell text-xs text-slate-400">{f.note}</td></tr>
-                ))}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No findings."
+              columns={[
+                { header: "Field" },
+                { header: "Status" },
+                { header: "Note" },
+              ]}
+              rows={validation.findings.map((f, i) => ({
+                key: String(i),
+                cells: [
+                  { sort: f.field, node: f.field },
+                  { sort: f.status, node: <StatusBadge status={f.status} /> },
+                  { sort: f.note, node: f.note, tdClassName: "text-xs text-slate-400" },
+                ],
+              }))}
+            />
           </section>
         </>
       ) : null}

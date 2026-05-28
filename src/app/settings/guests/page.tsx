@@ -1,4 +1,5 @@
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDateTime } from "@/lib/utils";
@@ -36,35 +37,35 @@ export default async function GuestsPage() {
         </section>
 
         <section className="card p-0 overflow-hidden">
-          <table className="min-w-full divide-y divide-white/10 text-sm">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Email</th>
-                <th className="table-header">Name</th>
-                <th className="table-header">Role</th>
-                <th className="table-header">Last seen</th>
-                <th className="table-header">Active</th>
-                <th className="table-header" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {guests.map((g) => (
-                <tr key={g.id} className={g.active ? "" : "opacity-50"}>
-                  <td className="table-cell">{g.email}</td>
-                  <td className="table-cell">{g.name ?? "—"}</td>
-                  <td className="table-cell text-xs">{g.role}</td>
-                  <td className="table-cell text-xs">{g.lastSeenAt ? formatDateTime(g.lastSeenAt) : "—"}</td>
-                  <td className="table-cell">{g.active ? "✓" : "—"}</td>
-                  <td className="table-cell">
+          <SortableTable
+            emptyMessage="No guest accounts yet."
+            columns={[
+              { header: "Email" },
+              { header: "Name" },
+              { header: "Role" },
+              { header: "Last seen" },
+              { header: "Active" },
+              { header: "", sortable: false },
+            ]}
+            rows={guests.map((g) => ({
+              key: g.id,
+              className: g.active ? "" : "opacity-50",
+              cells: [
+                { sort: g.email, node: g.email },
+                { sort: g.name ?? "", node: g.name ?? "—" },
+                { sort: g.role, node: g.role, tdClassName: "text-xs" },
+                { sort: g.lastSeenAt ? new Date(g.lastSeenAt).getTime() : undefined, node: g.lastSeenAt ? formatDateTime(g.lastSeenAt) : "—", tdClassName: "text-xs" },
+                { sort: g.active ? 1 : 0, node: g.active ? "✓" : "—" },
+                {
+                  node: (
                     <form action={`/api/tenant/guests/${g.id}/toggle`} method="post">
                       <button className="btn-outline text-xs">{g.active ? "Disable" : "Enable"}</button>
                     </form>
-                  </td>
-                </tr>
-              ))}
-              {guests.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500 py-4">No guest accounts yet.</td></tr> : null}
-            </tbody>
-          </table>
+                  ),
+                },
+              ],
+            }))}
+          />
         </section>
       </div>
     </AppLayout>

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { DetailShell } from "@/components/layout/detail-shell";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { scopeGapCheck } from "@/lib/estimating-ai";
@@ -23,24 +24,22 @@ export default async function GapsPage({ params }: { params: Promise<{ id: strin
         <div className="card p-6 text-sm text-slate-300">No material scope gaps detected — estimate covers typical cost codes for this mode.</div>
       ) : (
         <section className="card p-0 overflow-hidden">
-          <table className="min-w-full divide-y divide-white/10 text-sm">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Cost code</th>
-                <th className="table-header">Description</th>
-                <th className="table-header">Why</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {gaps.map((g) => (
-                <tr key={g.costCode}>
-                  <td className="table-cell font-mono text-xs text-amber-200">{g.costCode}</td>
-                  <td className="table-cell">{g.description}</td>
-                  <td className="table-cell text-xs text-slate-400">{g.rationale}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No gaps."
+            columns={[
+              { header: "Cost code" },
+              { header: "Description" },
+              { header: "Why" },
+            ]}
+            rows={gaps.map((g) => ({
+              key: g.costCode,
+              cells: [
+                { sort: g.costCode, tdClassName: "font-mono text-xs text-amber-200", node: g.costCode },
+                { sort: g.description, node: g.description },
+                { sort: g.rationale, tdClassName: "text-xs text-slate-400", node: g.rationale },
+              ],
+            }))}
+          />
         </section>
       )}
       <Link href={`/bids/drafts/${id}`} className="btn-outline text-xs">← back to draft</Link>

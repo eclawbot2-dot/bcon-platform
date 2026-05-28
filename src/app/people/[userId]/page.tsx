@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DetailShell, DetailGrid, DetailField } from "@/components/layout/detail-shell";
 import { StatTile } from "@/components/ui/stat-tile";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate, roleLabel } from "@/lib/utils";
@@ -50,55 +51,53 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Role memberships</div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Tenant</th>
-                <th className="table-header">Business unit</th>
-                <th className="table-header">Role</th>
-                <th className="table-header">Created</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {user.memberships.map((m) => (
-                <tr key={m.id}>
-                  <td className="table-cell">{m.tenant.name}</td>
-                  <td className="table-cell">{m.businessUnit?.name ?? "—"}</td>
-                  <td className="table-cell">{roleLabel(m.roleTemplate)}</td>
-                  <td className="table-cell text-slate-400">{formatDate(m.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <SortableTable
+            className="min-w-full divide-y divide-white/10"
+            emptyMessage="No memberships."
+            columns={[
+              { header: "Tenant" },
+              { header: "Business unit" },
+              { header: "Role" },
+              { header: "Created" },
+            ]}
+            rows={user.memberships.map((m) => ({
+              key: m.id,
+              cells: [
+                { sort: m.tenant.name, node: m.tenant.name },
+                { sort: m.businessUnit?.name ?? "", node: m.businessUnit?.name ?? "—" },
+                { sort: roleLabel(m.roleTemplate), node: roleLabel(m.roleTemplate) },
+                { sort: new Date(m.createdAt).getTime(), node: formatDate(m.createdAt), tdClassName: "text-slate-400" },
+              ],
+            }))}
+          />
         </div>
       </section>
 
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Assigned tasks</div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Project</th>
-                <th className="table-header">Task</th>
-                <th className="table-header">Priority</th>
-                <th className="table-header">Due</th>
-                <th className="table-header">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {user.tasks.map((t) => (
-                <tr key={t.id} className="transition hover:bg-white/5">
-                  <td className="table-cell"><Link href={`/projects/${t.project.id}/tasks`} className="text-cyan-300 hover:underline">{t.project.code}</Link></td>
-                  <td className="table-cell">{t.title}</td>
-                  <td className="table-cell">{t.priority}</td>
-                  <td className="table-cell text-slate-400">{formatDate(t.dueDate)}</td>
-                  <td className="table-cell">{t.status.replaceAll("_", " ")}</td>
-                </tr>
-              ))}
-              {user.tasks.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-slate-500">No tasks assigned.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            className="min-w-full divide-y divide-white/10"
+            emptyMessage="No tasks assigned."
+            columns={[
+              { header: "Project" },
+              { header: "Task" },
+              { header: "Priority" },
+              { header: "Due" },
+              { header: "Status" },
+            ]}
+            rows={user.tasks.map((t) => ({
+              key: t.id,
+              className: "transition hover:bg-white/5",
+              cells: [
+                { sort: t.project.code, node: <Link href={`/projects/${t.project.id}/tasks`} className="text-cyan-300 hover:underline">{t.project.code}</Link> },
+                { sort: t.title, node: t.title },
+                { sort: t.priority, node: t.priority },
+                { sort: t.dueDate ? new Date(t.dueDate).getTime() : null, node: formatDate(t.dueDate), tdClassName: "text-slate-400" },
+                { sort: t.status, node: t.status.replaceAll("_", " ") },
+              ],
+            }))}
+          />
         </div>
       </section>
     </DetailShell>

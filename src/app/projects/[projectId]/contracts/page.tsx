@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { contractTypeLabel, formatCurrency, formatDate, formatPercent } from "@/lib/utils";
-import { sumMoney, subtractMoney } from "@/lib/money";
+import { sumMoney, subtractMoney, toNum } from "@/lib/money";
 
 export default async function ContractsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -65,30 +66,28 @@ export default async function ContractsPage({ params }: { params: Promise<{ proj
               </div>
               {c.commitments.length > 0 ? (
                 <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                  <table className="min-w-full divide-y divide-white/10">
-                    <thead className="bg-white/5">
-                      <tr>
-                        <th className="table-header">Cost code</th>
-                        <th className="table-header">Description</th>
-                        <th className="table-header">Committed</th>
-                        <th className="table-header">Invoiced</th>
-                        <th className="table-header">Paid</th>
-                        <th className="table-header">Remaining</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                      {c.commitments.map((cm) => (
-                        <tr key={cm.id}>
-                          <td className="table-cell font-mono text-xs text-slate-400">{cm.costCode ?? "—"}</td>
-                          <td className="table-cell">{cm.description}</td>
-                          <td className="table-cell">{formatCurrency(cm.committedAmount)}</td>
-                          <td className="table-cell">{formatCurrency(cm.invoicedToDate)}</td>
-                          <td className="table-cell">{formatCurrency(cm.paidToDate)}</td>
-                          <td className="table-cell">{formatCurrency(subtractMoney(cm.committedAmount, cm.invoicedToDate))}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <SortableTable
+                    emptyMessage="No commitments."
+                    columns={[
+                      { header: "Cost code" },
+                      { header: "Description" },
+                      { header: "Committed" },
+                      { header: "Invoiced" },
+                      { header: "Paid" },
+                      { header: "Remaining" },
+                    ]}
+                    rows={c.commitments.map((cm) => ({
+                      key: cm.id,
+                      cells: [
+                        { sort: cm.costCode ?? "", node: cm.costCode ?? "—", tdClassName: "font-mono text-xs text-slate-400" },
+                        { sort: cm.description, node: cm.description },
+                        { sort: toNum(cm.committedAmount), node: formatCurrency(cm.committedAmount) },
+                        { sort: toNum(cm.invoicedToDate), node: formatCurrency(cm.invoicedToDate) },
+                        { sort: toNum(cm.paidToDate), node: formatCurrency(cm.paidToDate) },
+                        { sort: toNum(subtractMoney(cm.committedAmount, cm.invoicedToDate)), node: formatCurrency(subtractMoney(cm.committedAmount, cm.invoicedToDate)) },
+                      ],
+                    }))}
+                  />
                 </div>
               ) : null}
               <div className="mt-4 text-xs text-slate-400">

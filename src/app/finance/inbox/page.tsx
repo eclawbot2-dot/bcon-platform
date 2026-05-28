@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -71,35 +72,32 @@ export default async function InboxPage() {
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Recent invoice emails</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Received</th>
-                  <th className="table-header">From</th>
-                  <th className="table-header">Subject</th>
-                  <th className="table-header">Vendor</th>
-                  <th className="table-header">Amount</th>
-                  <th className="table-header">Project</th>
-                  <th className="table-header">Confidence</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {messages.map((m) => (
-                  <tr key={m.id}>
-                    <td className="table-cell text-slate-400">{formatDate(m.receivedAt)}</td>
-                    <td className="table-cell font-mono text-xs text-slate-400">{m.fromAddress}</td>
-                    <td className="table-cell max-w-[320px]">{m.subject}</td>
-                    <td className="table-cell">{m.vendorGuess ?? "—"}</td>
-                    <td className="table-cell">{formatCurrency(m.amountGuess)}</td>
-                    <td className="table-cell">{m.projectGuess ? <Link href={`/projects/${m.projectGuess.id}/financials`} className="text-cyan-300 hover:underline">{m.projectGuess.code}</Link> : <span className="text-slate-500">—</span>}</td>
-                    <td className="table-cell">{m.confidence}%</td>
-                    <td className="table-cell"><StatusBadge status={m.status} /></td>
-                  </tr>
-                ))}
-                {messages.length === 0 ? <tr><td colSpan={8} className="table-cell text-center text-slate-500">No messages yet. Connect + poll to ingest.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No messages yet. Connect + poll to ingest."
+              columns={[
+                { header: "Received" },
+                { header: "From" },
+                { header: "Subject" },
+                { header: "Vendor" },
+                { header: "Amount" },
+                { header: "Project" },
+                { header: "Confidence" },
+                { header: "Status" },
+              ]}
+              rows={messages.map((m) => ({
+                key: m.id,
+                cells: [
+                  { sort: new Date(m.receivedAt).getTime(), node: formatDate(m.receivedAt), tdClassName: "text-slate-400" },
+                  { sort: m.fromAddress, node: m.fromAddress, tdClassName: "font-mono text-xs text-slate-400" },
+                  { sort: m.subject, node: m.subject, tdClassName: "max-w-[320px]" },
+                  { sort: m.vendorGuess ?? "", node: m.vendorGuess ?? "—" },
+                  { sort: Number(m.amountGuess ?? 0), node: formatCurrency(m.amountGuess) },
+                  { sort: m.projectGuess?.code ?? "", node: m.projectGuess ? <Link href={`/projects/${m.projectGuess.id}/financials`} className="text-cyan-300 hover:underline">{m.projectGuess.code}</Link> : <span className="text-slate-500">—</span> },
+                  { sort: m.confidence, node: `${m.confidence}%` },
+                  { sort: m.status, node: <StatusBadge status={m.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

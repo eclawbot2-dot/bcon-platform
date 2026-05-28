@@ -4,10 +4,12 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatTile } from "@/components/ui/stat-tile";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { currentActor } from "@/lib/permissions";
 import { loadedLabor } from "@/lib/timesheets";
+import { toNum } from "@/lib/money";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export default async function TimesheetsPage({ params }: { params: Promise<{ projectId: string }> }) {
@@ -61,42 +63,40 @@ export default async function TimesheetsPage({ params }: { params: Promise<{ pro
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Entries</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Employee</th>
-                  <th className="table-header">Trade</th>
-                  <th className="table-header">Week ending</th>
-                  <th className="table-header">Reg</th>
-                  <th className="table-header">OT</th>
-                  <th className="table-header">DT</th>
-                  <th className="table-header">Rate</th>
-                  <th className="table-header">Loaded cost</th>
-                  <th className="table-header">Cost code</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.timeEntries.map((t) => {
-                  const loaded = loadedLabor(t);
-                  return (
-                    <tr key={t.id} className="cursor-pointer transition hover:bg-white/5">
-                      <td className="table-cell"><Link href={`/timesheets/${t.id}`} className="block font-medium text-white">{t.employeeName}</Link></td>
-                      <td className="table-cell"><Link href={`/timesheets/${t.id}`} className="block text-slate-400">{t.trade ?? "—"}</Link></td>
-                      <td className="table-cell"><Link href={`/timesheets/${t.id}`} className="block text-slate-400">{formatDate(t.weekEnding)}</Link></td>
-                      <td className="table-cell"><Link href={`/timesheets/${t.id}`} className="block">{t.regularHours}</Link></td>
-                      <td className="table-cell"><Link href={`/timesheets/${t.id}`} className="block">{t.overtimeHours}</Link></td>
-                      <td className="table-cell"><Link href={`/timesheets/${t.id}`} className="block">{t.doubleTimeHours}</Link></td>
-                      <td className="table-cell"><Link href={`/timesheets/${t.id}`} className="block">{formatCurrency(t.rate)}/h</Link></td>
-                      <td className="table-cell"><Link href={`/timesheets/${t.id}`} className="block">{formatCurrency(loaded)}</Link></td>
-                      <td className="table-cell font-mono text-xs"><Link href={`/timesheets/${t.id}`} className="block">{t.costCode ?? "—"}</Link></td>
-                      <td className="table-cell"><Link href={`/timesheets/${t.id}`} className="block"><StatusBadge status={t.status} /></Link></td>
-                    </tr>
-                  );
-                })}
-                {project.timeEntries.length === 0 ? <tr><td colSpan={10} className="table-cell text-center text-slate-500">No time entries yet — add one above.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No time entries yet — add one above."
+              columns={[
+                { header: "Employee" },
+                { header: "Trade" },
+                { header: "Week ending" },
+                { header: "Reg" },
+                { header: "OT" },
+                { header: "DT" },
+                { header: "Rate" },
+                { header: "Loaded cost" },
+                { header: "Cost code" },
+                { header: "Status" },
+              ]}
+              rows={project.timeEntries.map((t) => {
+                const loaded = loadedLabor(t);
+                return {
+                  key: t.id,
+                  className: "cursor-pointer transition hover:bg-white/5",
+                  cells: [
+                    { sort: t.employeeName, node: <Link href={`/timesheets/${t.id}`} className="block font-medium text-white">{t.employeeName}</Link> },
+                    { sort: t.trade ?? "", node: <Link href={`/timesheets/${t.id}`} className="block text-slate-400">{t.trade ?? "—"}</Link> },
+                    { sort: new Date(t.weekEnding).getTime(), node: <Link href={`/timesheets/${t.id}`} className="block text-slate-400">{formatDate(t.weekEnding)}</Link> },
+                    { sort: t.regularHours, node: <Link href={`/timesheets/${t.id}`} className="block">{t.regularHours}</Link> },
+                    { sort: t.overtimeHours, node: <Link href={`/timesheets/${t.id}`} className="block">{t.overtimeHours}</Link> },
+                    { sort: t.doubleTimeHours, node: <Link href={`/timesheets/${t.id}`} className="block">{t.doubleTimeHours}</Link> },
+                    { sort: toNum(t.rate), node: <Link href={`/timesheets/${t.id}`} className="block">{formatCurrency(t.rate)}/h</Link> },
+                    { sort: loaded, node: <Link href={`/timesheets/${t.id}`} className="block">{formatCurrency(loaded)}</Link> },
+                    { sort: t.costCode ?? "", node: <Link href={`/timesheets/${t.id}`} className="block">{t.costCode ?? "—"}</Link>, tdClassName: "font-mono text-xs" },
+                    { sort: t.status, node: <Link href={`/timesheets/${t.id}`} className="block"><StatusBadge status={t.status} /></Link> },
+                  ],
+                };
+              })}
+            />
           </div>
         </section>
       </div>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
@@ -35,29 +36,28 @@ export default async function RfisPage({ params }: { params: Promise<{ projectId
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">RFI log</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">#</th>
-                  <th className="table-header">Subject</th>
-                  <th className="table-header">Ball in court</th>
-                  <th className="table-header">Due</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.rfis.map((r) => (
-                  <tr key={r.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell font-mono text-xs text-slate-400">{r.number}</td>
-                    <td className="table-cell"><Link href={`/projects/${project.id}/rfis/${r.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{r.subject}</Link></td>
-                    <td className="table-cell">{r.ballInCourt ?? "—"}</td>
-                    <td className="table-cell text-slate-400">{formatDate(r.dueDate)}</td>
-                    <td className="table-cell"><StatusBadge status={r.status} /></td>
-                  </tr>
-                ))}
-                {project.rfis.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-slate-500">No RFIs tracked.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No RFIs tracked."
+              columns={[
+                { header: "#" },
+                { header: "Subject" },
+                { header: "Ball in court" },
+                { header: "Due" },
+                { header: "Status" },
+              ]}
+              rows={project.rfis.map((r) => ({
+                key: r.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  { sort: r.number, node: r.number, tdClassName: "font-mono text-xs text-slate-400" },
+                  { sort: r.subject, node: <Link href={`/projects/${project.id}/rfis/${r.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{r.subject}</Link> },
+                  { sort: r.ballInCourt ?? "", node: r.ballInCourt ?? "—" },
+                  { sort: r.dueDate ? new Date(r.dueDate).getTime() : null, node: formatDate(r.dueDate), tdClassName: "text-slate-400" },
+                  { sort: r.status, node: <StatusBadge status={r.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

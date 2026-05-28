@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
@@ -33,27 +34,26 @@ export default async function SafetyPage({ params }: { params: Promise<{ project
         </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Title</th>
-                  <th className="table-header">Severity</th>
-                  <th className="table-header">Occurred</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.safetyIncidents.map((i) => (
-                  <tr key={i.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell"><Link href={`/projects/${project.id}/safety/${i.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{i.title}</Link></td>
-                    <td className="table-cell">{i.severity}</td>
-                    <td className="table-cell text-slate-400">{formatDate(i.occurredAt)}</td>
-                    <td className="table-cell"><StatusBadge status={i.status} /></td>
-                  </tr>
-                ))}
-                {project.safetyIncidents.length === 0 ? <tr><td colSpan={4} className="table-cell text-center text-slate-500">No incidents logged.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No incidents logged."
+              columns={[
+                { header: "Title" },
+                { header: "Severity" },
+                { header: "Occurred" },
+                { header: "Status" },
+              ]}
+              rows={project.safetyIncidents.map((i) => ({
+                key: i.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  { sort: i.title, node: <Link href={`/projects/${project.id}/safety/${i.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{i.title}</Link> },
+                  { sort: i.severity, node: i.severity },
+                  { sort: i.occurredAt ? new Date(i.occurredAt).getTime() : null, node: formatDate(i.occurredAt), tdClassName: "text-slate-400" },
+                  { sort: i.status, node: <StatusBadge status={i.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

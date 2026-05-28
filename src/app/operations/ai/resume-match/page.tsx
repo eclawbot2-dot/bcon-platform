@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { resumeRoleMatch } from "@/lib/ops-ai";
 
 export default async function ResumeMatchPage({ searchParams }: { searchParams: Promise<{ resume?: string }> }) {
@@ -28,18 +29,22 @@ export default async function ResumeMatchPage({ searchParams }: { searchParams: 
             </div>
           </section>
           <section className="card p-0 overflow-hidden">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5"><tr><th className="table-header">Role</th><th className="table-header">Score</th><th className="table-header">Missing</th></tr></thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {match.roleMatches.map((r) => (
-                  <tr key={r.role}>
-                    <td className="table-cell">{r.role}</td>
-                    <td className="table-cell font-semibold text-white">{r.score}%</td>
-                    <td className="table-cell text-xs text-slate-400">{r.missing.length > 0 ? r.missing.join("; ") : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No role matches."
+              columns={[
+                { header: "Role" },
+                { header: "Score" },
+                { header: "Missing" },
+              ]}
+              rows={match.roleMatches.map((r) => ({
+                key: r.role,
+                cells: [
+                  { sort: r.role, node: r.role },
+                  { sort: r.score, node: `${r.score}%`, tdClassName: "font-semibold text-white" },
+                  { sort: r.missing.join("; "), node: r.missing.length > 0 ? r.missing.join("; ") : "—", tdClassName: "text-xs text-slate-400" },
+                ],
+              }))}
+            />
           </section>
         </>
       ) : null}

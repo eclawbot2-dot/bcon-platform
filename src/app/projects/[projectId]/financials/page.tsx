@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
@@ -79,35 +80,39 @@ export default async function ProjectFinancialsPage({ params }: { params: Promis
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Date</th>
-                  <th className="table-header">Account</th>
-                  <th className="table-header">Memo</th>
-                  <th className="table-header">Vendor</th>
-                  <th className="table-header">Cost code</th>
-                  <th className="table-header">Amount</th>
-                  <th className="table-header">Conf.</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {journal.map((j) => (
-                  <tr key={j.id}>
-                    <td className="table-cell text-slate-400">{formatDate(j.entryDate)}</td>
-                    <td className="table-cell">{j.accountName}<div className="font-mono text-[10px] text-slate-500">{j.accountCode}</div></td>
-                    <td className="table-cell max-w-[280px]">{j.memo}</td>
-                    <td className="table-cell text-slate-400">{j.vendorName ?? "—"}</td>
-                    <td className="table-cell font-mono text-xs text-slate-400">{j.costCode ?? "—"}</td>
-                    <td className={"table-cell font-medium " + (toNum(j.amount) < 0 ? "text-rose-200" : "text-emerald-200")}>{formatCurrency(j.amount)}</td>
-                    <td className="table-cell text-slate-400">{j.allocationConfidence !== null ? `${j.allocationConfidence}%` : "—"}</td>
-                    <td className="table-cell"><StatusBadge status={j.reconciliationStatus} /></td>
-                  </tr>
-                ))}
-                {journal.length === 0 ? <tr><td colSpan={8} className="table-cell text-center text-slate-500">No journal entries allocated to this project yet.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No journal entries allocated to this project yet."
+              columns={[
+                { header: "Date" },
+                { header: "Account" },
+                { header: "Memo" },
+                { header: "Vendor" },
+                { header: "Cost code" },
+                { header: "Amount" },
+                { header: "Conf." },
+                { header: "Status" },
+              ]}
+              rows={journal.map((j) => ({
+                key: j.id,
+                cells: [
+                  { sort: j.entryDate ? new Date(j.entryDate).getTime() : null, node: formatDate(j.entryDate), tdClassName: "text-slate-400" },
+                  {
+                    sort: j.accountName,
+                    node: <>{j.accountName}<div className="font-mono text-[10px] text-slate-500">{j.accountCode}</div></>,
+                  },
+                  { sort: j.memo, node: j.memo, tdClassName: "max-w-[280px]" },
+                  { sort: j.vendorName ?? "", node: j.vendorName ?? "—", tdClassName: "text-slate-400" },
+                  { sort: j.costCode ?? "", node: j.costCode ?? "—", tdClassName: "font-mono text-xs text-slate-400" },
+                  {
+                    sort: toNum(j.amount),
+                    node: formatCurrency(j.amount),
+                    tdClassName: "font-medium " + (toNum(j.amount) < 0 ? "text-rose-200" : "text-emerald-200"),
+                  },
+                  { sort: j.allocationConfidence ?? null, node: j.allocationConfidence !== null ? `${j.allocationConfidence}%` : "—", tdClassName: "text-slate-400" },
+                  { sort: j.reconciliationStatus, node: <StatusBadge status={j.reconciliationStatus} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

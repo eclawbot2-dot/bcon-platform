@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { DetailShell, DetailGrid, DetailField } from "@/components/layout/detail-shell";
+import { SortableTable } from "@/components/SortableTable";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
@@ -59,47 +60,56 @@ export default async function BidPackageDetailPage({ params }: { params: Promise
       <section className="card p-0 overflow-hidden">
         <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Bid leveling</div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Vendor</th>
-                <th className="table-header">Amount</th>
-                <th className="table-header">Δ vs. low</th>
-                <th className="table-header">Δ vs. estimate</th>
-                <th className="table-header">Days</th>
-                <th className="table-header">Status</th>
-                <th className="table-header" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {pkg.subBids.map((b) => {
-                const deltaLow = b.bidAmount !== null && low !== null ? subtractMoney(b.bidAmount, low) : null;
-                const deltaEst = b.bidAmount !== null ? subtractMoney(b.bidAmount, pkg.estimatedValue) : null;
-                const awardable = pkg.status !== "AWARDED" && b.status !== "SELECTED" && b.bidAmount != null;
-                return (
-                  <tr key={b.id} className="transition hover:bg-white/5">
-                    <td className="table-cell">
-                      <Link href={`/vendors/${b.vendor.id}`} className="font-medium text-white hover:text-cyan-200">{b.vendor.name}</Link>
-                      <div className="text-xs text-slate-500">{b.vendor.trade ?? "—"}</div>
-                    </td>
-                    <td className="table-cell">{formatCurrency(b.bidAmount)}</td>
-                    <td className="table-cell">{deltaLow === null ? "—" : deltaLow === 0 ? <span className="text-emerald-300">Low bid</span> : `+${formatCurrency(deltaLow)}`}</td>
-                    <td className="table-cell">{deltaEst === null ? "—" : <span className={deltaEst <= 0 ? "text-emerald-300" : "text-rose-300"}>{deltaEst > 0 ? "+" : ""}{formatCurrency(deltaEst)}</span>}</td>
-                    <td className="table-cell text-slate-400">{b.daysToComplete ? `${b.daysToComplete}d` : "—"}</td>
-                    <td className="table-cell"><StatusBadge status={b.status} /></td>
-                    <td className="table-cell">
-                      {awardable ? (
-                        <form action={`/api/bids/${pkg.id}/subbids/${b.id}/award`} method="post">
-                          <button className="btn-primary text-xs">Award →</button>
-                        </form>
-                      ) : b.status === "SELECTED" ? <span className="text-xs text-emerald-300">awarded</span> : null}
-                    </td>
-                  </tr>
-                );
-              })}
-              {pkg.subBids.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500">No bidders invited.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            emptyMessage="No bidders invited."
+            columns={[
+              { header: "Vendor" },
+              { header: "Amount" },
+              { header: "Δ vs. low" },
+              { header: "Δ vs. estimate" },
+              { header: "Days" },
+              { header: "Status" },
+              { header: "", sortable: false },
+            ]}
+            rows={pkg.subBids.map((b) => {
+              const deltaLow = b.bidAmount !== null && low !== null ? subtractMoney(b.bidAmount, low) : null;
+              const deltaEst = b.bidAmount !== null ? subtractMoney(b.bidAmount, pkg.estimatedValue) : null;
+              const awardable = pkg.status !== "AWARDED" && b.status !== "SELECTED" && b.bidAmount != null;
+              return {
+                key: b.id,
+                className: "transition hover:bg-white/5",
+                cells: [
+                  {
+                    sort: b.vendor.name,
+                    node: (
+                      <>
+                        <Link href={`/vendors/${b.vendor.id}`} className="font-medium text-white hover:text-cyan-200">{b.vendor.name}</Link>
+                        <div className="text-xs text-slate-500">{b.vendor.trade ?? "—"}</div>
+                      </>
+                    ),
+                  },
+                  { sort: b.bidAmount != null ? toNum(b.bidAmount) : null, node: formatCurrency(b.bidAmount) },
+                  {
+                    sort: deltaLow,
+                    node: deltaLow === null ? "—" : deltaLow === 0 ? <span className="text-emerald-300">Low bid</span> : `+${formatCurrency(deltaLow)}`,
+                  },
+                  {
+                    sort: deltaEst,
+                    node: deltaEst === null ? "—" : <span className={deltaEst <= 0 ? "text-emerald-300" : "text-rose-300"}>{deltaEst > 0 ? "+" : ""}{formatCurrency(deltaEst)}</span>,
+                  },
+                  { sort: b.daysToComplete ?? null, node: b.daysToComplete ? `${b.daysToComplete}d` : "—", tdClassName: "text-slate-400" },
+                  { sort: b.status, node: <StatusBadge status={b.status} /> },
+                  {
+                    node: awardable ? (
+                      <form action={`/api/bids/${pkg.id}/subbids/${b.id}/award`} method="post">
+                        <button className="btn-primary text-xs">Award →</button>
+                      </form>
+                    ) : b.status === "SELECTED" ? <span className="text-xs text-emerald-300">awarded</span> : null,
+                  },
+                ],
+              };
+            })}
+          />
         </div>
       </section>
     </DetailShell>

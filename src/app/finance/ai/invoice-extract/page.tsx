@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { extractInvoiceFromText } from "@/lib/finance-ai";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -30,16 +31,23 @@ export default async function InvoiceExtractPage({ searchParams }: { searchParam
             <Field label="Total">{formatCurrency(result.total)}</Field>
           </div>
           <div className="mt-5 text-xs uppercase tracking-[0.18em] text-slate-400">Line items</div>
-          <table className="min-w-full divide-y divide-white/10 text-sm mt-2">
-            <thead className="bg-white/5">
-              <tr><th className="table-header">Description</th><th className="table-header">Cost code</th><th className="table-header">Amount</th></tr>
-            </thead>
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              {result.lineItems.map((l, i) => (
-                <tr key={i}><td className="table-cell">{l.description}</td><td className="table-cell font-mono text-xs">{l.costCode ?? "—"}</td><td className="table-cell">{formatCurrency(l.amount)}</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <SortableTable
+            className="min-w-full divide-y divide-white/10 text-sm mt-2"
+            emptyMessage="No line items."
+            columns={[
+              { header: "Description" },
+              { header: "Cost code" },
+              { header: "Amount" },
+            ]}
+            rows={result.lineItems.map((l, i) => ({
+              key: String(i),
+              cells: [
+                { sort: l.description, node: l.description },
+                { sort: l.costCode ?? "", node: l.costCode ?? "—", tdClassName: "font-mono text-xs" },
+                { sort: Number(l.amount), node: formatCurrency(l.amount) },
+              ],
+            }))}
+          />
         </section>
       ) : null}
     </AppLayout>

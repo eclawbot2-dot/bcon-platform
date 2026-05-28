@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate } from "@/lib/utils";
@@ -30,29 +31,26 @@ export default async function ProjectDocumentsPage({ params }: { params: Promise
         </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Title</th>
-                  <th className="table-header">Class</th>
-                  <th className="table-header">Folder</th>
-                  <th className="table-header">Version</th>
-                  <th className="table-header">Uploaded</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.documents.map((d) => (
-                  <tr key={d.id}>
-                    <td className="table-cell">{d.title}</td>
-                    <td className="table-cell text-slate-400">{d.documentClass}</td>
-                    <td className="table-cell text-slate-400">{d.folderPath ?? "—"}</td>
-                    <td className="table-cell">{d.versionLabel}</td>
-                    <td className="table-cell text-slate-400">{formatDate(d.createdAt)}</td>
-                  </tr>
-                ))}
-                {project.documents.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-slate-500">No documents uploaded.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No documents uploaded."
+              columns={[
+                { header: "Title" },
+                { header: "Class" },
+                { header: "Folder" },
+                { header: "Version" },
+                { header: "Uploaded" },
+              ]}
+              rows={project.documents.map((d) => ({
+                key: d.id,
+                cells: [
+                  { sort: d.title, node: d.title },
+                  { sort: d.documentClass, node: d.documentClass, tdClassName: "text-slate-400" },
+                  { sort: d.folderPath ?? "", node: d.folderPath ?? "—", tdClassName: "text-slate-400" },
+                  { sort: d.versionLabel, node: d.versionLabel },
+                  { sort: new Date(d.createdAt).getTime(), node: formatDate(d.createdAt), tdClassName: "text-slate-400" },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

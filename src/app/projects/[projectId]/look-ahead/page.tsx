@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate } from "@/lib/utils";
@@ -75,37 +76,35 @@ export default async function LookAheadPage({ params }: { params: Promise<{ proj
         </section>
 
         <section className="card p-0 overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10 text-sm">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header sticky left-0 bg-slate-950/80">Crew / sub</th>
-                {weeks.map((w) => (
-                  <th key={w.toISOString()} className="table-header text-xs">{formatDate(w)}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {parties.map(([party, list]) => (
-                <tr key={party}>
-                  <td className="table-cell sticky left-0 bg-slate-950/80 font-medium">{party}</td>
-                  {weeks.map((w) => {
-                    const cell = list.filter((c) => sameWeek(c.weekStarting, w));
-                    return (
-                      <td key={w.toISOString()} className="table-cell align-top text-xs">
+          <SortableTable
+            emptyMessage="No commitments yet — add above."
+            columns={[
+              { header: "Crew / sub", thClassName: "sticky left-0 bg-slate-950/80" },
+              ...weeks.map((w) => ({ header: formatDate(w), thClassName: "text-xs", sortable: false as const })),
+            ]}
+            rows={parties.map(([party, list]) => ({
+              key: party,
+              cells: [
+                { sort: party, node: party, tdClassName: "sticky left-0 bg-slate-950/80 font-medium" },
+                ...weeks.map((w) => {
+                  const cell = list.filter((c) => sameWeek(c.weekStarting, w));
+                  return {
+                    node: (
+                      <>
                         {cell.map((c) => (
                           <div key={c.id} className={`mb-1 rounded p-1.5 ${c.actualComplete ? "bg-emerald-500/10 text-emerald-200" : c.plannedComplete ? "bg-rose-500/10 text-rose-200" : "bg-cyan-500/10 text-cyan-100"}`}>
                             <div>{c.description}</div>
                             {c.reasonNotComplete ? <div className="text-[10px] text-rose-300 mt-1">⚠ {c.reasonNotComplete}</div> : null}
                           </div>
                         ))}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-              {parties.length === 0 ? <tr><td colSpan={weeks.length + 1} className="py-6 text-center text-slate-500">No commitments yet — add above.</td></tr> : null}
-            </tbody>
-          </table>
+                      </>
+                    ),
+                    tdClassName: "align-top text-xs",
+                  };
+                }),
+              ],
+            }))}
+          />
         </section>
       </div>
     </AppLayout>

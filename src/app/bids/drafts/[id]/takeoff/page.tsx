@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { DetailShell } from "@/components/layout/detail-shell";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { takeoffFromSow } from "@/lib/estimating-ai";
@@ -39,34 +40,32 @@ export default async function TakeoffPage({ params, searchParams }: { params: Pr
       {items.length > 0 ? (
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Code</th>
-                  <th className="table-header">Description</th>
-                  <th className="table-header">Qty</th>
-                  <th className="table-header">Unit</th>
-                  <th className="table-header">Unit cost</th>
-                  <th className="table-header">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {items.map((it, i) => (
-                  <tr key={i}>
-                    <td className="table-cell font-mono text-xs text-slate-400">{it.costCode}</td>
-                    <td className="table-cell">{it.description}</td>
-                    <td className="table-cell">{it.quantity}</td>
-                    <td className="table-cell text-xs text-slate-400">{it.unit}</td>
-                    <td className="table-cell">{formatCurrency(it.unitCost)}</td>
-                    <td className="table-cell font-semibold text-white">{formatCurrency(it.amount)}</td>
-                  </tr>
-                ))}
-                <tr className="bg-cyan-500/10">
-                  <td className="table-cell" colSpan={5}>Takeoff total</td>
-                  <td className="table-cell font-semibold text-cyan-100">{formatCurrency(total)}</td>
-                </tr>
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No items."
+              columns={[
+                { header: "Code" },
+                { header: "Description" },
+                { header: "Qty" },
+                { header: "Unit" },
+                { header: "Unit cost" },
+                { header: "Amount" },
+              ]}
+              rows={items.map((it, i) => ({
+                key: String(i),
+                cells: [
+                  { sort: it.costCode, tdClassName: "font-mono text-xs text-slate-400", node: it.costCode },
+                  { sort: it.description, node: it.description },
+                  { sort: it.quantity, node: it.quantity },
+                  { sort: it.unit, tdClassName: "text-xs text-slate-400", node: it.unit },
+                  { sort: it.unitCost, node: formatCurrency(it.unitCost) },
+                  { sort: it.amount, tdClassName: "font-semibold text-white", node: formatCurrency(it.amount) },
+                ],
+              }))}
+            />
+            <div className="bg-cyan-500/10 px-4 py-3 flex justify-between items-center text-sm">
+              <span>Takeoff total</span>
+              <span className="font-semibold text-cyan-100">{formatCurrency(total)}</span>
+            </div>
           </div>
         </section>
       ) : sow ? <div className="text-sm text-slate-500">No assemblies matched — try adding keywords like concrete, steel, electrical, HVAC.</div> : null}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate } from "@/lib/utils";
@@ -26,31 +27,30 @@ export default async function DocumentsRollupPage() {
         </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Document</th>
-                  <th className="table-header">Class</th>
-                  <th className="table-header">Project</th>
-                  <th className="table-header">Folder</th>
-                  <th className="table-header">Version</th>
-                  <th className="table-header">Uploaded</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {docs.map((d) => (
-                  <tr key={d.id} className="transition hover:bg-white/5">
-                    <td className="table-cell font-medium text-white">{d.title}</td>
-                    <td className="table-cell text-slate-400">{d.documentClass}</td>
-                    <td className="table-cell"><Link href={`/projects/${d.project.id}/documents`} className="text-cyan-300 hover:underline">{d.project.code}</Link></td>
-                    <td className="table-cell text-slate-400">{d.folderPath ?? "—"}</td>
-                    <td className="table-cell">{d.versionLabel}</td>
-                    <td className="table-cell text-slate-400">{formatDate(d.createdAt)}</td>
-                  </tr>
-                ))}
-                {docs.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-slate-500">No documents in the system yet.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No documents in the system yet."
+              columns={[
+                { header: "Document" },
+                { header: "Class" },
+                { header: "Project" },
+                { header: "Folder" },
+                { header: "Version" },
+                { header: "Uploaded" },
+              ]}
+              rows={docs.map((d) => ({
+                key: d.id,
+                className: "transition hover:bg-white/5",
+                cells: [
+                  { sort: d.title, tdClassName: "font-medium text-white", node: d.title },
+                  { sort: d.documentClass, tdClassName: "text-slate-400", node: d.documentClass },
+                  { sort: d.project.code, node: <Link href={`/projects/${d.project.id}/documents`} className="text-cyan-300 hover:underline">{d.project.code}</Link> },
+                  { sort: d.folderPath ?? "", tdClassName: "text-slate-400", node: d.folderPath ?? "—" },
+                  { sort: d.versionLabel, node: d.versionLabel },
+                  { sort: new Date(d.createdAt).getTime(), tdClassName: "text-slate-400", node: formatDate(d.createdAt) },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

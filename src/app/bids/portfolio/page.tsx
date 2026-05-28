@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { addMoney } from "@/lib/money";
+import { addMoney, toNum } from "@/lib/money";
 
 /**
  * BD pipeline summary for the current tenant. Shows where the bid
@@ -106,33 +107,32 @@ export default async function BidsPortfolioPage() {
             </div>
             <div className="text-xs text-slate-500">avg score: {avgScore == null ? "—" : Math.round(avgScore)}</div>
           </div>
-          <table className="mt-4 min-w-full divide-y divide-white/10 text-sm">
-            <thead className="text-xs uppercase tracking-[0.16em] text-slate-500">
-              <tr>
-                <th className="py-2 pr-4 text-left">Score</th>
-                <th className="py-2 pr-4 text-left">Title</th>
-                <th className="py-2 pr-4 text-left">Agency</th>
-                <th className="py-2 pr-4 text-right">Value</th>
-                <th className="py-2 pr-4 text-left">Due</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {topListings.map((l) => (
-                <tr key={l.id} className="hover:bg-white/5">
-                  <td className="py-2 pr-4">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${l.score! >= 70 ? "bg-emerald-500/10 text-emerald-300" : l.score! >= 50 ? "bg-amber-500/10 text-amber-300" : "bg-slate-500/10 text-slate-300"}`}>{l.score}</span>
-                  </td>
-                  <td className="py-2 pr-4">
-                    <Link href={`/bids/listings/${l.id}`} className="text-white hover:text-cyan-200">{l.title.slice(0, 80)}</Link>
-                  </td>
-                  <td className="py-2 pr-4 text-slate-400">{l.agency}</td>
-                  <td className="py-2 pr-4 text-right text-slate-400">{formatCurrency(l.estimatedValue)}</td>
-                  <td className="py-2 pr-4 text-slate-400">{formatDate(l.dueAt) ?? "—"}</td>
-                </tr>
-              ))}
-              {topListings.length === 0 ? <tr><td colSpan={5} className="py-3 text-center text-slate-500">No scored listings yet — set up a bid profile and subscribe to portals.</td></tr> : null}
-            </tbody>
-          </table>
+          <div className="mt-4">
+            <SortableTable
+              emptyMessage="No scored listings yet — set up a bid profile and subscribe to portals."
+              columns={[
+                { header: "Score" },
+                { header: "Title" },
+                { header: "Agency" },
+                { header: "Value", align: "right" },
+                { header: "Due" },
+              ]}
+              rows={topListings.map((l) => ({
+                key: l.id,
+                className: "hover:bg-white/5",
+                cells: [
+                  {
+                    sort: l.score ?? null,
+                    node: <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${l.score! >= 70 ? "bg-emerald-500/10 text-emerald-300" : l.score! >= 50 ? "bg-amber-500/10 text-amber-300" : "bg-slate-500/10 text-slate-300"}`}>{l.score}</span>,
+                  },
+                  { sort: l.title, node: <Link href={`/bids/listings/${l.id}`} className="text-white hover:text-cyan-200">{l.title.slice(0, 80)}</Link> },
+                  { sort: l.agency, tdClassName: "text-slate-400", node: l.agency },
+                  { sort: toNum(l.estimatedValue) ?? null, tdClassName: "text-slate-400", node: formatCurrency(l.estimatedValue) },
+                  { sort: l.dueAt ? new Date(l.dueAt).getTime() : null, tdClassName: "text-slate-400", node: formatDate(l.dueAt) ?? "—" },
+                ],
+              }))}
+            />
+          </div>
         </section>
 
         <section className="card p-6">

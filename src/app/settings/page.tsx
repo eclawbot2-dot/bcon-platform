@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate, modeLabel, roleLabel } from "@/lib/utils";
@@ -112,39 +113,46 @@ export default async function SettingsPage() {
         <section id="tenants" className="card p-6 scroll-mt-20">
           <div className="text-xs uppercase tracking-[0.2em] text-slate-400">All tenants on this platform</div>
           <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Name</th>
-                  <th className="table-header">Slug</th>
-                  <th className="table-header">Primary mode</th>
-                  <th className="table-header">Enabled modes</th>
-                  <th className="table-header">Created</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {allTenants.map((t) => {
-                  let tEnabled: string[] = [];
-                  try { tEnabled = JSON.parse(t.enabledModes); } catch { tEnabled = []; }
-                  return (
-                    <tr key={t.id} className={t.id === tenant.id ? "bg-cyan-500/5" : ""}>
-                      <td className="table-cell">
-                        <div className="font-medium text-white">{t.name}</div>
-                        {t.id === tenant.id ? <div className="text-xs text-cyan-300">current</div> : null}
-                      </td>
-                      <td className="table-cell font-mono text-xs text-slate-400">{t.slug}</td>
-                      <td className="table-cell">{modeLabel(t.primaryMode)}</td>
-                      <td className="table-cell">
+            <SortableTable
+              emptyMessage="No tenants."
+              columns={[
+                { header: "Name" },
+                { header: "Slug" },
+                { header: "Primary mode" },
+                { header: "Enabled modes" },
+                { header: "Created" },
+              ]}
+              rows={allTenants.map((t) => {
+                let tEnabled: string[] = [];
+                try { tEnabled = JSON.parse(t.enabledModes); } catch { tEnabled = []; }
+                return {
+                  key: t.id,
+                  className: t.id === tenant.id ? "bg-cyan-500/5" : "",
+                  cells: [
+                    {
+                      sort: t.name,
+                      node: (
+                        <>
+                          <div className="font-medium text-white">{t.name}</div>
+                          {t.id === tenant.id ? <div className="text-xs text-cyan-300">current</div> : null}
+                        </>
+                      ),
+                    },
+                    { sort: t.slug, node: t.slug, tdClassName: "font-mono text-xs text-slate-400" },
+                    { sort: modeLabel(t.primaryMode), node: modeLabel(t.primaryMode) },
+                    {
+                      sort: tEnabled.join(","),
+                      node: (
                         <div className="flex flex-wrap gap-1">
                           {tEnabled.map((m) => <span key={m} className="badge-gray text-[10px]">{modeLabel(m)}</span>)}
                         </div>
-                      </td>
-                      <td className="table-cell text-slate-400">{formatDate(t.createdAt)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      ),
+                    },
+                    { sort: t.createdAt ? new Date(t.createdAt).getTime() : undefined, node: formatDate(t.createdAt), tdClassName: "text-slate-400" },
+                  ],
+                };
+              })}
+            />
           </div>
           <p className="mt-3 text-xs text-slate-500">Use the tenant switcher in the header to jump between companies. Each tenant sees only its own projects, vendors, contracts, and financials.</p>
         </section>
@@ -170,29 +178,27 @@ export default async function SettingsPage() {
             <button className="btn-primary">Invite / update</button>
           </form>
           <div className="mt-5 overflow-hidden rounded-2xl border border-white/10">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Name</th>
-                  <th className="table-header">Email</th>
-                  <th className="table-header">Role</th>
-                  <th className="table-header">Business unit</th>
-                  <th className="table-header">Joined</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {memberships.map((m) => (
-                  <tr key={m.id} className="transition hover:bg-white/5">
-                    <td className="table-cell"><Link href={`/people/${m.user.id}`} className="text-cyan-300 hover:underline">{m.user.name}</Link></td>
-                    <td className="table-cell text-slate-400">{m.user.email}</td>
-                    <td className="table-cell">{roleLabel(m.roleTemplate)}</td>
-                    <td className="table-cell text-slate-400">{m.businessUnit?.name ?? "—"}</td>
-                    <td className="table-cell text-slate-400">{formatDate(m.createdAt)}</td>
-                  </tr>
-                ))}
-                {memberships.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-slate-500">No memberships yet.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No memberships yet."
+              columns={[
+                { header: "Name" },
+                { header: "Email" },
+                { header: "Role" },
+                { header: "Business unit" },
+                { header: "Joined" },
+              ]}
+              rows={memberships.map((m) => ({
+                key: m.id,
+                className: "transition hover:bg-white/5",
+                cells: [
+                  { sort: m.user.name ?? "", node: <Link href={`/people/${m.user.id}`} className="text-cyan-300 hover:underline">{m.user.name}</Link> },
+                  { sort: m.user.email ?? "", node: m.user.email, tdClassName: "text-slate-400" },
+                  { sort: roleLabel(m.roleTemplate), node: roleLabel(m.roleTemplate) },
+                  { sort: m.businessUnit?.name ?? "", node: m.businessUnit?.name ?? "—", tdClassName: "text-slate-400" },
+                  { sort: m.createdAt ? new Date(m.createdAt).getTime() : undefined, node: formatDate(m.createdAt), tdClassName: "text-slate-400" },
+                ],
+              }))}
+            />
           </div>
         </section>
 

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/utils";
@@ -175,33 +176,31 @@ export default async function ProfitAuditPage({ params }: { params: Promise<{ pr
         <section className="card p-6">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Variance by cost code</div>
           <p className="mt-1 text-xs text-slate-400">Bid line vs current budget actual. Sorted by absolute variance.</p>
-          <table className="mt-4 min-w-full divide-y divide-white/10 text-sm">
-            <thead className="text-xs uppercase tracking-[0.16em] text-slate-500">
-              <tr>
-                <th className="py-2 pr-4 text-left">Cost code</th>
-                <th className="py-2 pr-4 text-right">Bid</th>
-                <th className="py-2 pr-4 text-right">Budget</th>
-                <th className="py-2 pr-4 text-right">Actual</th>
-                <th className="py-2 pr-4 text-right">Committed</th>
-                <th className="py-2 pr-4 text-right">EAC</th>
-                <th className="py-2 pr-4 text-right">Variance</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {varianceRows.slice(0, 20).map((r) => (
-                <tr key={r.code}>
-                  <td className="py-2 pr-4 font-mono text-xs">{r.code}</td>
-                  <td className="py-2 pr-4 text-right text-slate-300">{formatCurrency(r.bid)}</td>
-                  <td className="py-2 pr-4 text-right text-slate-300">{formatCurrency(r.budget)}</td>
-                  <td className="py-2 pr-4 text-right text-slate-300">{formatCurrency(r.actual)}</td>
-                  <td className="py-2 pr-4 text-right text-slate-300">{formatCurrency(r.committed)}</td>
-                  <td className="py-2 pr-4 text-right text-white">{formatCurrency(r.eac)}</td>
-                  <td className={`py-2 pr-4 text-right ${r.variance > 0 ? "text-rose-300" : r.variance < 0 ? "text-emerald-300" : "text-slate-400"}`}>{r.variance === 0 ? "—" : formatCurrency(r.variance)}</td>
-                </tr>
-              ))}
-              {varianceRows.length === 0 ? <tr><td colSpan={7} className="py-3 text-center text-slate-500">No bid lines or budget rows yet.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            className="mt-4 min-w-full divide-y divide-white/10 text-sm"
+            emptyMessage="No bid lines or budget rows yet."
+            columns={[
+              { header: "Cost code" },
+              { header: "Bid", align: "right" },
+              { header: "Budget", align: "right" },
+              { header: "Actual", align: "right" },
+              { header: "Committed", align: "right" },
+              { header: "EAC", align: "right" },
+              { header: "Variance", align: "right" },
+            ]}
+            rows={varianceRows.slice(0, 20).map((r) => ({
+              key: r.code,
+              cells: [
+                { sort: r.code, node: r.code, tdClassName: "font-mono text-xs" },
+                { sort: r.bid, node: formatCurrency(r.bid), tdClassName: "text-slate-300" },
+                { sort: r.budget, node: formatCurrency(r.budget), tdClassName: "text-slate-300" },
+                { sort: r.actual, node: formatCurrency(r.actual), tdClassName: "text-slate-300" },
+                { sort: r.committed, node: formatCurrency(r.committed), tdClassName: "text-slate-300" },
+                { sort: r.eac, node: formatCurrency(r.eac), tdClassName: "text-white" },
+                { sort: r.variance, node: r.variance === 0 ? "—" : formatCurrency(r.variance), tdClassName: r.variance > 0 ? "text-rose-300" : r.variance < 0 ? "text-emerald-300" : "text-slate-400" },
+              ],
+            }))}
+          />
           {varianceRows.length > 20 ? <div className="mt-2 text-xs text-slate-500">Showing top 20 by variance · {varianceRows.length} total cost codes.</div> : null}
         </section>
 
@@ -218,31 +217,29 @@ export default async function ProfitAuditPage({ params }: { params: Promise<{ pr
             <Tile label="Already paid" value={formatCurrency(commissionsPaid)} tone="good" />
             <Tile label="Open / pending" value={formatCurrency(commissionsAccrued)} tone={commissionsAccrued > 0 ? "warn" : "default"} />
           </div>
-          <table className="mt-4 min-w-full divide-y divide-white/10 text-sm">
-            <thead className="text-xs uppercase tracking-[0.16em] text-slate-500">
-              <tr>
-                <th className="py-2 pr-4 text-left">Recipient</th>
-                <th className="py-2 pr-4 text-left">Source</th>
-                <th className="py-2 pr-4 text-right">Basis</th>
-                <th className="py-2 pr-4 text-right">Rate</th>
-                <th className="py-2 pr-4 text-right">Amount</th>
-                <th className="py-2 pr-4 text-left">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {commissions.map((c) => (
-                <tr key={c.id}>
-                  <td className="py-2 pr-4 text-white">{c.recipientName}</td>
-                  <td className="py-2 pr-4 text-xs text-slate-400">{c.sourceLabel ?? c.sourceType}</td>
-                  <td className="py-2 pr-4 text-right text-slate-300">{formatCurrency(c.basis)}</td>
-                  <td className="py-2 pr-4 text-right text-slate-300">{formatPercent(c.ratePct)}</td>
-                  <td className="py-2 pr-4 text-right text-white">{formatCurrency(c.amount)}</td>
-                  <td className="py-2 pr-4 text-xs">{c.status}</td>
-                </tr>
-              ))}
-              {commissions.length === 0 ? <tr><td colSpan={6} className="py-3 text-center text-slate-500">No commissions on file for this project. {opportunity ? `Linked opportunity: ${opportunity.name}` : "Project has no opportunity link."}</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            className="mt-4 min-w-full divide-y divide-white/10 text-sm"
+            emptyMessage={<>No commissions on file for this project. {opportunity ? `Linked opportunity: ${opportunity.name}` : "Project has no opportunity link."}</>}
+            columns={[
+              { header: "Recipient" },
+              { header: "Source" },
+              { header: "Basis", align: "right" },
+              { header: "Rate", align: "right" },
+              { header: "Amount", align: "right" },
+              { header: "Status" },
+            ]}
+            rows={commissions.map((c) => ({
+              key: c.id,
+              cells: [
+                { sort: c.recipientName, node: c.recipientName, tdClassName: "text-white" },
+                { sort: c.sourceLabel ?? c.sourceType, node: c.sourceLabel ?? c.sourceType, tdClassName: "text-xs text-slate-400" },
+                { sort: toNum(c.basis), node: formatCurrency(c.basis), tdClassName: "text-slate-300" },
+                { sort: toNum(c.ratePct), node: formatPercent(c.ratePct), tdClassName: "text-slate-300" },
+                { sort: toNum(c.amount), node: formatCurrency(c.amount), tdClassName: "text-white" },
+                { sort: c.status, node: c.status, tdClassName: "text-xs" },
+              ],
+            }))}
+          />
         </section>
 
         {/* Quick links to related views */}

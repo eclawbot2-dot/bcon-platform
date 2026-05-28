@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate, lienWaiverTypeLabel } from "@/lib/utils";
-import { sumMoney } from "@/lib/money";
+import { sumMoney, toNum } from "@/lib/money";
 
 export default async function LienWaiversPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -39,40 +40,39 @@ export default async function LienWaiversPage({ params }: { params: Promise<{ pr
             Waiver log · {formatCurrency(receivedAmount)} received, {formatCurrency(pendingAmount)} outstanding
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Party</th>
-                  <th className="table-header">Type</th>
-                  <th className="table-header">Through</th>
-                  <th className="table-header">Amount</th>
-                  <th className="table-header">Contract</th>
-                  <th className="table-header">Status</th>
-                  <th className="table-header">Received</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.lienWaivers.map((w) => (
-                  <tr key={w.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell">
+            <SortableTable
+              emptyMessage="No lien waivers tracked."
+              columns={[
+                { header: "Party" },
+                { header: "Type" },
+                { header: "Through" },
+                { header: "Amount" },
+                { header: "Contract" },
+                { header: "Status" },
+                { header: "Received" },
+              ]}
+              rows={project.lienWaivers.map((w) => ({
+                key: w.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  {
+                    sort: w.partyName,
+                    node: (
                       <Link href={`/projects/${project.id}/lien-waivers/${w.id}`} className="block">
                         <div className="font-medium text-white hover:text-cyan-200">{w.partyName}</div>
                         {w.notes ? <div className="text-xs text-slate-500">{w.notes}</div> : null}
                       </Link>
-                    </td>
-                    <td className="table-cell">{lienWaiverTypeLabel(w.waiverType)}</td>
-                    <td className="table-cell text-slate-400">{formatDate(w.throughDate)}</td>
-                    <td className="table-cell">{formatCurrency(w.amount)}</td>
-                    <td className="table-cell text-xs text-slate-400">{w.contract?.contractNumber ?? "—"}</td>
-                    <td className="table-cell"><StatusBadge status={w.status} /></td>
-                    <td className="table-cell text-slate-400">{formatDate(w.receivedAt)}</td>
-                  </tr>
-                ))}
-                {project.lienWaivers.length === 0 ? (
-                  <tr><td colSpan={7} className="table-cell text-center text-slate-500">No lien waivers tracked.</td></tr>
-                ) : null}
-              </tbody>
-            </table>
+                    ),
+                  },
+                  { sort: lienWaiverTypeLabel(w.waiverType), node: lienWaiverTypeLabel(w.waiverType) },
+                  { sort: w.throughDate ? new Date(w.throughDate).getTime() : null, node: formatDate(w.throughDate), tdClassName: "text-slate-400" },
+                  { sort: toNum(w.amount), node: formatCurrency(w.amount) },
+                  { sort: w.contract?.contractNumber ?? "", node: w.contract?.contractNumber ?? "—", tdClassName: "text-xs text-slate-400" },
+                  { sort: w.status, node: <StatusBadge status={w.status} /> },
+                  { sort: w.receivedAt ? new Date(w.receivedAt).getTime() : null, node: formatDate(w.receivedAt), tdClassName: "text-slate-400" },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

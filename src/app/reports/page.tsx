@@ -1,4 +1,5 @@
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import {
   wipReport,
   costToCompleteForecast,
@@ -52,35 +53,34 @@ export default async function ReportsPage() {
             </div>
             <a href="/api/reports/wip?format=csv" className="btn-outline text-xs">Export CSV</a>
           </div>
-          <table className="mt-4 min-w-full divide-y divide-white/10 text-sm">
-            <thead className="text-xs uppercase tracking-[0.16em] text-slate-500">
-              <tr>
-                <th className="py-2 pr-4 text-left">Project</th>
-                <th className="py-2 pr-4 text-right">Contract</th>
-                <th className="py-2 pr-4 text-right">% Complete</th>
-                <th className="py-2 pr-4 text-right">Earned</th>
-                <th className="py-2 pr-4 text-right">Billed</th>
-                <th className="py-2 pr-4 text-right">Over</th>
-                <th className="py-2 pr-4 text-right">Under</th>
-                <th className="py-2 pr-4 text-right">Forecast GM</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {wip.map((r) => (
-                <tr key={r.projectId} className="hover:bg-white/5">
-                  <td className="py-2 pr-4 text-white">{r.projectName}</td>
-                  <td className="py-2 pr-4 text-right text-slate-300">{formatCurrency(r.contractValue)}</td>
-                  <td className="py-2 pr-4 text-right text-slate-300">{formatPercent(r.percentComplete * 100)}</td>
-                  <td className="py-2 pr-4 text-right text-slate-300">{formatCurrency(r.earnedRevenue)}</td>
-                  <td className="py-2 pr-4 text-right text-slate-300">{formatCurrency(r.billedToDate)}</td>
-                  <td className="py-2 pr-4 text-right text-amber-300">{r.overBilled > 0 ? formatCurrency(r.overBilled) : "—"}</td>
-                  <td className="py-2 pr-4 text-right text-rose-300">{r.underBilled > 0 ? formatCurrency(r.underBilled) : "—"}</td>
-                  <td className="py-2 pr-4 text-right text-emerald-300">{formatCurrency(r.forecastGrossMargin)}</td>
-                </tr>
-              ))}
-              {wip.length === 0 ? <tr><td colSpan={8} className="py-3 text-center text-slate-500">No project P&L snapshots yet.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            className="mt-4 min-w-full divide-y divide-white/10 text-sm"
+            emptyMessage="No project P&L snapshots yet."
+            columns={[
+              { header: "Project", thClassName: "py-2 pr-4" },
+              { header: "Contract", align: "right", thClassName: "py-2 pr-4" },
+              { header: "% Complete", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Earned", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Billed", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Over", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Under", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Forecast GM", align: "right", thClassName: "py-2 pr-4" },
+            ]}
+            rows={wip.map((r) => ({
+              key: r.projectId,
+              className: "hover:bg-white/5",
+              cells: [
+                { sort: r.projectName, node: r.projectName, tdClassName: "py-2 pr-4 text-white" },
+                { sort: r.contractValue, node: formatCurrency(r.contractValue), tdClassName: "py-2 pr-4 text-slate-300" },
+                { sort: r.percentComplete, node: formatPercent(r.percentComplete * 100), tdClassName: "py-2 pr-4 text-slate-300" },
+                { sort: r.earnedRevenue, node: formatCurrency(r.earnedRevenue), tdClassName: "py-2 pr-4 text-slate-300" },
+                { sort: r.billedToDate, node: formatCurrency(r.billedToDate), tdClassName: "py-2 pr-4 text-slate-300" },
+                { sort: r.overBilled, node: r.overBilled > 0 ? formatCurrency(r.overBilled) : "—", tdClassName: "py-2 pr-4 text-amber-300" },
+                { sort: r.underBilled, node: r.underBilled > 0 ? formatCurrency(r.underBilled) : "—", tdClassName: "py-2 pr-4 text-rose-300" },
+                { sort: r.forecastGrossMargin, node: formatCurrency(r.forecastGrossMargin), tdClassName: "py-2 pr-4 text-emerald-300" },
+              ],
+            }))}
+          />
         </section>
 
         <section className="card p-6">
@@ -91,29 +91,27 @@ export default async function ReportsPage() {
             </div>
             <a href="/api/reports/cost-to-complete?format=csv" className="btn-outline text-xs">Export CSV</a>
           </div>
-          <table className="mt-4 min-w-full divide-y divide-white/10 text-sm">
-            <thead className="text-xs uppercase tracking-[0.16em] text-slate-500">
-              <tr>
-                <th className="py-2 pr-4 text-left">Cost code</th>
-                <th className="py-2 pr-4 text-right">Budgeted</th>
-                <th className="py-2 pr-4 text-right">Spent</th>
-                <th className="py-2 pr-4 text-right">Committed</th>
-                <th className="py-2 pr-4 text-right">EAC</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {ctcSorted.map(([code, s]) => (
-                <tr key={code}>
-                  <td className="py-2 pr-4 font-mono text-xs text-cyan-200">{code}</td>
-                  <td className="py-2 pr-4 text-right">{formatCurrency(s.budgeted)}</td>
-                  <td className="py-2 pr-4 text-right">{formatCurrency(s.spent)}</td>
-                  <td className="py-2 pr-4 text-right">{formatCurrency(s.committed)}</td>
-                  <td className="py-2 pr-4 text-right text-white">{formatCurrency(s.eac)}</td>
-                </tr>
-              ))}
-              {ctcSorted.length === 0 ? <tr><td colSpan={5} className="py-3 text-center text-slate-500">No budget lines yet.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            className="mt-4 min-w-full divide-y divide-white/10 text-sm"
+            emptyMessage="No budget lines yet."
+            columns={[
+              { header: "Cost code", thClassName: "py-2 pr-4" },
+              { header: "Budgeted", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Spent", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Committed", align: "right", thClassName: "py-2 pr-4" },
+              { header: "EAC", align: "right", thClassName: "py-2 pr-4" },
+            ]}
+            rows={ctcSorted.map(([code, s]) => ({
+              key: code,
+              cells: [
+                { sort: code, node: code, tdClassName: "py-2 pr-4 font-mono text-xs text-cyan-200" },
+                { sort: s.budgeted, node: formatCurrency(s.budgeted), tdClassName: "py-2 pr-4" },
+                { sort: s.spent, node: formatCurrency(s.spent), tdClassName: "py-2 pr-4" },
+                { sort: s.committed, node: formatCurrency(s.committed), tdClassName: "py-2 pr-4" },
+                { sort: s.eac, node: formatCurrency(s.eac), tdClassName: "py-2 pr-4 text-white" },
+              ],
+            }))}
+          />
         </section>
 
         <section className="card p-6">
@@ -124,29 +122,27 @@ export default async function ReportsPage() {
             </div>
             <a href="/api/reports/win-rate?format=csv" className="btn-outline text-xs">Export CSV</a>
           </div>
-          <table className="mt-4 min-w-full divide-y divide-white/10 text-sm">
-            <thead className="text-xs uppercase tracking-[0.16em] text-slate-500">
-              <tr>
-                <th className="py-2 pr-4 text-left">Owner</th>
-                <th className="py-2 pr-4 text-right">Total bids</th>
-                <th className="py-2 pr-4 text-right">Won</th>
-                <th className="py-2 pr-4 text-right">Lost</th>
-                <th className="py-2 pr-4 text-right">Win rate</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {win.byOwner.map((r) => (
-                <tr key={r.scope}>
-                  <td className="py-2 pr-4">{r.scope}</td>
-                  <td className="py-2 pr-4 text-right">{r.total}</td>
-                  <td className="py-2 pr-4 text-right text-emerald-300">{r.won}</td>
-                  <td className="py-2 pr-4 text-right text-rose-300">{r.lost}</td>
-                  <td className="py-2 pr-4 text-right">{formatPercent(r.winRate * 100)}</td>
-                </tr>
-              ))}
-              {win.byOwner.length === 0 ? <tr><td colSpan={5} className="py-3 text-center text-slate-500">No opportunities yet.</td></tr> : null}
-            </tbody>
-          </table>
+          <SortableTable
+            className="mt-4 min-w-full divide-y divide-white/10 text-sm"
+            emptyMessage="No opportunities yet."
+            columns={[
+              { header: "Owner", thClassName: "py-2 pr-4" },
+              { header: "Total bids", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Won", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Lost", align: "right", thClassName: "py-2 pr-4" },
+              { header: "Win rate", align: "right", thClassName: "py-2 pr-4" },
+            ]}
+            rows={win.byOwner.map((r) => ({
+              key: r.scope,
+              cells: [
+                { sort: r.scope, node: r.scope, tdClassName: "py-2 pr-4" },
+                { sort: r.total, node: r.total, tdClassName: "py-2 pr-4" },
+                { sort: r.won, node: r.won, tdClassName: "py-2 pr-4 text-emerald-300" },
+                { sort: r.lost, node: r.lost, tdClassName: "py-2 pr-4 text-rose-300" },
+                { sort: r.winRate, node: formatPercent(r.winRate * 100), tdClassName: "py-2 pr-4" },
+              ],
+            }))}
+          />
         </section>
 
         <section className="card p-6">

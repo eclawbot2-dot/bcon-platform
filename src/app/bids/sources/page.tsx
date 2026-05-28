@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { TestSourceButton } from "@/components/bids/test-source-button";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate } from "@/lib/utils";
@@ -54,40 +55,45 @@ export default async function BidSourcesPage() {
         </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Label</th>
-                  <th className="table-header">URL</th>
-                  <th className="table-header">Cadence</th>
-                  <th className="table-header">NAICS</th>
-                  <th className="table-header">Scraper</th>
-                  <th className="table-header">Last checked</th>
-                  <th className="table-header">Result</th>
-                  <th className="table-header">Status</th>
-                  <th className="table-header">Auto-draft</th>
-                  <th className="table-header" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {sources.map((s) => (
-                  <tr key={s.id} className="transition hover:bg-white/5">
-                    <td className="table-cell"><Link href={`/bids/listings?sourceId=${s.id}`} className="font-medium text-white hover:text-cyan-200">{s.label}</Link></td>
-                    <td className="table-cell font-mono text-xs text-slate-400 truncate max-w-[280px]"><a href={s.url} target="_blank" rel="noopener" className="text-cyan-300 hover:underline">{s.url}</a></td>
-                    <td className="table-cell">{s.cadence}</td>
-                    <td className="table-cell text-slate-400">{s.naicsFilter ?? "—"}</td>
-                    <td className="table-cell">
-                      {(() => {
-                        const kind = s.catalog?.scraperKind;
-                        if (!kind || kind === "MANUAL" || kind === "DEPRECATED") {
-                          return <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-300">manual</span>;
-                        }
-                        return <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-300">auto · {kind.toLowerCase()}</span>;
-                      })()}
-                    </td>
-                    <td className="table-cell text-slate-400">{formatDate(s.lastCheckedAt)}</td>
-                    <td className="table-cell text-xs">
-                      {s.status === "ERROR" && s.lastCheckNote ? (
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage={<>No sources yet. Add one above or via <Link href="/bids/discover" className="underline">Discover</Link>.</>}
+              columns={[
+                { header: "Label" },
+                { header: "URL" },
+                { header: "Cadence" },
+                { header: "NAICS" },
+                { header: "Scraper" },
+                { header: "Last checked" },
+                { header: "Result" },
+                { header: "Status" },
+                { header: "Auto-draft", sortable: false },
+                { header: "", sortable: false },
+              ]}
+              rows={sources.map((s) => {
+                const kind = s.catalog?.scraperKind;
+                const scraperLabel = !kind || kind === "MANUAL" || kind === "DEPRECATED" ? "manual" : `auto · ${kind.toLowerCase()}`;
+                return {
+                  key: s.id,
+                  className: "transition hover:bg-white/5",
+                  cells: [
+                    { sort: s.label, node: <Link href={`/bids/listings?sourceId=${s.id}`} className="font-medium text-white hover:text-cyan-200">{s.label}</Link> },
+                    { sort: s.url, tdClassName: "font-mono text-xs text-slate-400 truncate max-w-[280px]", node: <a href={s.url} target="_blank" rel="noopener" className="text-cyan-300 hover:underline">{s.url}</a> },
+                    { sort: s.cadence, node: s.cadence },
+                    { sort: s.naicsFilter ?? "", tdClassName: "text-slate-400", node: s.naicsFilter ?? "—" },
+                    {
+                      sort: scraperLabel,
+                      node: !kind || kind === "MANUAL" || kind === "DEPRECATED" ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-300">manual</span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-300">auto · {kind.toLowerCase()}</span>
+                      ),
+                    },
+                    { sort: s.lastCheckedAt ? new Date(s.lastCheckedAt).getTime() : null, tdClassName: "text-slate-400", node: formatDate(s.lastCheckedAt) },
+                    {
+                      sort: s.lastCheckNote ?? "",
+                      tdClassName: "text-xs",
+                      node: s.status === "ERROR" && s.lastCheckNote ? (
                         <details className="cursor-pointer">
                           <summary className="text-rose-300 hover:text-rose-200">
                             {s.lastCheckNote.slice(0, 60)}{s.lastCheckNote.length > 60 ? "…" : ""}
@@ -101,40 +107,43 @@ export default async function BidSourcesPage() {
                         </details>
                       ) : (
                         <span className="text-slate-400">{s.lastCheckNote ?? "—"}</span>
-                      )}
-                    </td>
-                    <td className="table-cell"><StatusBadge status={s.status} /></td>
-                    <td className="table-cell">
-                      <form action={`/api/rfp/sources/${s.id}/auto-draft`} method="post" className="flex items-center gap-1">
-                        <label className="flex items-center gap-1 text-xs" style={{ color: "var(--faint)" }}>
-                          <input type="checkbox" name="autoDraftEnabled" defaultChecked={s.autoDraftEnabled} />
-                          auto-draft
-                        </label>
-                        <input
-                          name="autoDraftMinScore"
-                          type="number"
-                          min={0}
-                          max={100}
-                          defaultValue={s.autoDraftMinScore}
-                          aria-label="Auto-draft minimum score"
-                          className="form-input w-14 text-xs"
-                        />
-                        <button type="submit" className="btn-outline text-xs">Save</button>
-                      </form>
-                    </td>
-                    <td className="table-cell">
-                      <div className="flex flex-col gap-1">
-                        <form action={`/api/rfp/sources/${s.id}/refresh`} method="post">
-                          <button type="submit" className="btn-outline text-xs">Refresh</button>
+                      ),
+                    },
+                    { sort: s.status, node: <StatusBadge status={s.status} /> },
+                    {
+                      node: (
+                        <form action={`/api/rfp/sources/${s.id}/auto-draft`} method="post" className="flex items-center gap-1">
+                          <label className="flex items-center gap-1 text-xs" style={{ color: "var(--faint)" }}>
+                            <input type="checkbox" name="autoDraftEnabled" defaultChecked={s.autoDraftEnabled} />
+                            auto-draft
+                          </label>
+                          <input
+                            name="autoDraftMinScore"
+                            type="number"
+                            min={0}
+                            max={100}
+                            defaultValue={s.autoDraftMinScore}
+                            aria-label="Auto-draft minimum score"
+                            className="form-input w-14 text-xs"
+                          />
+                          <button type="submit" className="btn-outline text-xs">Save</button>
                         </form>
-                        <TestSourceButton sourceId={s.id} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {sources.length === 0 ? <tr><td colSpan={10} className="table-cell text-center text-slate-500">No sources yet. Add one above or via <Link href="/bids/discover" className="underline">Discover</Link>.</td></tr> : null}
-              </tbody>
-            </table>
+                      ),
+                    },
+                    {
+                      node: (
+                        <div className="flex flex-col gap-1">
+                          <form action={`/api/rfp/sources/${s.id}/refresh`} method="post">
+                            <button type="submit" className="btn-outline text-xs">Refresh</button>
+                          </form>
+                          <TestSourceButton sourceId={s.id} />
+                        </div>
+                      ),
+                    },
+                  ],
+                };
+              })}
+            />
           </div>
         </section>
       </div>

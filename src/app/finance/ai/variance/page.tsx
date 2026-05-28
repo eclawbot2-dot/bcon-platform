@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { varianceNarrative } from "@/lib/finance-ai";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
@@ -29,17 +30,22 @@ export default async function VariancePage({ searchParams }: { searchParams: Pro
             <p className="mt-2 text-sm text-slate-200 leading-6">{narrative.summary}</p>
           </section>
           <section className="card p-0 overflow-hidden">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr><th className="table-header">Cost code</th><th className="table-header">Variance</th><th className="table-header">Narrative</th></tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {narrative.byCostCode.map((l, i) => (
-                  <tr key={i}><td className="table-cell font-mono text-xs">{l.costCode}</td><td className={"table-cell font-medium " + (l.variance >= 0 ? "text-rose-200" : "text-emerald-200")}>{formatCurrency(l.variance)}</td><td className="table-cell text-xs text-slate-400">{l.narrative}</td></tr>
-                ))}
-                {narrative.byCostCode.length === 0 ? <tr><td colSpan={3} className="table-cell text-center text-slate-500">No budget lines on file for this project.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No budget lines on file for this project."
+              columns={[
+                { header: "Cost code" },
+                { header: "Variance" },
+                { header: "Narrative" },
+              ]}
+              rows={narrative.byCostCode.map((l, i) => ({
+                key: String(i),
+                cells: [
+                  { sort: l.costCode, node: l.costCode, tdClassName: "font-mono text-xs" },
+                  { sort: l.variance, node: formatCurrency(l.variance), tdClassName: "font-medium " + (l.variance >= 0 ? "text-rose-200" : "text-emerald-200") },
+                  { sort: l.narrative, node: l.narrative, tdClassName: "text-xs text-slate-400" },
+                ],
+              }))}
+            />
           </section>
         </>
       ) : null}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DetailShell, DetailGrid, DetailField } from "@/components/layout/detail-shell";
 import { StatTile } from "@/components/ui/stat-tile";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
 
@@ -62,27 +63,37 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
 
       <section className="card p-6">
         <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Tenant memberships · {user.memberships.length}</div>
-        <table className="min-w-full divide-y divide-white/10 text-sm mt-4">
-          <thead className="bg-white/5"><tr>
-            <th className="table-header">Tenant</th>
-            <th className="table-header">Role</th>
-            <th className="table-header">Business unit</th>
-            <th className="table-header">Joined</th>
-            <th className="table-header"></th>
-          </tr></thead>
-          <tbody className="divide-y divide-white/10 bg-slate-950/40">
-            {user.memberships.map((m) => (
-              <tr key={m.id}>
-                <td className="table-cell"><Link href={`/admin/tenants/${m.tenantId}`} className="text-cyan-300 hover:underline">{m.tenant.name}</Link></td>
-                <td className="table-cell font-mono text-xs">{m.roleTemplate}{m.roleTemplate === "ADMIN" ? <span className="ml-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">TENANT ADMIN</span> : null}</td>
-                <td className="table-cell text-xs">{m.businessUnit?.name ?? "—"}</td>
-                <td className="table-cell text-xs text-slate-400">{formatDate(m.createdAt)}</td>
-                <td className="table-cell"><Link href={`/admin/tenants/${m.tenantId}`} className="btn-outline text-xs">Manage</Link></td>
-              </tr>
-            ))}
-            {user.memberships.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-slate-500">User has no tenant memberships.</td></tr> : null}
-          </tbody>
-        </table>
+        <div className="mt-4">
+          <SortableTable
+            emptyMessage="User has no tenant memberships."
+            columns={[
+              { header: "Tenant" },
+              { header: "Role" },
+              { header: "Business unit" },
+              { header: "Joined" },
+              { header: "", sortable: false },
+            ]}
+            rows={user.memberships.map((m) => ({
+              key: m.id,
+              cells: [
+                { sort: m.tenant.name, node: <Link href={`/admin/tenants/${m.tenantId}`} className="text-cyan-300 hover:underline">{m.tenant.name}</Link> },
+                {
+                  sort: m.roleTemplate,
+                  tdClassName: "font-mono text-xs",
+                  node: (
+                    <>
+                      {m.roleTemplate}
+                      {m.roleTemplate === "ADMIN" ? <span className="ml-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">TENANT ADMIN</span> : null}
+                    </>
+                  ),
+                },
+                { sort: m.businessUnit?.name ?? "", tdClassName: "text-xs", node: m.businessUnit?.name ?? "—" },
+                { sort: new Date(m.createdAt).getTime(), tdClassName: "text-xs text-slate-400", node: formatDate(m.createdAt) },
+                { node: <Link href={`/admin/tenants/${m.tenantId}`} className="btn-outline text-xs">Manage</Link> },
+              ],
+            }))}
+          />
+        </div>
       </section>
 
       <section className="card p-6 border-rose-500/30">

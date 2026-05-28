@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/utils";
 
@@ -103,65 +104,80 @@ export default async function PortalCoveragePage({ searchParams }: { searchParam
 
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Portal</th>
-                  <th className="table-header">Agency</th>
-                  <th className="table-header">Scraper</th>
-                  <th className="table-header text-right">Subs</th>
-                  <th className="table-header">Last verified</th>
-                  <th className="table-header">Result</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {rows.map((r) => {
-                  const subs = subsByCatalog.get(r.id) ?? 0;
-                  const isAuto = r.scraperKind !== "MANUAL" && r.scraperKind !== "DEPRECATED";
-                  return (
-                    <tr key={r.id} className="hover:bg-white/5">
-                      <td className="table-cell">
-                        <a href={r.url} target="_blank" rel="noopener" className="font-medium text-cyan-300 hover:underline">{r.name}</a>
-                        <div className="text-xs text-slate-500 mt-0.5">{r.category}</div>
-                      </td>
-                      <td className="table-cell text-xs text-slate-400">
-                        <div>{r.agencyName ?? r.agencyKind}</div>
-                        <div className="text-slate-600">{[r.geoCity, r.geoState].filter(Boolean).join(", ") || r.geoScope}</div>
-                      </td>
-                      <td className="table-cell">
-                        {isAuto ? (
-                          <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-300">
-                            {r.scraperKind.toLowerCase()} · {r.scraperModule ?? "(no module)"}
-                          </span>
-                        ) : (
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${r.scraperKind === "DEPRECATED" ? "bg-rose-500/10 text-rose-300" : "bg-amber-500/10 text-amber-300"}`}>
-                            {r.scraperKind.toLowerCase()}
-                          </span>
-                        )}
-                      </td>
-                      <td className="table-cell text-right text-slate-300">
-                        {subs > 0 ? <span className="font-medium text-white">{subs}</span> : <span className="text-slate-600">0</span>}
-                      </td>
-                      <td className="table-cell text-xs text-slate-400">
-                        {r.lastVerifiedAt ? formatDateTime(r.lastVerifiedAt) : <span className="text-slate-600">never</span>}
-                      </td>
-                      <td className="table-cell text-xs">
-                        {r.lastVerifiedAt == null ? (
-                          <span className="text-slate-500">—</span>
-                        ) : r.lastVerifiedOk ? (
-                          <span className="text-emerald-300">{r.lastVerifiedCount ?? 0} listings</span>
-                        ) : (
-                          <span className="text-rose-300" title={r.lastVerifiedNote ?? ""}>{(r.lastVerifiedNote ?? "failed").slice(0, 60)}</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {rows.length === 0 ? (
-                  <tr><td colSpan={6} className="table-cell text-center text-slate-500">No portals match these filters.</td></tr>
-                ) : null}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No portals match these filters."
+              columns={[
+                { header: "Portal" },
+                { header: "Agency" },
+                { header: "Scraper" },
+                { header: "Subs", align: "right" },
+                { header: "Last verified" },
+                { header: "Result" },
+              ]}
+              rows={rows.map((r) => {
+                const subs = subsByCatalog.get(r.id) ?? 0;
+                const isAuto = r.scraperKind !== "MANUAL" && r.scraperKind !== "DEPRECATED";
+                return {
+                  key: r.id,
+                  className: "hover:bg-white/5",
+                  cells: [
+                    {
+                      sort: r.name,
+                      node: (
+                        <>
+                          <a href={r.url} target="_blank" rel="noopener" className="font-medium text-cyan-300 hover:underline">{r.name}</a>
+                          <div className="text-xs text-slate-500 mt-0.5">{r.category}</div>
+                        </>
+                      ),
+                    },
+                    {
+                      sort: r.agencyName ?? r.agencyKind,
+                      tdClassName: "text-xs text-slate-400",
+                      node: (
+                        <>
+                          <div>{r.agencyName ?? r.agencyKind}</div>
+                          <div className="text-slate-600">{[r.geoCity, r.geoState].filter(Boolean).join(", ") || r.geoScope}</div>
+                        </>
+                      ),
+                    },
+                    {
+                      sort: r.scraperKind,
+                      node: isAuto ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-300">
+                          {r.scraperKind.toLowerCase()} · {r.scraperModule ?? "(no module)"}
+                        </span>
+                      ) : (
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${r.scraperKind === "DEPRECATED" ? "bg-rose-500/10 text-rose-300" : "bg-amber-500/10 text-amber-300"}`}>
+                          {r.scraperKind.toLowerCase()}
+                        </span>
+                      ),
+                    },
+                    {
+                      sort: subs,
+                      tdClassName: "text-slate-300",
+                      node: subs > 0 ? <span className="font-medium text-white">{subs}</span> : <span className="text-slate-600">0</span>,
+                    },
+                    {
+                      sort: r.lastVerifiedAt ? new Date(r.lastVerifiedAt).getTime() : null,
+                      tdClassName: "text-xs text-slate-400",
+                      node: r.lastVerifiedAt ? formatDateTime(r.lastVerifiedAt) : <span className="text-slate-600">never</span>,
+                    },
+                    {
+                      sort: r.lastVerifiedAt == null ? null : r.lastVerifiedOk ? (r.lastVerifiedCount ?? 0) : -1,
+                      tdClassName: "text-xs",
+                      node: r.lastVerifiedAt == null ? (
+                        <span className="text-slate-500">—</span>
+                      ) : r.lastVerifiedOk ? (
+                        <span className="text-emerald-300">{r.lastVerifiedCount ?? 0} listings</span>
+                      ) : (
+                        <span className="text-rose-300" title={r.lastVerifiedNote ?? ""}>{(r.lastVerifiedNote ?? "failed").slice(0, 60)}</span>
+                      ),
+                    },
+                  ],
+                };
+              })}
+            />
           </div>
         </section>
       </div>

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
+import { SortableTable } from "@/components/SortableTable";
 import { auth } from "@/lib/auth";
 import { snapshot } from "@/lib/metrics";
 import { formatDateTime } from "@/lib/utils";
@@ -58,101 +59,86 @@ export default async function ObservabilityPage({ searchParams }: { searchParams
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-cyan-300">Per-route latency</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Route</th>
-                  <th className="table-header text-right">Count</th>
-                  <th className="table-header text-right">Errors</th>
-                  <th className="table-header text-right">Avg</th>
-                  <th className="table-header text-right">p50</th>
-                  <th className="table-header text-right">p95</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {data.perRoute.slice(0, 50).map((r) => (
-                  <tr key={r.route} className={r.errorCount > 0 ? "bg-rose-500/5" : ""}>
-                    <td className="table-cell font-mono text-xs">{r.route}</td>
-                    <td className="table-cell text-right tabular-nums">{r.count}</td>
-                    <td className="table-cell text-right tabular-nums">{r.errorCount > 0 ? <span className="text-rose-300">{r.errorCount}</span> : 0}</td>
-                    <td className="table-cell text-right tabular-nums">{r.avgMs}ms</td>
-                    <td className="table-cell text-right tabular-nums">{r.p50Ms}ms</td>
-                    <td className={`table-cell text-right tabular-nums ${r.p95Ms > 1000 ? "text-amber-300" : ""}`}>{r.p95Ms}ms</td>
-                  </tr>
-                ))}
-                {data.perRoute.length === 0 ? (
-                  <tr><td colSpan={6} className="table-cell text-center text-slate-500 py-8">
-                    No requests recorded yet — middleware captures auth-terminated requests; route handlers must call <code className="text-xs text-cyan-300">withMetrics()</code> for full coverage.
-                  </td></tr>
-                ) : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage={<>No requests recorded yet — middleware captures auth-terminated requests; route handlers must call <code className="text-xs text-cyan-300">withMetrics()</code> for full coverage.</>}
+              columns={[
+                { header: "Route" },
+                { header: "Count", align: "right" },
+                { header: "Errors", align: "right" },
+                { header: "Avg", align: "right" },
+                { header: "p50", align: "right" },
+                { header: "p95", align: "right" },
+              ]}
+              rows={data.perRoute.slice(0, 50).map((r) => ({
+                key: r.route,
+                className: r.errorCount > 0 ? "bg-rose-500/5" : "",
+                cells: [
+                  { sort: r.route, node: r.route, tdClassName: "font-mono text-xs" },
+                  { sort: r.count, node: r.count, tdClassName: "tabular-nums" },
+                  { sort: r.errorCount, node: r.errorCount > 0 ? <span className="text-rose-300">{r.errorCount}</span> : 0, tdClassName: "tabular-nums" },
+                  { sort: r.avgMs, node: `${r.avgMs}ms`, tdClassName: "tabular-nums" },
+                  { sort: r.p50Ms, node: `${r.p50Ms}ms`, tdClassName: "tabular-nums" },
+                  { sort: r.p95Ms, node: `${r.p95Ms}ms`, tdClassName: `tabular-nums ${r.p95Ms > 1000 ? "text-amber-300" : ""}` },
+                ],
+              }))}
+            />
           </div>
         </section>
 
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-cyan-300">Recent errors</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">When</th>
-                  <th className="table-header">Module</th>
-                  <th className="table-header">Path</th>
-                  <th className="table-header">Message</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {data.recentErrors.map((e, i) => (
-                  <tr key={`${e.t}-${i}`}>
-                    <td className="table-cell text-xs text-slate-400">{formatDateTime(new Date(e.t))}</td>
-                    <td className="table-cell font-mono text-xs">{e.module}</td>
-                    <td className="table-cell font-mono text-xs text-slate-400">{e.path ?? "—"}</td>
-                    <td className="table-cell text-rose-200">{e.message}</td>
-                  </tr>
-                ))}
-                {data.recentErrors.length === 0 ? (
-                  <tr><td colSpan={4} className="table-cell text-center text-slate-500 py-6">No errors captured in this window — clean.</td></tr>
-                ) : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No errors captured in this window — clean."
+              columns={[
+                { header: "When" },
+                { header: "Module" },
+                { header: "Path" },
+                { header: "Message" },
+              ]}
+              rows={data.recentErrors.map((e, i) => ({
+                key: `${e.t}-${i}`,
+                cells: [
+                  { sort: e.t, node: formatDateTime(new Date(e.t)), tdClassName: "text-xs text-slate-400" },
+                  { sort: e.module, node: e.module, tdClassName: "font-mono text-xs" },
+                  { sort: e.path ?? "", node: e.path ?? "—", tdClassName: "font-mono text-xs text-slate-400" },
+                  { sort: e.message, node: e.message, tdClassName: "text-rose-200" },
+                ],
+              }))}
+            />
           </div>
         </section>
 
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-cyan-300">Cron runs</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Job</th>
-                  <th className="table-header">Last run</th>
-                  <th className="table-header">Status</th>
-                  <th className="table-header">Duration</th>
-                  <th className="table-header">Note</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {data.cronRuns.map((r) => (
-                  <tr key={r.name}>
-                    <td className="table-cell font-mono text-xs">{r.name}</td>
-                    <td className="table-cell text-xs text-slate-400">{formatDateTime(new Date(r.startedAt))}</td>
-                    <td className="table-cell">
-                      {r.ok ? (
-                        <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-200">ok</span>
-                      ) : (
-                        <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] text-rose-200">failed</span>
-                      )}
-                    </td>
-                    <td className="table-cell text-right tabular-nums text-xs">{r.finishedAt - r.startedAt}ms</td>
-                    <td className="table-cell text-xs text-slate-400">{r.message ?? "—"}</td>
-                  </tr>
-                ))}
-                {data.cronRuns.length === 0 ? (
-                  <tr><td colSpan={5} className="table-cell text-center text-slate-500 py-6">No cron runs captured since restart.</td></tr>
-                ) : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No cron runs captured since restart."
+              columns={[
+                { header: "Job" },
+                { header: "Last run" },
+                { header: "Status" },
+                { header: "Duration" },
+                { header: "Note" },
+              ]}
+              rows={data.cronRuns.map((r) => ({
+                key: r.name,
+                cells: [
+                  { sort: r.name, node: r.name, tdClassName: "font-mono text-xs" },
+                  { sort: r.startedAt, node: formatDateTime(new Date(r.startedAt)), tdClassName: "text-xs text-slate-400" },
+                  {
+                    sort: r.ok ? 1 : 0,
+                    node: r.ok ? (
+                      <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-200">ok</span>
+                    ) : (
+                      <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] text-rose-200">failed</span>
+                    ),
+                  },
+                  { sort: r.finishedAt - r.startedAt, node: `${r.finishedAt - r.startedAt}ms`, tdClassName: "text-right tabular-nums text-xs" },
+                  { sort: r.message ?? "", node: r.message ?? "—", tdClassName: "text-xs text-slate-400" },
+                ],
+              }))}
+            />
           </div>
         </section>
 

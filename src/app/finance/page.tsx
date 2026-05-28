@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -156,75 +157,68 @@ export default async function FinanceHubPage() {
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Income statement — trailing months</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Period</th>
-                  <th className="table-header">Revenue</th>
-                  <th className="table-header">COGS</th>
-                  <th className="table-header">Gross profit</th>
-                  <th className="table-header">OpEx</th>
-                  <th className="table-header">EBITDA</th>
-                  <th className="table-header">Margin</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {statements.map((st) => {
-                  const margin = toNum(st.revenue) > 0 ? (toNum(st.ebitda) / toNum(st.revenue)) * 100 : 0;
-                  return (
-                    <tr key={st.id}>
-                      <td className="table-cell">{formatDate(st.periodStart)} → {formatDate(st.periodEnd)}</td>
-                      <td className="table-cell">{formatCurrency(st.revenue)}</td>
-                      <td className="table-cell">{formatCurrency(st.cogs)}</td>
-                      <td className="table-cell">{formatCurrency(st.grossProfit)}</td>
-                      <td className="table-cell">{formatCurrency(st.opex)}</td>
-                      <td className="table-cell">{formatCurrency(st.ebitda)}</td>
-                      <td className="table-cell">{margin.toFixed(1)}%</td>
-                    </tr>
-                  );
-                })}
-                {statements.length === 0 ? <tr><td colSpan={7} className="table-cell text-center text-slate-500">No statements yet. Connect Xero + Sync.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No statements yet. Connect Xero + Sync."
+              columns={[
+                { header: "Period" },
+                { header: "Revenue" },
+                { header: "COGS" },
+                { header: "Gross profit" },
+                { header: "OpEx" },
+                { header: "EBITDA" },
+                { header: "Margin" },
+              ]}
+              rows={statements.map((st) => {
+                const margin = toNum(st.revenue) > 0 ? (toNum(st.ebitda) / toNum(st.revenue)) * 100 : 0;
+                return {
+                  key: st.id,
+                  cells: [
+                    { sort: new Date(st.periodStart).getTime(), node: <>{formatDate(st.periodStart)} → {formatDate(st.periodEnd)}</> },
+                    { sort: toNum(st.revenue), node: formatCurrency(st.revenue) },
+                    { sort: toNum(st.cogs), node: formatCurrency(st.cogs) },
+                    { sort: toNum(st.grossProfit), node: formatCurrency(st.grossProfit) },
+                    { sort: toNum(st.opex), node: formatCurrency(st.opex) },
+                    { sort: toNum(st.ebitda), node: formatCurrency(st.ebitda) },
+                    { sort: margin, node: `${margin.toFixed(1)}%` },
+                  ],
+                };
+              })}
+            />
           </div>
         </section>
 
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Project P&L — portfolio</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Project</th>
-                  <th className="table-header">Contract value</th>
-                  <th className="table-header">+COs</th>
-                  <th className="table-header">Billed</th>
-                  <th className="table-header">% complete</th>
-                  <th className="table-header">Costs</th>
-                  <th className="table-header">Forecast margin</th>
-                  <th className="table-header">O/U billing</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {snapshots.map((s) => (
-                  <tr key={s.id} className="transition hover:bg-white/5">
-                    <td className="table-cell"><Link href={`/projects/${s.projectId}/financials`} className="text-cyan-300 hover:underline">{s.project.code} · {s.project.name}</Link></td>
-                    <td className="table-cell">{formatCurrency(s.contractValue)}</td>
-                    <td className="table-cell">{formatCurrency(s.approvedCOValue)}</td>
-                    <td className="table-cell">{formatCurrency(s.billedToDate)}</td>
-                    <td className="table-cell">{toNum(s.percentComplete).toFixed(1)}%</td>
-                    <td className="table-cell">{formatCurrency(s.costsToDate)}</td>
-                    <td className="table-cell">
-                      <span className={toNum(s.forecastGrossMargin) > 0 ? "text-emerald-300" : "text-rose-300"}>{formatCurrency(s.forecastGrossMargin)}</span>
-                    </td>
-                    <td className="table-cell">
-                      <span className={toNum(s.wipOverUnder) === 0 ? "text-slate-400" : toNum(s.wipOverUnder) > 0 ? "text-emerald-300" : "text-amber-300"}>{formatCurrency(s.wipOverUnder)}</span>
-                    </td>
-                  </tr>
-                ))}
-                {snapshots.length === 0 ? <tr><td colSpan={8} className="table-cell text-center text-slate-500">No P&L snapshots yet. Sync Xero.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No P&L snapshots yet. Sync Xero."
+              columns={[
+                { header: "Project" },
+                { header: "Contract value" },
+                { header: "+COs" },
+                { header: "Billed" },
+                { header: "% complete" },
+                { header: "Costs" },
+                { header: "Forecast margin" },
+                { header: "O/U billing" },
+              ]}
+              rows={snapshots.map((s) => ({
+                key: s.id,
+                className: "transition hover:bg-white/5",
+                cells: [
+                  { sort: `${s.project.code} ${s.project.name}`, node: <Link href={`/projects/${s.projectId}/financials`} className="text-cyan-300 hover:underline">{s.project.code} · {s.project.name}</Link> },
+                  { sort: toNum(s.contractValue), node: formatCurrency(s.contractValue) },
+                  { sort: toNum(s.approvedCOValue), node: formatCurrency(s.approvedCOValue) },
+                  { sort: toNum(s.billedToDate), node: formatCurrency(s.billedToDate) },
+                  { sort: toNum(s.percentComplete), node: `${toNum(s.percentComplete).toFixed(1)}%` },
+                  { sort: toNum(s.costsToDate), node: formatCurrency(s.costsToDate) },
+                  { sort: toNum(s.forecastGrossMargin), node: <span className={toNum(s.forecastGrossMargin) > 0 ? "text-emerald-300" : "text-rose-300"}>{formatCurrency(s.forecastGrossMargin)}</span> },
+                  { sort: toNum(s.wipOverUnder), node: <span className={toNum(s.wipOverUnder) === 0 ? "text-slate-400" : toNum(s.wipOverUnder) > 0 ? "text-emerald-300" : "text-amber-300"}>{formatCurrency(s.wipOverUnder)}</span> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

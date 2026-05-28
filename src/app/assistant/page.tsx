@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { tenantAskAnything } from "@/lib/copilot-ai";
 import { requireTenant } from "@/lib/tenant";
 
@@ -70,12 +71,17 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
             <section key={i} className="card p-0 overflow-hidden">
               <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">{t.title}</div>
               {t.rows.length > 0 ? (
-                <table className="min-w-full divide-y divide-white/10 text-sm">
-                  <thead className="bg-white/5"><tr>{Object.keys(t.rows[0]).map((k) => <th key={k} className="table-header">{k}</th>)}</tr></thead>
-                  <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                    {t.rows.map((r, j) => <tr key={j}>{Object.values(r).map((v, k) => <td key={k} className="table-cell">{v}</td>)}</tr>)}
-                  </tbody>
-                </table>
+                <SortableTable
+                  emptyMessage="No rows."
+                  columns={Object.keys(t.rows[0]).map((k) => ({ header: k }))}
+                  rows={t.rows.map((r, j) => ({
+                    key: String(j),
+                    cells: Object.values(r).map((v) => {
+                      const isPrimitive = typeof v === "string" || typeof v === "number" || typeof v === "boolean" || v == null;
+                      return { sort: isPrimitive ? (v as string | number | boolean | null) : String(v), node: v };
+                    }),
+                  }))}
+                />
               ) : <div className="p-4 text-sm text-slate-500">No rows.</div>}
             </section>
           ))}

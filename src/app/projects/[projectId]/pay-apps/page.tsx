@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/utils";
-import { sumMoney } from "@/lib/money";
+import { sumMoney, toNum } from "@/lib/money";
 
 export default async function PayAppsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -64,38 +65,36 @@ export default async function PayAppsPage({ params }: { params: Promise<{ projec
               <Stat label="Current payment due" value={formatCurrency(app.currentPaymentDue)} tone="good" />
             </div>
             <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-              <table className="min-w-full divide-y divide-white/10">
-                <thead className="bg-white/5">
-                  <tr>
-                    <th className="table-header">#</th>
-                    <th className="table-header">Cost code</th>
-                    <th className="table-header">Description</th>
-                    <th className="table-header">Scheduled value</th>
-                    <th className="table-header">Prior</th>
-                    <th className="table-header">This period</th>
-                    <th className="table-header">Total completed</th>
-                    <th className="table-header">% complete</th>
-                    <th className="table-header">Balance</th>
-                    <th className="table-header">Retainage</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                  {app.lines.map((line) => (
-                    <tr key={line.id}>
-                      <td className="table-cell font-mono text-xs text-slate-400">{line.lineNumber}</td>
-                      <td className="table-cell">{line.costCode ?? "—"}</td>
-                      <td className="table-cell">{line.description}</td>
-                      <td className="table-cell">{formatCurrency(line.scheduledValue)}</td>
-                      <td className="table-cell">{formatCurrency(line.workCompletedPrev)}</td>
-                      <td className="table-cell">{formatCurrency(line.workCompletedThis)}</td>
-                      <td className="table-cell">{formatCurrency(line.totalCompleted)}</td>
-                      <td className="table-cell">{formatPercent(line.percentComplete)}</td>
-                      <td className="table-cell">{formatCurrency(line.balanceToFinish)}</td>
-                      <td className="table-cell">{formatCurrency(line.retainage)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <SortableTable
+                className="min-w-full divide-y divide-white/10"
+                columns={[
+                  { header: "#" },
+                  { header: "Cost code" },
+                  { header: "Description" },
+                  { header: "Scheduled value" },
+                  { header: "Prior" },
+                  { header: "This period" },
+                  { header: "Total completed" },
+                  { header: "% complete" },
+                  { header: "Balance" },
+                  { header: "Retainage" },
+                ]}
+                rows={app.lines.map((line) => ({
+                  key: line.id,
+                  cells: [
+                    { sort: line.lineNumber, node: line.lineNumber, tdClassName: "font-mono text-xs text-slate-400" },
+                    { sort: line.costCode ?? "", node: line.costCode ?? "—" },
+                    { sort: line.description, node: line.description },
+                    { sort: toNum(line.scheduledValue), node: formatCurrency(line.scheduledValue) },
+                    { sort: toNum(line.workCompletedPrev), node: formatCurrency(line.workCompletedPrev) },
+                    { sort: toNum(line.workCompletedThis), node: formatCurrency(line.workCompletedThis) },
+                    { sort: toNum(line.totalCompleted), node: formatCurrency(line.totalCompleted) },
+                    { sort: toNum(line.percentComplete), node: formatPercent(line.percentComplete) },
+                    { sort: toNum(line.balanceToFinish), node: formatCurrency(line.balanceToFinish) },
+                    { sort: toNum(line.retainage), node: formatCurrency(line.retainage) },
+                  ],
+                }))}
+              />
             </div>
           </section>
         ))}

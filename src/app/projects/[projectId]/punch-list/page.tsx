@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
@@ -32,27 +33,26 @@ export default async function PunchListPage({ params }: { params: Promise<{ proj
         </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Title</th>
-                  <th className="table-header">Area</th>
-                  <th className="table-header">Due</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.punchItems.map((p) => (
-                  <tr key={p.id} className="cursor-pointer transition hover:bg-white/5">
-                    <td className="table-cell"><Link href={`/projects/${project.id}/punch-list/${p.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{p.title}</Link></td>
-                    <td className="table-cell text-slate-400">{p.area ?? "—"}</td>
-                    <td className="table-cell text-slate-400">{formatDate(p.dueDate)}</td>
-                    <td className="table-cell"><StatusBadge status={p.status} /></td>
-                  </tr>
-                ))}
-                {project.punchItems.length === 0 ? <tr><td colSpan={4} className="table-cell text-center text-slate-500">No punch items recorded.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              className="min-w-full divide-y divide-white/10"
+              emptyMessage="No punch items recorded."
+              columns={[
+                { header: "Title" },
+                { header: "Area" },
+                { header: "Due" },
+                { header: "Status" },
+              ]}
+              rows={project.punchItems.map((p) => ({
+                key: p.id,
+                className: "cursor-pointer transition hover:bg-white/5",
+                cells: [
+                  { sort: p.title, node: <Link href={`/projects/${project.id}/punch-list/${p.id}`} className="text-cyan-300 hover:text-cyan-200 hover:underline">{p.title}</Link> },
+                  { sort: p.area ?? "", node: p.area ?? "—", tdClassName: "text-slate-400" },
+                  { sort: p.dueDate ? new Date(p.dueDate).getTime() : null, node: formatDate(p.dueDate), tdClassName: "text-slate-400" },
+                  { sort: p.status, node: <StatusBadge status={p.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

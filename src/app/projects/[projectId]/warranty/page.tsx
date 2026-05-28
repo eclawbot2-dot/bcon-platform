@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatTile } from "@/components/ui/stat-tile";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate } from "@/lib/utils";
@@ -37,38 +38,40 @@ export default async function WarrantyPage({ params }: { params: Promise<{ proje
         </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Title</th>
-                  <th className="table-header">Reported by</th>
-                  <th className="table-header">Assigned to</th>
-                  <th className="table-header">Severity</th>
-                  <th className="table-header">Reported</th>
-                  <th className="table-header">Resolved</th>
-                  <th className="table-header">Expires</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {project.warrantyItems.map((w) => (
-                  <tr key={w.id}>
-                    <td className="table-cell">
-                      <div className="font-medium text-white">{w.title}</div>
-                      {w.description ? <div className="text-xs text-slate-500">{w.description}</div> : null}
-                    </td>
-                    <td className="table-cell text-slate-400">{w.reportedBy ?? "—"}</td>
-                    <td className="table-cell text-slate-400">{w.assignedTo ?? "—"}</td>
-                    <td className="table-cell">{w.severity}</td>
-                    <td className="table-cell text-slate-400">{formatDate(w.reportedAt)}</td>
-                    <td className="table-cell text-slate-400">{formatDate(w.resolvedAt)}</td>
-                    <td className="table-cell text-slate-400">{formatDate(w.warrantyExpires)}</td>
-                    <td className="table-cell"><StatusBadge status={w.status} /></td>
-                  </tr>
-                ))}
-                {project.warrantyItems.length === 0 ? <tr><td colSpan={8} className="table-cell text-center text-slate-500">No warranty items.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No warranty items."
+              columns={[
+                { header: "Title" },
+                { header: "Reported by" },
+                { header: "Assigned to" },
+                { header: "Severity" },
+                { header: "Reported" },
+                { header: "Resolved" },
+                { header: "Expires" },
+                { header: "Status" },
+              ]}
+              rows={project.warrantyItems.map((w) => ({
+                key: w.id,
+                cells: [
+                  {
+                    sort: w.title,
+                    node: (
+                      <>
+                        <div className="font-medium text-white">{w.title}</div>
+                        {w.description ? <div className="text-xs text-slate-500">{w.description}</div> : null}
+                      </>
+                    ),
+                  },
+                  { sort: w.reportedBy ?? "", node: w.reportedBy ?? "—", tdClassName: "text-slate-400" },
+                  { sort: w.assignedTo ?? "", node: w.assignedTo ?? "—", tdClassName: "text-slate-400" },
+                  { sort: w.severity, node: w.severity },
+                  { sort: w.reportedAt ? new Date(w.reportedAt).getTime() : undefined, node: formatDate(w.reportedAt), tdClassName: "text-slate-400" },
+                  { sort: w.resolvedAt ? new Date(w.resolvedAt).getTime() : undefined, node: formatDate(w.resolvedAt), tdClassName: "text-slate-400" },
+                  { sort: w.warrantyExpires ? new Date(w.warrantyExpires).getTime() : undefined, node: formatDate(w.warrantyExpires), tdClassName: "text-slate-400" },
+                  { sort: w.status, node: <StatusBadge status={w.status} /> },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>

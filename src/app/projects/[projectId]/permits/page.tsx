@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { SortableTable } from "@/components/SortableTable";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/prisma";
@@ -67,30 +68,28 @@ export default async function PermitsPage({ params }: { params: Promise<{ projec
             </div>
             {p.inspections.length > 0 ? (
               <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                <table className="min-w-full divide-y divide-white/10">
-                  <thead className="bg-white/5">
-                    <tr>
-                      <th className="table-header">Kind</th>
-                      <th className="table-header">Title</th>
-                      <th className="table-header">Inspector</th>
-                      <th className="table-header">Scheduled</th>
-                      <th className="table-header">Completed</th>
-                      <th className="table-header">Result</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                    {p.inspections.map((insp) => (
-                      <tr key={insp.id}>
-                        <td className="table-cell">{insp.kind.replaceAll("_", " ")}</td>
-                        <td className="table-cell">{insp.title}</td>
-                        <td className="table-cell text-slate-400">{insp.inspector ?? "—"}</td>
-                        <td className="table-cell text-slate-400">{formatDate(insp.scheduledAt)}</td>
-                        <td className="table-cell text-slate-400">{formatDate(insp.completedAt)}</td>
-                        <td className="table-cell"><StatusBadge status={insp.result} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <SortableTable
+                  className="min-w-full divide-y divide-white/10"
+                  columns={[
+                    { header: "Kind" },
+                    { header: "Title" },
+                    { header: "Inspector" },
+                    { header: "Scheduled" },
+                    { header: "Completed" },
+                    { header: "Result" },
+                  ]}
+                  rows={p.inspections.map((insp) => ({
+                    key: insp.id,
+                    cells: [
+                      { sort: insp.kind, node: insp.kind.replaceAll("_", " ") },
+                      { sort: insp.title, node: insp.title },
+                      { sort: insp.inspector ?? "", node: insp.inspector ?? "—", tdClassName: "text-slate-400" },
+                      { sort: insp.scheduledAt ? new Date(insp.scheduledAt).getTime() : null, node: formatDate(insp.scheduledAt), tdClassName: "text-slate-400" },
+                      { sort: insp.completedAt ? new Date(insp.completedAt).getTime() : null, node: formatDate(insp.completedAt), tdClassName: "text-slate-400" },
+                      { sort: insp.result ?? "", node: <StatusBadge status={insp.result} /> },
+                    ],
+                  }))}
+                />
               </div>
             ) : (
               <div className="mt-4 rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-center text-sm text-slate-500">

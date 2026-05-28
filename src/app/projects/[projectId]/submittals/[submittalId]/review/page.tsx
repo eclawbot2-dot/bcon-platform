@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { DetailShell } from "@/components/layout/detail-shell";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { reviewSubmittalAgainstSpec } from "@/lib/execution-ai";
@@ -22,24 +23,22 @@ export default async function SubmittalReviewPage({ params }: { params: Promise<
       actions={<StatusBadge status={result.overall} />}
     >
       <section className="card p-0 overflow-hidden">
-        <table className="min-w-full divide-y divide-white/10 text-sm">
-          <thead className="bg-white/5">
-            <tr>
-              <th className="table-header">Requirement</th>
-              <th className="table-header">Status</th>
-              <th className="table-header">Note</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/10 bg-slate-950/40">
-            {result.findings.map((f, i) => (
-              <tr key={i}>
-                <td className="table-cell">{f.requirement}</td>
-                <td className="table-cell"><StatusBadge status={f.status} /></td>
-                <td className="table-cell text-xs text-slate-400">{f.note}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <SortableTable
+          emptyMessage="No findings."
+          columns={[
+            { header: "Requirement" },
+            { header: "Status" },
+            { header: "Note" },
+          ]}
+          rows={result.findings.map((f, i) => ({
+            key: String(i),
+            cells: [
+              { sort: f.requirement, node: f.requirement },
+              { sort: f.status, node: <StatusBadge status={f.status} /> },
+              { sort: f.note, node: f.note, tdClassName: "text-xs text-slate-400" },
+            ],
+          }))}
+        />
       </section>
       <Link href={`/projects/${projectId}/submittals/${submittalId}`} className="btn-outline text-xs">← back</Link>
     </DetailShell>

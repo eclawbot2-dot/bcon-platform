@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -56,37 +57,35 @@ export default async function ImportsPage() {
         <section className="card p-0 overflow-hidden">
           <div className="px-5 py-3 text-xs uppercase tracking-[0.2em] text-slate-400">Recent imports</div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Label</th>
-                  <th className="table-header">Kind</th>
-                  <th className="table-header">Project</th>
-                  <th className="table-header">File</th>
-                  <th className="table-header">Rows</th>
-                  <th className="table-header">Imported</th>
-                  <th className="table-header">Dollar value</th>
-                  <th className="table-header">Status</th>
-                  <th className="table-header">Uploaded</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {imports.map((i) => (
-                  <tr key={i.id} className="transition hover:bg-white/5">
-                    <td className="table-cell"><Link href={`/imports/${i.id}`} className="text-cyan-300 hover:underline">{i.label}</Link></td>
-                    <td className="table-cell text-xs uppercase tracking-[0.18em] text-slate-400">{i.kind.replaceAll("_", " ")}</td>
-                    <td className="table-cell">{i.project ? <Link href={`/projects/${i.project.id}`} className="text-cyan-300 hover:underline">{i.project.code}</Link> : <span className="text-slate-500">tenant-wide</span>}</td>
-                    <td className="table-cell font-mono text-xs text-slate-400">{i.filename}</td>
-                    <td className="table-cell">{i.rowsDetected.toLocaleString()}</td>
-                    <td className="table-cell">{i.rowsImported.toLocaleString()}</td>
-                    <td className="table-cell">{formatCurrency(i.totalDollarValue)}</td>
-                    <td className="table-cell"><StatusBadge status={i.status} /></td>
-                    <td className="table-cell text-slate-400">{formatDate(i.createdAt)}</td>
-                  </tr>
-                ))}
-                {imports.length === 0 ? <tr><td colSpan={9} className="table-cell text-center text-slate-500">No historical imports yet. Upload your first CSV above.</td></tr> : null}
-              </tbody>
-            </table>
+            <SortableTable
+              emptyMessage="No historical imports yet. Upload your first CSV above."
+              columns={[
+                { header: "Label" },
+                { header: "Kind" },
+                { header: "Project" },
+                { header: "File" },
+                { header: "Rows" },
+                { header: "Imported" },
+                { header: "Dollar value" },
+                { header: "Status" },
+                { header: "Uploaded" },
+              ]}
+              rows={imports.map((i) => ({
+                key: i.id,
+                className: "transition hover:bg-white/5",
+                cells: [
+                  { sort: i.label, node: <Link href={`/imports/${i.id}`} className="text-cyan-300 hover:underline">{i.label}</Link> },
+                  { sort: i.kind, node: i.kind.replaceAll("_", " "), tdClassName: "text-xs uppercase tracking-[0.18em] text-slate-400" },
+                  { sort: i.project?.code ?? "", node: i.project ? <Link href={`/projects/${i.project.id}`} className="text-cyan-300 hover:underline">{i.project.code}</Link> : <span className="text-slate-500">tenant-wide</span> },
+                  { sort: i.filename, node: i.filename, tdClassName: "font-mono text-xs text-slate-400" },
+                  { sort: i.rowsDetected, node: i.rowsDetected.toLocaleString() },
+                  { sort: i.rowsImported, node: i.rowsImported.toLocaleString() },
+                  { sort: Number(i.totalDollarValue ?? 0), node: formatCurrency(i.totalDollarValue) },
+                  { sort: i.status, node: <StatusBadge status={i.status} /> },
+                  { sort: new Date(i.createdAt).getTime(), node: formatDate(i.createdAt), tdClassName: "text-slate-400" },
+                ],
+              }))}
+            />
           </div>
         </section>
       </div>
