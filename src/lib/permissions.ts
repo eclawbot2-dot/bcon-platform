@@ -141,6 +141,16 @@ export function isManagerRole(role: UserRoleTemplate | null | undefined): boolea
   return !!role && MANAGER_ROLES.includes(role);
 }
 
+/**
+ * Non-throwing manager check for redirect-style form-post handlers that
+ * can't easily wrap a thrown error in a 403 response. Returns true when
+ * the current actor holds a manager-class role in this tenant.
+ */
+export async function actorIsManager(tenantId: string): Promise<boolean> {
+  const actor = await currentActor(tenantId);
+  return actor.isManager;
+}
+
 export function canEditRole(role: UserRoleTemplate | null | undefined): boolean {
   return !!role && EDIT_ROLES.includes(role);
 }

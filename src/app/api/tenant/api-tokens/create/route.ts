@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { requireTenant } from "@/lib/tenant";
+import { actorIsManager } from "@/lib/permissions";
 import { auth } from "@/lib/auth";
 import { issueApiToken } from "@/lib/api-token";
 import { recordAudit } from "@/lib/audit";
@@ -15,6 +16,7 @@ import { recordAudit } from "@/lib/audit";
  */
 export async function POST(req: NextRequest) {
   const tenant = await requireTenant();
+  if (!(await actorIsManager(tenant.id))) redirect("/settings/api?error=Manager+role+required");
   const form = await req.formData();
   const name = (form.get("name") as string | null)?.trim();
   if (!name) redirect("/settings/api?error=name+required");

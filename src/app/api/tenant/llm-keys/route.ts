@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
+import { actorIsManager } from "@/lib/permissions";
 import { auth } from "@/lib/auth";
 import { encryptSecret } from "@/lib/rfp-geo";
 import { recordAudit } from "@/lib/audit";
@@ -13,8 +14,9 @@ import { recordAudit } from "@/lib/audit";
  * field clears it (so customers can rotate or revoke). The actual
  * cleartext is never stored.
  *
- * Only tenant ADMIN role can hit this — covered by requireTenant
- * which throws 403 if the user isn't a member with admin rights.
+ * requireTenant enforces tenant membership; actorIsManager restricts
+ * this credential-management change to manager-class roles (viewers /
+ * field roles cannot rotate or clear billing keys).
  *
  * CSRF protection: handled at the middleware layer
  * (src/middleware.ts) — every non-GET API request gets an
@@ -22,6 +24,7 @@ import { recordAudit } from "@/lib/audit";
  */
 export async function POST(req: NextRequest) {
   const tenant = await requireTenant();
+  if (!(await actorIsManager(tenant.id))) redirect("/settings?error=Manager+role+required");
   const form = await req.formData();
   const openai = (form.get("openaiKey") as string | null)?.trim() ?? "";
   const anthropic = (form.get("anthropicKey") as string | null)?.trim() ?? "";

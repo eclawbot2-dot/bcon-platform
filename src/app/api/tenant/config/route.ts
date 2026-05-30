@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { currentTenantSlug } from "@/lib/tenant";
+import { requireTenant } from "@/lib/tenant";
+import { requireManager } from "@/lib/permissions";
 import { ProjectMode } from "@prisma/client";
 import { publicRedirect } from "@/lib/redirect";
 
 const VALID_MODES = new Set(Object.values(ProjectMode));
 
 export async function POST(req: Request) {
-  const slug = await currentTenantSlug();
-  const tenant = slug ? await prisma.tenant.findUnique({ where: { slug } }) : await prisma.tenant.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!tenant) return NextResponse.json({ error: "no tenant" }, { status: 404 });
+  // Membership-checked tenant resolution (was a raw slug lookup that let any
+  // logged-in user rewrite another tenant's mode config by switching the
+  // cx.tenant cookie). requireTenant enforces membership; requireManager
+  // restricts this admin-class settings change to manager+ roles.
+  const tenant = await requireTenant();
+  try {
+    await requireManager(tenant.id);
+  } catch {
+    return NextResponse.json({ error: "Manager-level role required." }, { status: 403 });
+  }
 
   const form = await req.formData();
   const primaryMode = String(form.get("primaryMode") ?? tenant.primaryMode);

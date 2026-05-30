@@ -4,10 +4,12 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
+import { actorIsManager } from "@/lib/permissions";
 import { sendEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   const tenant = await requireTenant();
+  if (!(await actorIsManager(tenant.id))) redirect("/settings/guests?error=Manager+role+required");
   const form = await req.formData();
   const email = (form.get("email") as string | null)?.trim().toLowerCase();
   // Email validation tighter than .includes("@") to block SMTP

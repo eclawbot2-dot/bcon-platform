@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
+import { actorIsManager } from "@/lib/permissions";
 import { decryptSecret } from "@/lib/rfp-geo";
 
 /**
@@ -16,6 +17,9 @@ import { decryptSecret } from "@/lib/rfp-geo";
  */
 export async function POST() {
   const tenant = await requireTenant();
+  if (!(await actorIsManager(tenant.id))) {
+    return NextResponse.json({ ok: false, error: "Manager-level role required." }, { status: 403 });
+  }
   const row = await prisma.tenant.findUnique({
     where: { id: tenant.id },
     select: { openaiKeyEnc: true, anthropicKeyEnc: true, preferredProvider: true },
