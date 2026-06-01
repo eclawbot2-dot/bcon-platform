@@ -207,6 +207,16 @@ function buildAiSummary(kind: HistoricalImportKind, rowCount: number, flags: Arr
 export async function commitImport(importId: string, tenantId: string): Promise<{ ok: boolean; imported: number; note: string }> {
   const imp = await prisma.historicalImport.findFirst({ where: { id: importId, tenantId }, include: { rows: true } });
   if (!imp) return { ok: false, imported: 0, note: "import not found" };
+  // Idempotency guard: this loop creates JournalEntryRow / Opportunity /
+  // BudgetLine records with no unique key, so committing the same import
+  // twice would duplicate every row (real money double-counted). Refuse to
+  // re-commit a batch that has already reached IMPORTED (or was REJECTED).
+  if (imp.status === HistoricalImportStatus.IMPORTED) {
+    return { ok: false, imported: 0, note: "this import has already been committed" };
+  }
+  if (imp.status === HistoricalImportStatus.REJECTED) {
+    return { ok: false, imported: 0, note: "this import was rejected and cannot be committed" };
+  }
   let imported = 0;
   for (const row of imp.rows) {
     let issues: string[] = [];

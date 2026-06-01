@@ -75,15 +75,18 @@ export async function autopilotListing(tenantId: string, listingId: string, comp
  * autopilotListing on listings whose score crosses the configured
  * threshold.
  */
-export async function sweepAllSources(): Promise<{
+export async function sweepAllSources(tenantId?: string): Promise<{
   ok: boolean;
   sourcesChecked: number;
   newListings: number;
   scored: number;
   autoDrafted: number;
 }> {
+  // When `tenantId` is supplied (tenant-facing "sweep now" trigger) the
+  // sweep is restricted to that tenant's sources. The platform cron calls
+  // this with no argument to sweep every active source across all tenants.
   const sources = await prisma.rfpSource.findMany({
-    where: { status: RfpSourceStatus.ACTIVE },
+    where: { status: RfpSourceStatus.ACTIVE, ...(tenantId ? { tenantId } : {}) },
     include: { tenant: { include: { bidProfile: true } } },
   });
   let checked = 0;

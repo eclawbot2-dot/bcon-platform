@@ -32,7 +32,7 @@ type SyncSummary = {
   }>;
 };
 
-export async function runInspectionSync(): Promise<SyncSummary> {
+export async function runInspectionSync(tenantId?: string): Promise<SyncSummary> {
   const summary: SyncSummary = {
     tenantsScanned: 0,
     portalsScanned: 0,
@@ -43,8 +43,11 @@ export async function runInspectionSync(): Promise<SyncSummary> {
     runs: [],
   };
 
+  // When `tenantId` is supplied (tenant-facing "Sync now") the scan is
+  // restricted to that tenant's portal accounts. The platform cron calls
+  // this with no argument to sync every tenant with active credentials.
   const accounts = await prisma.tenantJurisdictionAccount.findMany({
-    where: { active: true, portal: { active: true } },
+    where: { active: true, portal: { active: true }, ...(tenantId ? { tenantId } : {}) },
     include: { tenant: true, portal: true },
   });
 

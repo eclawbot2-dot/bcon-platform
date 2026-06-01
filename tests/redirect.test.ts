@@ -50,4 +50,14 @@ describe("publicRedirect", () => {
     const res = publicRedirect(reqWith({ "x-forwarded-host": "x.com" }), "/auth/callback?next=/dashboard");
     expect(res.headers.get("location")).toBe("https://x.com/auth/callback?next=/dashboard");
   });
+
+  it("blocks open redirects to an external origin (falls back to root)", () => {
+    const res = publicRedirect(reqWith({ "x-forwarded-host": "x.com" }), "https://evil.com/phish");
+    expect(res.headers.get("location")).toBe("https://x.com/");
+  });
+
+  it("blocks protocol-relative open redirects", () => {
+    const res = publicRedirect(reqWith({ "x-forwarded-host": "x.com" }), "//evil.com/phish");
+    expect(res.headers.get("location")).toBe("https://x.com/");
+  });
 });

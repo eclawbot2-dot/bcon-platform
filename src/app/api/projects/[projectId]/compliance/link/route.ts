@@ -2,12 +2,18 @@ import { NextRequest } from "next/server";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
+import { currentActor } from "@/lib/permissions";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId: string }> }) {
   const tenant = await requireTenant();
   const { projectId } = await ctx.params;
   const project = await prisma.project.findFirst({ where: { id: projectId, tenantId: tenant.id } });
   if (!project) redirect(`/projects/${projectId}/compliance?error=not+found`);
+  // Linking compliance requirements to company credentials is a PM/office
+  // action — require an edit-capable role (pure viewers are read-only).
+  if (!(await currentActor(tenant.id)).canEdit) {
+    redirect(`/projects/${projectId}/compliance?error=Editor+role+required`);
+  }
 
   const form = await req.formData();
   const requirementType = (form.get("requirementType") as string | null) ?? "";

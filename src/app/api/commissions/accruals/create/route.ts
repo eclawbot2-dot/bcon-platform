@@ -4,6 +4,8 @@ import { requireTenant } from "@/lib/tenant";
 import { requireManager } from "@/lib/permissions";
 import { recordAudit } from "@/lib/audit";
 import { publicRedirect } from "@/lib/redirect";
+import { parseNumberField } from "@/lib/form-input";
+import { roundCents } from "@/lib/money";
 import { CommissionSourceType } from "@prisma/client";
 
 const VALID_SOURCES: CommissionSourceType[] = [
@@ -25,10 +27,11 @@ export async function POST(req: Request) {
     ? (sourceTypeRaw as CommissionSourceType)
     : "MANUAL";
 
-  const ratePct = form.get("ratePct") ? Number(form.get("ratePct")) : 0;
-  const basis = form.get("basis") ? Number(form.get("basis")) : 0;
-  const flatAmount = form.get("flatAmount") ? Number(form.get("flatAmount")) : 0;
-  const computed = flatAmount || (basis * ratePct) / 100;
+  // parseNumberField guards against NaN being written to money columns.
+  const ratePct = parseNumberField(form.get("ratePct"), 0, { min: 0, max: 100 }) ?? 0;
+  const basis = parseNumberField(form.get("basis"), 0, { min: 0 }) ?? 0;
+  const flatAmount = parseNumberField(form.get("flatAmount"), 0, { min: 0 }) ?? 0;
+  const computed = roundCents(flatAmount || (basis * ratePct) / 100);
 
   const ruleId = form.get("ruleId") ? String(form.get("ruleId")) : null;
   if (ruleId) {

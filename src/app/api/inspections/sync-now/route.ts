@@ -12,7 +12,10 @@ import { publicRedirect } from "@/lib/redirect";
 export async function POST(req: Request) {
   const tenant = await requireTenant();
   await requireManager(tenant.id);
-  await runInspectionSync();
+  // Scope the on-demand sync to the caller's tenant. Previously this ran
+  // runInspectionSync() with no argument, syncing every tenant's portals
+  // platform-wide on a single tenant manager's click.
+  await runInspectionSync(tenant.id);
   return publicRedirect(req, "/inspections?scope=upcoming", 303);
 }
 

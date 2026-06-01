@@ -4,6 +4,7 @@ import { requireTenant } from "@/lib/tenant";
 import { requireManager } from "@/lib/permissions";
 import { recordAudit } from "@/lib/audit";
 import { publicRedirect } from "@/lib/redirect";
+import { parseNumberField } from "@/lib/form-input";
 
 export async function POST(req: Request) {
   const tenant = await requireTenant();
@@ -14,6 +15,19 @@ export async function POST(req: Request) {
   const startDateRaw = String(form.get("startDate") ?? "");
   if (!candidateId || !startDateRaw) {
     return NextResponse.json({ error: "candidateId and startDate required" }, { status: 400 });
+  }
+  const startDate = new Date(startDateRaw);
+  if (Number.isNaN(startDate.getTime())) {
+    return NextResponse.json({ error: "startDate is not a valid date" }, { status: 400 });
+  }
+  const endDateRaw = form.get("endDate") ? String(form.get("endDate")) : null;
+  let endDate: Date | null = null;
+  if (endDateRaw) {
+    const d = new Date(endDateRaw);
+    if (Number.isNaN(d.getTime())) {
+      return NextResponse.json({ error: "endDate is not a valid date" }, { status: 400 });
+    }
+    endDate = d;
   }
 
   const candidate = await prisma.candidate.findFirst({ where: { id: candidateId, tenantId: tenant.id } });
@@ -40,10 +54,10 @@ export async function POST(req: Request) {
       contractRef: form.get("contractRef") ? String(form.get("contractRef")) : null,
       laborCategory: form.get("laborCategory") ? String(form.get("laborCategory")) : null,
       department: form.get("department") ? String(form.get("department")) : null,
-      startDate: new Date(startDateRaw),
-      endDate: form.get("endDate") ? new Date(String(form.get("endDate"))) : null,
-      billRate: form.get("billRate") ? Number(form.get("billRate")) : null,
-      payRate: form.get("payRate") ? Number(form.get("payRate")) : null,
+      startDate,
+      endDate,
+      billRate: parseNumberField(form.get("billRate"), null, { min: 0 }),
+      payRate: parseNumberField(form.get("payRate"), null, { min: 0 }),
       status: "PENDING_START",
     },
   });

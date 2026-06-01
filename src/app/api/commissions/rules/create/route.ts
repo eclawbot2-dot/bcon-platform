@@ -4,6 +4,7 @@ import { requireTenant } from "@/lib/tenant";
 import { requireManager } from "@/lib/permissions";
 import { recordAudit } from "@/lib/audit";
 import { publicRedirect } from "@/lib/redirect";
+import { parseNumberField } from "@/lib/form-input";
 import { CommissionSourceType, UserRoleTemplate } from "@prisma/client";
 
 const VALID_SOURCES: CommissionSourceType[] = [
@@ -38,9 +39,10 @@ export async function POST(req: Request) {
       name,
       appliesTo,
       recipientRole,
-      ratePct: form.get("ratePct") ? Number(form.get("ratePct")) : 0,
-      flatAmount: form.get("flatAmount") ? Number(form.get("flatAmount")) : null,
-      cap: form.get("cap") ? Number(form.get("cap")) : null,
+      // parseNumberField guards against NaN being written to money columns.
+      ratePct: parseNumberField(form.get("ratePct"), 0, { min: 0, max: 100 }) ?? 0,
+      flatAmount: parseNumberField(form.get("flatAmount"), null, { min: 0 }),
+      cap: parseNumberField(form.get("cap"), null, { min: 0 }),
     },
   });
 

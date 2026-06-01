@@ -2,9 +2,12 @@ import { NextRequest } from "next/server";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
+import { actorIsManager } from "@/lib/permissions";
 import { auth } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit";
 
+// Recording a bid-leveling award decides which subcontractor wins a scope
+// item — a money/commitment decision. Gate to manager-class roles.
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const tenant = await requireTenant();
   const { id } = await ctx.params;
@@ -13,6 +16,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     include: { project: true },
   });
   if (!pkg) redirect("/?error=bid+package+not+found");
+  if (!(await actorIsManager(tenant.id))) {
+    redirect(`/projects/${pkg.projectId}/bids/${id}/leveling?error=Manager+role+required`);
+  }
   const form = await req.formData();
   const scopeItemKey = form.get("scopeItemKey") as string;
   const subBidId = form.get("subBidId") as string;
