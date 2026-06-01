@@ -217,6 +217,20 @@ export async function commitImport(importId: string, tenantId: string): Promise<
   if (imp.status === HistoricalImportStatus.REJECTED) {
     return { ok: false, imported: 0, note: "this import was rejected and cannot be committed" };
   }
+  // Atomically claim the batch. The status read above is a TOCTOU check;
+  // two concurrent double-submits could both pass it and then both run the
+  // row loop, double-counting real money (JournalEntryRow / Opportunity have
+  // no unique key). A conditional updateMany that only matches the import
+  // while it is still in its pre-commit status is the claim: the first
+  // request flips it to IMPORTED and proceeds; the second matches zero rows
+  // and bails out. We set rowsImported at the end of the loop.
+  const claim = await prisma.historicalImport.updateMany({
+    where: { id: importId, tenantId, status: imp.status },
+    data: { status: HistoricalImportStatus.IMPORTED },
+  });
+  if (claim.count === 0) {
+    return { ok: false, imported: 0, note: "this import is already being committed" };
+  }
   let imported = 0;
   for (const row of imp.rows) {
     let issues: string[] = [];
@@ -288,6 +302,8 @@ export async function commitImport(importId: string, tenantId: string): Promise<
     }
     await prisma.historicalImportRow.update({ where: { id: row.id }, data: { accepted: true } });
   }
-  await prisma.historicalImport.update({ where: { id: imp.id }, data: { status: HistoricalImportStatus.IMPORTED, rowsImported: imported } });
+  // Status was already flipped to IMPORTED by the atomic claim above; just
+  // record how many rows landed.
+  await prisma.historicalImport.update({ where: { id: imp.id }, data: { rowsImported: imported } });
   return { ok: true, imported, note: `imported ${imported} rows into ${imp.kind}` };
 }

@@ -124,17 +124,66 @@ export async function runAlertScan(tenantId: string): Promise<{ ok: boolean; pro
     }
   }
 
-  await prisma.alertEvent.deleteMany({ where: { tenantId, acknowledgedAt: null } });
+  // Idempotent reconciliation. The previous implementation deleted every
+  // unacknowledged alert and recreated the full set on each scan, then
+  // dispatched a notification for every recreated row. That was acceptable
+  // while the scan only ran on a manual click, but once wired to a DAILY
+  // cron it re-fired a notification for every still-true condition (expired
+  // permit, expiring insurance, overdue RFI, …) every single day — a
+  // notification storm and duplicate AlertEvent churn.
+  //
+  // Instead, reconcile against what already exists:
+  //   - key each produced alert by (entityType, entityId, title) — the same
+  //     condition on the same entity always yields the same key;
+  //   - keep matching unacknowledged rows untouched (no re-notify, the body
+  //     may refresh e.g. "12d ago" → "13d ago" but we only refresh INFO/WARN
+  //     state, never re-alert);
+  //   - create + notify ONLY genuinely new conditions;
+  //   - delete unacknowledged rows whose condition no longer holds (resolved).
+  // Acknowledged rows are never touched here.
+  const keyOf = (a: { entityType: string; entityId: string; title: string }) =>
+    `${a.entityType} ${a.entityId} ${a.title}`;
+
+  const existing = await prisma.alertEvent.findMany({
+    where: { tenantId, acknowledgedAt: null },
+    select: { id: true, entityType: true, entityId: true, title: true, body: true, severity: true },
+  });
+  const existingByKey = new Map<string, (typeof existing)[number]>();
+  for (const e of existing) {
+    if (!e.entityType || !e.entityId) continue;
+    existingByKey.set(keyOf({ entityType: e.entityType, entityId: e.entityId, title: e.title }), e);
+  }
+
+  const producedKeys = new Set<string>();
   let notified = 0;
+  let created = 0;
   for (const p of out) {
+    const k = keyOf(p);
+    producedKeys.add(k);
+    const prior = existingByKey.get(k);
+    if (prior) {
+      // Same condition already open. Refresh the body/severity text in place
+      // (cheap, no notification) so the dashboard shows current day-counts.
+      if (prior.body !== (p.body ?? null) || prior.severity !== p.severity) {
+        await prisma.alertEvent.update({ where: { id: prior.id }, data: { body: p.body ?? null, severity: p.severity } });
+      }
+      continue;
+    }
     const event = await prisma.alertEvent.create({ data: { tenantId, ...p } });
+    created += 1;
     notified += await notifyForAlert(event);
+  }
+
+  // Resolve: drop unacknowledged rows whose condition is no longer produced.
+  const staleIds = existing.filter((e) => !producedKeys.has(keyOf({ entityType: e.entityType ?? "", entityId: e.entityId ?? "", title: e.title }))).map((e) => e.id);
+  if (staleIds.length > 0) {
+    await prisma.alertEvent.deleteMany({ where: { id: { in: staleIds }, tenantId, acknowledgedAt: null } });
   }
 
   return {
     ok: true,
     produced: out.length,
-    note: `produced ${out.length} alert${out.length === 1 ? "" : "s"}; dispatched ${notified} notification${notified === 1 ? "" : "s"}`,
+    note: `produced ${out.length} alert${out.length === 1 ? "" : "s"} (${created} new); dispatched ${notified} notification${notified === 1 ? "" : "s"}; resolved ${staleIds.length}`,
   };
 }
 

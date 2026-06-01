@@ -16,6 +16,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
   const co = await prisma.changeOrder.findFirst({ where: { id, project: { tenantId: tenant.id } }, include: { project: true } });
   if (!co) return NextResponse.json({ error: "CO not found" }, { status: 404 });
-  const result = await applyCoScheduleImpact(co.id);
+  await applyCoScheduleImpact(co.id);
   return publicRedirect(req, `/projects/${co.projectId}/schedule`, 303);
 }
