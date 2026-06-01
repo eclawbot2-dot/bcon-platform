@@ -9,7 +9,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { aiCall, stableHash } from "@/lib/ai";
-import { sumMoney, toNum } from "@/lib/money";
+import { sumMoney, addMoney, toNum } from "@/lib/money";
+import { approvedCoValue, isApprovedCo, isPendingCo } from "@/lib/change-order-totals";
 
 export type OwnerAnswer = { answer: string; sources: string[] };
 
@@ -55,18 +56,19 @@ export async function answerOwnerQuestion(params: { question: string; projectId:
       // COST / BILLING
       if (/spent|cost|budget|expense|bill|invoice|pay.*app|cash/i.test(q)) {
         const billed = sumMoney(project.payApplications.map((p) => p.currentPaymentDue));
-        const cos = sumMoney(project.changeOrders.map((c) => c.amount));
+        const approvedCos = approvedCoValue(project.changeOrders);
+        const currentContract = addMoney(contractValue, approvedCos);
         const lastApp = project.payApplications[0];
         sources.push("PayApplication", "ChangeOrder", "Contract");
         return {
-          answer: `Contract value: $${contractValue.toLocaleString()} (includes $${cos.toLocaleString()} in approved change orders). Billed to date: $${billed.toLocaleString()} across ${project.payApplications.length} pay applications.${lastApp ? ` Most recent pay app period ending ${lastApp.periodTo.toISOString().slice(0, 10)} requested $${toNum(lastApp.currentPaymentDue).toLocaleString()}.` : ""}`,
+          answer: `Current contract value: $${currentContract.toLocaleString()} (original $${contractValue.toLocaleString()} + $${approvedCos.toLocaleString()} in approved change orders). Billed to date: $${billed.toLocaleString()} across ${project.payApplications.length} pay applications.${lastApp ? ` Most recent pay app period ending ${lastApp.periodTo.toISOString().slice(0, 10)} requested $${toNum(lastApp.currentPaymentDue).toLocaleString()}.` : ""}`,
           sources,
         };
       }
       // CHANGE ORDERS
       if (/change\s+order|extra|co\b|scope\s+change|cor\b/i.test(q)) {
-        const approved = project.changeOrders.filter((c) => c.status === "APPROVED");
-        const pending = project.changeOrders.filter((c) => c.status !== "APPROVED" && c.status !== "REJECTED");
+        const approved = project.changeOrders.filter((c) => isApprovedCo(c.status));
+        const pending = project.changeOrders.filter((c) => isPendingCo(c.status));
         sources.push("ChangeOrder");
         return {
           answer: `${project.changeOrders.length} change orders on file. ${approved.length} approved totaling $${sumMoney(approved.map((c) => c.amount)).toLocaleString()}. ${pending.length} pending review totaling $${sumMoney(pending.map((c) => c.amount)).toLocaleString()}. Total schedule impact from approved COs: ${approved.reduce((s, c) => s + c.scheduleImpactDays, 0)} days.`,

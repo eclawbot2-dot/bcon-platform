@@ -23,16 +23,25 @@ export default async function ProjectFinancialsPage({ params }: { params: Promis
   if (!project) notFound();
 
   const pnl = project.pnlSnapshot;
-  const journal = project.journalEntries;
-  const costByCode = journal
-    .filter((j) => j.entryType === "COST_OF_GOODS")
-    .reduce<Record<string, number>>((acc, j) => { const k = j.costCode ?? "unassigned"; acc[k] = addMoney(acc[k] ?? 0, Math.abs(toNum(j.amount))); return acc; }, {});
-  const revenueRows = journal.filter((j) => j.entryType === "REVENUE");
-  const totalRev = sumMoney(revenueRows.map((j) => j.amount));
-  const costRows = journal.filter((j) => j.entryType === "COST_OF_GOODS");
-  const totalCost = Math.abs(sumMoney(costRows.map((j) => j.amount)));
+  const journal = project.journalEntries; // capped display list (take: 200)
+
+  // Headline totals must come from DB aggregates over ALL journal rows for this
+  // project, not the take:200 display list — otherwise Revenue/Cost/Margin and the
+  // cost-by-code panel silently understate once a project exceeds 200 entries.
+  const [revAgg, costAgg, unreconciled, costByCodeGroups] = await Promise.all([
+    prisma.journalEntryRow.aggregate({ where: { tenantId: tenant.id, projectId: project.id, entryType: "REVENUE" }, _sum: { amount: true } }),
+    prisma.journalEntryRow.aggregate({ where: { tenantId: tenant.id, projectId: project.id, entryType: "COST_OF_GOODS" }, _sum: { amount: true } }),
+    prisma.journalEntryRow.count({ where: { tenantId: tenant.id, projectId: project.id, reconciliationStatus: { in: ["UNREVIEWED", "NEEDS_INPUT"] } } }),
+    prisma.journalEntryRow.groupBy({ by: ["costCode"], where: { tenantId: tenant.id, projectId: project.id, entryType: "COST_OF_GOODS" }, _sum: { amount: true } }),
+  ]);
+  const totalRev = sumMoney([revAgg._sum.amount]);
+  const totalCost = Math.abs(sumMoney([costAgg._sum.amount]));
   const margin = totalRev > 0 ? ((totalRev - totalCost) / totalRev) * 100 : 0;
-  const unreconciled = journal.filter((j) => j.reconciliationStatus === "UNREVIEWED" || j.reconciliationStatus === "NEEDS_INPUT").length;
+  const costByCode = costByCodeGroups.reduce<Record<string, number>>((acc, g) => {
+    const k = g.costCode ?? "unassigned";
+    acc[k] = addMoney(acc[k] ?? 0, Math.abs(toNum(g._sum.amount)));
+    return acc;
+  }, {});
 
   return (
     <AppLayout eyebrow={`${project.code} · P&L`} title={project.name} description="Project-level financials — contract value, billed vs earned, cost-to-date, forecast margin, WIP over/under billing.">

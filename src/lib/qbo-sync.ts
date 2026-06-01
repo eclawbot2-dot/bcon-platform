@@ -114,9 +114,14 @@ export async function syncFromQbo(tenantId: string): Promise<{ ok: boolean; jour
   for (let monthOffset = 11; monthOffset >= 0; monthOffset--) {
     const periodStart = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1);
     const periodEnd = new Date(now.getFullYear(), now.getMonth() - monthOffset + 1, 0);
-    const revenue = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lte: periodEnd }, entryType: JournalEntryType.REVENUE }, _sum: { amount: true } });
-    const cogs = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lte: periodEnd }, entryType: JournalEntryType.COST_OF_GOODS }, _sum: { amount: true } });
-    const opex = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lte: periodEnd }, entryType: { in: [JournalEntryType.OPERATING_EXPENSE, JournalEntryType.INDIRECT_COST] } }, _sum: { amount: true } });
+    // Exclusive upper bound = first instant of next month, so entries timestamped
+    // on the last day with a time component (e.g. receivedAt 2026-01-31T15:00) are
+    // not silently dropped. (periodEnd itself is last-day-midnight and must stay so
+    // for the persisted record + upsert unique key.)
+    const periodEndExclusive = new Date(now.getFullYear(), now.getMonth() - monthOffset + 1, 1);
+    const revenue = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lt: periodEndExclusive }, entryType: JournalEntryType.REVENUE }, _sum: { amount: true } });
+    const cogs = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lt: periodEndExclusive }, entryType: JournalEntryType.COST_OF_GOODS }, _sum: { amount: true } });
+    const opex = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lt: periodEndExclusive }, entryType: { in: [JournalEntryType.OPERATING_EXPENSE, JournalEntryType.INDIRECT_COST] } }, _sum: { amount: true } });
     const rev = toNum(revenue._sum.amount);
     const cogsAbs = Math.abs(toNum(cogs._sum.amount));
     const opexAbs = Math.abs(toNum(opex._sum.amount));

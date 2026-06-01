@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate, formatPercent, contractTypeLabel, changeOrderKindLabel } from "@/lib/utils";
 import { sumMoney, toNum } from "@/lib/money";
+import { approvedCoValue, pendingCoValue } from "@/lib/change-order-totals";
 
 export default async function CommercialPage() {
   const tenant = await requireTenant();
@@ -19,8 +20,8 @@ export default async function CommercialPage() {
   ]);
 
   const contractedValue = sumMoney(contracts.map((c) => c.currentValue));
-  const coApproved = sumMoney(changeOrders.filter((c) => c.status === "APPROVED" || c.status === "EXECUTED").map((c) => c.amount));
-  const coPending = sumMoney(changeOrders.filter((c) => c.status === "PENDING" || c.status === "DRAFT").map((c) => c.amount));
+  const coApproved = approvedCoValue(changeOrders);
+  const coPending = pendingCoValue(changeOrders);
   const billedToDate = sumMoney(payApps.map((p) => p.workCompletedToDate));
   const retainageHeld = sumMoney(payApps.map((p) => p.retainageHeld));
   const pendingPayment = sumMoney(payApps.filter((p) => p.status !== "PAID").map((p) => p.currentPaymentDue));

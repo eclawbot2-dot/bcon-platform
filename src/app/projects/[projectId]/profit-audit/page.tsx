@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/utils";
 import { sumMoney, subtractMoney, addMoney, toNum } from "@/lib/money";
+import { approvedCoValue, pendingCoValue } from "@/lib/change-order-totals";
 
 /**
  * Bid-vs-execution profit audit. The full money lifecycle for one
@@ -56,8 +57,8 @@ export default async function ProfitAuditPage({ params }: { params: Promise<{ pr
 
   // Contract evolution
   const originalContract = toNum(project.contractValue);
-  const approvedCOValue = sumMoney(project.changeOrders.filter((c) => c.status === "APPROVED").map((c) => c.amount));
-  const pendingCOValue = sumMoney(project.changeOrders.filter((c) => c.status !== "APPROVED" && c.status !== "REJECTED").map((c) => c.amount));
+  const approvedCOValue = approvedCoValue(project.changeOrders);
+  const pendingCOValue = pendingCoValue(project.changeOrders);
   const currentContractValue = addMoney(originalContract, approvedCOValue);
 
   // Execution

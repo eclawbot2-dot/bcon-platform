@@ -17,6 +17,7 @@ import {
   XeroConnectionStatus,
 } from "@prisma/client";
 import { sumMoney, toNum } from "@/lib/money";
+import { approvedCoValue } from "@/lib/change-order-totals";
 
 export async function connectXeroDemo(tenantId: string) {
   const existing = await prisma.xeroConnection.findUnique({ where: { tenantId } });
@@ -107,9 +108,14 @@ export async function syncFromXero(tenantId: string): Promise<{ ok: boolean; jou
   for (let monthOffset = 11; monthOffset >= 0; monthOffset--) {
     const periodStart = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1);
     const periodEnd = new Date(now.getFullYear(), now.getMonth() - monthOffset + 1, 0);
-    const revenue = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lte: periodEnd }, entryType: JournalEntryType.REVENUE }, _sum: { amount: true } });
-    const cogs = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lte: periodEnd }, entryType: JournalEntryType.COST_OF_GOODS }, _sum: { amount: true } });
-    const opex = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lte: periodEnd }, entryType: { in: [JournalEntryType.OPERATING_EXPENSE, JournalEntryType.INDIRECT_COST] } }, _sum: { amount: true } });
+    // Exclusive upper bound = first instant of next month, so entries timestamped
+    // on the last day with a time component (e.g. receivedAt 2026-01-31T15:00) are
+    // not silently dropped. (periodEnd itself is last-day-midnight and must stay so
+    // for the persisted record + upsert unique key.)
+    const periodEndExclusive = new Date(now.getFullYear(), now.getMonth() - monthOffset + 1, 1);
+    const revenue = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lt: periodEndExclusive }, entryType: JournalEntryType.REVENUE }, _sum: { amount: true } });
+    const cogs = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lt: periodEndExclusive }, entryType: JournalEntryType.COST_OF_GOODS }, _sum: { amount: true } });
+    const opex = await prisma.journalEntryRow.aggregate({ where: { tenantId, entryDate: { gte: periodStart, lt: periodEndExclusive }, entryType: { in: [JournalEntryType.OPERATING_EXPENSE, JournalEntryType.INDIRECT_COST] } }, _sum: { amount: true } });
     const rev = toNum(revenue._sum.amount);
     const cogsAbs = Math.abs(toNum(cogs._sum.amount));
     const opexAbs = Math.abs(toNum(opex._sum.amount));
@@ -215,7 +221,7 @@ export async function refreshProjectPnl(tenantId: string) {
     const journals = await prisma.journalEntryRow.findMany({ where: { projectId: project.id } });
 
     const contractValue = sumMoney(contracts.filter((c) => c.type === "PRIME_OWNER").map((c) => c.originalValue)) || toNum(project.contractValue);
-    const approvedCOValue = sumMoney(changeOrders.filter((c) => c.status === "APPROVED" || c.status === "EXECUTED").map((c) => c.amount));
+    const approvedCOValue = approvedCoValue(changeOrders);
     const totalContractValue = contractValue + approvedCOValue;
     const billedToDate = sumMoney(contracts.flatMap((c) => c.payApplications).map((p) => p.workCompletedToDate));
     const costsToDate = Math.abs(sumMoney(journals.filter((j) => j.entryType === "COST_OF_GOODS").map((j) => j.amount)));
