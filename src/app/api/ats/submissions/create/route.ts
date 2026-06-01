@@ -4,6 +4,7 @@ import { requireTenant } from "@/lib/tenant";
 import { requireEditor } from "@/lib/permissions";
 import { recordAudit } from "@/lib/audit";
 import { publicRedirect } from "@/lib/redirect";
+import { parseNumberField } from "@/lib/form-input";
 
 export async function POST(req: Request) {
   const tenant = await requireTenant();
@@ -39,7 +40,8 @@ export async function POST(req: Request) {
       reqId,
       stage: "SUBMITTED",
       recruiterName: actor.userName,
-      rateOffered: form.get("rateOffered") ? Number(form.get("rateOffered")) : null,
+      // parseNumberField: non-numeric rate would be NaN and throw a raw 500.
+      rateOffered: parseNumberField(form.get("rateOffered"), null, { min: 0 }),
       notes: form.get("notes") ? String(form.get("notes")) : null,
     },
   });

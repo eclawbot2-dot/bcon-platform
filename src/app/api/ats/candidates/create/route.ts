@@ -4,6 +4,7 @@ import { requireTenant } from "@/lib/tenant";
 import { requireEditor } from "@/lib/permissions";
 import { recordAudit } from "@/lib/audit";
 import { publicRedirect } from "@/lib/redirect";
+import { parseNumberField } from "@/lib/form-input";
 
 export async function POST(req: Request) {
   const tenant = await requireTenant();
@@ -26,7 +27,9 @@ export async function POST(req: Request) {
       laborCategory: form.get("laborCategory") ? String(form.get("laborCategory")) : null,
       primarySkill: form.get("primarySkill") ? String(form.get("primarySkill")) : null,
       source: form.get("source") ? String(form.get("source")) : null,
-      rateExpectation: form.get("rateExpectation") ? Number(form.get("rateExpectation")) : null,
+      // parseNumberField: a non-numeric rate would otherwise be Number()->NaN
+      // and throw a raw 500 on the Prisma Float write. Empty/garbage -> null.
+      rateExpectation: parseNumberField(form.get("rateExpectation"), null, { min: 0 }),
       ownerUserId: actor.userId,
     },
   });

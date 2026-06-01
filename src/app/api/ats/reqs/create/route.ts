@@ -4,6 +4,7 @@ import { requireTenant } from "@/lib/tenant";
 import { requireManager } from "@/lib/permissions";
 import { recordAudit } from "@/lib/audit";
 import { publicRedirect } from "@/lib/redirect";
+import { parseNumberField } from "@/lib/form-input";
 
 export async function POST(req: Request) {
   const tenant = await requireTenant();
@@ -30,9 +31,11 @@ export async function POST(req: Request) {
       laborCategory: form.get("laborCategory") ? String(form.get("laborCategory")) : null,
       location: form.get("location") ? String(form.get("location")) : null,
       remoteAllowed: form.get("remoteAllowed") === "on",
-      rateMin: form.get("rateMin") ? Number(form.get("rateMin")) : null,
-      rateMax: form.get("rateMax") ? Number(form.get("rateMax")) : null,
-      openings: form.get("openings") ? Number(form.get("openings")) : 1,
+      // parseNumberField guards non-numeric input (Number()->NaN would throw a
+      // raw 500 on the Prisma write). Empty/garbage rate -> null; openings -> 1.
+      rateMin: parseNumberField(form.get("rateMin"), null, { min: 0 }),
+      rateMax: parseNumberField(form.get("rateMax"), null, { min: 0 }),
+      openings: parseNumberField(form.get("openings"), 1, { min: 1 }) ?? 1,
       description: form.get("description") ? String(form.get("description")) : null,
       status: "OPEN",
       postedDate: new Date(),
