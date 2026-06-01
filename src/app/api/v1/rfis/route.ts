@@ -66,16 +66,33 @@ export async function POST(req: NextRequest) {
   const project = await prisma.project.findFirst({ where: { id: body.project_id, tenantId: auth.tenantId } });
   if (!project) return NextResponse.json({ error: "project_not_found" }, { status: 404 });
 
-  const rfi = await prisma.rFI.create({
-    data: {
-      projectId: body.project_id,
-      number: body.number,
-      subject: body.subject,
-      question: body.question,
-      ballInCourt: body.ball_in_court,
-      dueDate: body.due_date ? new Date(body.due_date) : null,
-    },
-  });
+  // RFI has @@unique([projectId, number]). An automation client that
+  // retries (network blip, queue redelivery) or double-fires with the
+  // same `number` would otherwise hit a raw Prisma P2002 → 500. Return
+  // a clean 409 so the caller can treat the retry as a no-op rather than
+  // a server error. (Mirrors the dedup pattern in src/lib/rfp-crawl.ts.)
+  let rfi;
+  try {
+    rfi = await prisma.rFI.create({
+      data: {
+        projectId: body.project_id,
+        number: body.number,
+        subject: body.subject,
+        question: body.question,
+        ballInCourt: body.ball_in_court,
+        dueDate: body.due_date ? new Date(body.due_date) : null,
+      },
+    });
+  } catch (err) {
+    const isUniqueConflict = err instanceof Error && /Unique constraint failed/i.test(err.message);
+    if (isUniqueConflict) {
+      return NextResponse.json(
+        { error: "conflict", message: `An RFI with number "${body.number}" already exists on this project` },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   await dispatchWebhook(auth.tenantId, "rfi.created", { id: rfi.id, projectId: rfi.projectId, number: rfi.number, subject: rfi.subject });
 

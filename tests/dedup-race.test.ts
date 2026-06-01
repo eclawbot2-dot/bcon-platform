@@ -278,3 +278,56 @@ describe("Opportunity convert idempotency guard", () => {
     expect(survivors[0].id).toBe(p1.id);
   });
 });
+
+describe("v1 RFI POST duplicate-number guard", () => {
+  // POST /api/v1/rfis is a token-authed public API. RFI has
+  // @@unique([projectId, number]). An automation client that retries
+  // (queue redelivery, network blip) or double-fires with the same
+  // `number` would hit a raw Prisma P2002 -> 500. The route now catches
+  // the unique-constraint error and returns a clean 409. This test
+  // proves (a) the DB enforces the constraint and (b) the error message
+  // matches the regex the route uses to distinguish P2002 from other
+  // failures, so a retry can't silently fall through to a 500.
+  it("second create with same (projectId, number) raises a detectable unique error", async () => {
+    const project = await prisma.project.create({
+      data: { tenantId, name: "rfi-dup", code: `RD-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, mode: "SIMPLE" },
+    });
+    const number = `RFI-${Date.now()}`;
+
+    const first = await prisma.rFI.create({
+      data: { projectId: project.id, number, subject: "first" },
+    });
+    expect(first.id).toBeTruthy();
+
+    let caught: Error | null = null;
+    try {
+      await prisma.rFI.create({
+        data: { projectId: project.id, number, subject: "duplicate retry" },
+      });
+    } catch (err) {
+      caught = err as Error;
+    }
+    expect(caught).not.toBeNull();
+    // Same predicate the route's catch uses to map P2002 -> 409.
+    const isUniqueConflict = caught instanceof Error && /Unique constraint failed/i.test(caught.message);
+    expect(isUniqueConflict).toBe(true);
+
+    // Exactly one RFI persisted for this (project, number) — the retry
+    // created nothing.
+    const rfis = await prisma.rFI.findMany({ where: { projectId: project.id, number } });
+    expect(rfis.length).toBe(1);
+  });
+
+  it("same number on a different project is allowed (scope is per-project)", async () => {
+    const number = `RFI-SHARED-${Date.now()}`;
+    const pA = await prisma.project.create({
+      data: { tenantId, name: "rfi-a", code: `RA-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, mode: "SIMPLE" },
+    });
+    const pB = await prisma.project.create({
+      data: { tenantId, name: "rfi-b", code: `RB-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, mode: "SIMPLE" },
+    });
+    const a = await prisma.rFI.create({ data: { projectId: pA.id, number, subject: "a" } });
+    const b = await prisma.rFI.create({ data: { projectId: pB.id, number, subject: "b" } });
+    expect(a.id).not.toBe(b.id);
+  });
+});
