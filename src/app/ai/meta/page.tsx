@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { SortableTable } from "@/components/SortableTable";
 import { generateFixtures, releaseNotesFromCommits } from "@/lib/meta-ai";
-import { isLlmEnabled } from "@/lib/ai";
+import { isLlmEnabled, llmProvider } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate } from "@/lib/utils";
@@ -30,19 +30,23 @@ export default async function MetaAiPage() {
   const accepted = feedback.find((f) => f.userFeedback === "ACCEPTED")?._count._all ?? 0;
   const rejected = feedback.find((f) => f.userFeedback === "REJECTED")?._count._all ?? 0;
   const acceptRate = accepted + rejected > 0 ? ((accepted / (accepted + rejected)) * 100).toFixed(0) : "—";
+  // Label the active provider truthfully — the wrapper prefers OpenAI when
+  // OPENAI_API_KEY is set, so a hard-coded "Claude" label was misleading.
+  const provider = llmProvider();
+  const providerLabel = provider === "openai" ? "OpenAI API" : provider === "anthropic" ? "Claude API" : "Heuristic";
 
   return (
     <AppLayout eyebrow="AI · Platform" title="Meta / operational AI" description="Test fixtures, release notes, LLM swap indicator, run logs, feedback.">
       <section className="grid gap-4 md:grid-cols-4">
         <StatTile label="Total AI runs" value={totalRuns} />
         <StatTile label="Accept rate" value={`${acceptRate}%`} tone={acceptRate === "—" ? "default" : (parseInt(acceptRate) >= 70 ? "good" : "warn")} />
-        <StatTile label="LLM mode" value={isLlmEnabled() ? "Claude API" : "Heuristic"} tone={isLlmEnabled() ? "good" : "default"} />
+        <StatTile label="LLM mode" value={providerLabel} tone={isLlmEnabled() ? "good" : "default"} />
         <StatTile label="Distinct features used" value={new Set(byKind.map((b) => b.kind)).size} />
       </section>
       <section className="card p-6">
         <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">LLM status</div>
-        <div className="mt-2 text-lg font-semibold text-white">{isLlmEnabled() ? "Claude API enabled" : "Deterministic heuristics (flip ENABLE_LLM_CALLS=true + set ANTHROPIC_API_KEY)"}</div>
-        <p className="mt-2 text-xs text-slate-500">All 45 AI features share one wrapper in <span className="font-mono">src/lib/ai.ts</span>. Outputs are persisted to <span className="font-mono">AiRunLog</span> and re-used within the TTL window. When the flag is off, callers get heuristic output. When on, calls route to Claude.</p>
+        <div className="mt-2 text-lg font-semibold text-white">{isLlmEnabled() ? `${providerLabel} enabled` : "Deterministic heuristics (flip ENABLE_LLM_CALLS=true + set OPENAI_API_KEY or ANTHROPIC_API_KEY)"}</div>
+        <p className="mt-2 text-xs text-slate-500">All 45 AI features share one wrapper in <span className="font-mono">src/lib/ai.ts</span>. Outputs are persisted to <span className="font-mono">AiRunLog</span> and re-used within the TTL window. When the flag is off, callers get heuristic output. When on, calls route to the configured provider (OpenAI preferred when both keys are set).</p>
       </section>
       {byKind.length > 0 ? (
         <section className="card p-0 overflow-hidden">
