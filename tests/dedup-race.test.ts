@@ -233,3 +233,48 @@ describe("SubBid award idempotency guard", () => {
     vi.doUnmock("@/lib/prisma");
   });
 });
+
+describe("Opportunity convert idempotency guard", () => {
+  // POST /api/opportunities/[id]/convert creates a Project (with budgets /
+  // contracts / pay-apps hanging off it) and links it back to the opportunity.
+  // The route's `if (opp.projectId) redirect` is a TOCTOU read: two concurrent
+  // converts both see projectId === null and both create a Project. The fix
+  // creates the Project, then atomically CLAIMS the opportunity via a
+  // conditional updateMany that only matches while projectId is still null.
+  // The loser matches zero rows and deletes its orphan project.
+  async function makeOpportunity() {
+    const opp = await prisma.opportunity.create({
+      data: { tenantId, name: `Convert-${Math.random().toString(36).slice(2, 6)}`, stage: "AWARDED", estimatedValue: 250000, mode: "SIMPLE" },
+    });
+    return opp.id;
+  }
+
+  it("claim matches one row on first convert, zero on the second", async () => {
+    const oppId = await makeOpportunity();
+    const p1 = await prisma.project.create({ data: { tenantId, name: "conv-1", code: `C1-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, mode: "SIMPLE" } });
+    const p2 = await prisma.project.create({ data: { tenantId, name: "conv-2", code: `C2-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, mode: "SIMPLE" } });
+
+    const first = await prisma.opportunity.updateMany({
+      where: { id: oppId, tenantId, projectId: null },
+      data: { projectId: p1.id },
+    });
+    expect(first.count).toBe(1);
+
+    // Second convert (re-submit / concurrent): opportunity already linked, so
+    // the guarded claim matches nothing and the loser discards its project.
+    const second = await prisma.opportunity.updateMany({
+      where: { id: oppId, tenantId, projectId: null },
+      data: { projectId: p2.id },
+    });
+    expect(second.count).toBe(0);
+
+    const fresh = await prisma.opportunity.findUnique({ where: { id: oppId } });
+    expect(fresh?.projectId).toBe(p1.id);
+
+    // The orphan project (p2) would be deleted by the route on the losing path.
+    await prisma.project.delete({ where: { id: p2.id } });
+    const survivors = await prisma.project.findMany({ where: { id: { in: [p1.id, p2.id] } } });
+    expect(survivors.length).toBe(1);
+    expect(survivors[0].id).toBe(p1.id);
+  });
+});
