@@ -14,12 +14,26 @@ export async function awardSubBid(subBidId: string, tenantId: string): Promise<{
   if (bid.bidPackage.project.tenantId !== tenantId) return { ok: false, note: "cross-tenant" };
   if (!bid.bidAmount) return { ok: false, note: "bid has no amount" };
 
-  // Mark losers NOT_SELECTED
+  // Idempotency guard. The rest of this function creates an EXECUTED Contract
+  // + ContractCommitment — real committed dollars with no unique key — so a
+  // double-submit (or two concurrent requests) on the award button would
+  // create a duplicate subcontract for the same winning bid. Atomically claim
+  // the winning SubBid by flipping it to SELECTED only while it is still in a
+  // pre-award status. The first request matches one row and proceeds; a second
+  // matches zero (already SELECTED) and bails before any contract is created.
+  const claim = await prisma.subBid.updateMany({
+    where: { id: bid.id, status: { in: [SubBidStatus.SUBMITTED, SubBidStatus.BIDDING, SubBidStatus.INVITED] } },
+    data: { status: SubBidStatus.SELECTED },
+  });
+  if (claim.count === 0) {
+    return { ok: false, note: "this bid has already been awarded" };
+  }
+
+  // Mark losers NOT_SELECTED (the winner is already SELECTED via the claim).
   await prisma.subBid.updateMany({
-    where: { bidPackageId: bid.bidPackageId, status: { in: [SubBidStatus.SUBMITTED, SubBidStatus.BIDDING, SubBidStatus.INVITED] } },
+    where: { bidPackageId: bid.bidPackageId, id: { not: bid.id }, status: { in: [SubBidStatus.SUBMITTED, SubBidStatus.BIDDING, SubBidStatus.INVITED] } },
     data: { status: SubBidStatus.NOT_SELECTED },
   });
-  await prisma.subBid.update({ where: { id: bid.id }, data: { status: SubBidStatus.SELECTED } });
 
   const contractNumber = `${bid.bidPackage.project.code}-SUB-${bid.bidPackage.trade.replace(/[^A-Z]/gi, "").slice(0, 4).toUpperCase()}-${bid.id.slice(-4).toUpperCase()}`;
   const contract = await prisma.contract.create({

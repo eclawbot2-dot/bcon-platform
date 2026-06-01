@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
@@ -161,5 +161,75 @@ describe("Autopilot idempotency guard", () => {
     // Score should still be 88 — sweep #2 didn't overwrite.
     const fresh = await prisma.rfpListing.findUnique({ where: { id: listing.id } });
     expect(fresh?.score).toBe(88);
+  });
+});
+
+describe("SubBid award idempotency guard", () => {
+  // awardSubBid (src/lib/subcontract-award.ts) creates an EXECUTED Contract +
+  // ContractCommitment — real committed dollars with no unique key. A
+  // double-submit on the award button would create a duplicate subcontract.
+  // The fix claims the winning SubBid via a conditional updateMany that only
+  // matches a pre-award status; a second attempt matches zero rows and bails.
+  async function makeSubBid(status: "SUBMITTED" | "SELECTED") {
+    const project = await prisma.project.create({
+      data: { tenantId, name: "award-race", code: `AR-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, mode: "SIMPLE" },
+    });
+    const pkg = await prisma.bidPackage.create({
+      data: { projectId: project.id, name: "Concrete", trade: "Concrete" },
+    });
+    const vendor = await prisma.vendor.create({
+      data: { tenantId, name: `Vendor-${Math.random().toString(36).slice(2, 6)}` },
+    });
+    const bid = await prisma.subBid.create({
+      data: { bidPackageId: pkg.id, vendorId: vendor.id, bidAmount: 100000, status },
+    });
+    return bid.id;
+  }
+
+  it("claim matches one row on first award, zero on the second", async () => {
+    const bidId = await makeSubBid("SUBMITTED");
+
+    // First award: the conditional claim should flip SUBMITTED -> SELECTED.
+    const first = await prisma.subBid.updateMany({
+      where: { id: bidId, status: { in: ["SUBMITTED", "BIDDING", "INVITED"] } },
+      data: { status: "SELECTED" },
+    });
+    expect(first.count).toBe(1);
+
+    // Second award (re-submit / concurrent): bid is already SELECTED, so the
+    // same guarded claim matches nothing and the contract-creation path bails.
+    const second = await prisma.subBid.updateMany({
+      where: { id: bidId, status: { in: ["SUBMITTED", "BIDDING", "INVITED"] } },
+      data: { status: "SELECTED" },
+    });
+    expect(second.count).toBe(0);
+  });
+
+  it("awardSubBid creates exactly one contract even when called twice", async () => {
+    vi.resetModules();
+    // Point the lib's prisma client at the temp DB used by this test.
+    vi.doMock("@/lib/prisma", () => ({ prisma }));
+    const { awardSubBid } = await import("@/lib/subcontract-award");
+
+    const bidId = await makeSubBid("SUBMITTED");
+
+    const r1 = await awardSubBid(bidId, tenantId);
+    const r2 = await awardSubBid(bidId, tenantId);
+
+    expect(r1.ok).toBe(true);
+    expect(r2.ok).toBe(false);
+    expect(r2.note).toMatch(/already been awarded/i);
+
+    // Only ONE contract should exist for this bid's commitment.
+    const bid = await prisma.subBid.findUnique({
+      where: { id: bidId },
+      include: { bidPackage: true },
+    });
+    const contracts = await prisma.contract.findMany({
+      where: { projectId: bid!.bidPackage.projectId, type: "SUBCONTRACT" },
+    });
+    expect(contracts.length).toBe(1);
+
+    vi.doUnmock("@/lib/prisma");
   });
 });
