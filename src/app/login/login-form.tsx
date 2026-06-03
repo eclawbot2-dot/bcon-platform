@@ -77,7 +77,7 @@ export function LoginForm({
       </button>
 
       <div className="login-demo-buttons">
-        <button type="button" className="btn-outline" onClick={() => fillDemo("trey@velocitychs.com", "hadleymaris")} disabled={isPending}>
+        <button type="button" className="btn-outline" onClick={() => fillDemo("trey@jahdev.com", "hadleymaris")} disabled={isPending}>
           Use admin demo
         </button>
         <button type="button" className="btn-outline" onClick={() => fillDemo("pm@construction.local")} disabled={isPending}>

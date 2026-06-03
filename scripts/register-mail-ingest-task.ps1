@@ -27,7 +27,7 @@ $secretLine = Get-Content $envFile | Where-Object { $_ -match '^CRON_SECRET=' } 
 if (-not $secretLine) { throw "CRON_SECRET not present in .env" }
 $secret = ($secretLine -replace '^CRON_SECRET=', '').Trim('"').Trim("'")
 
-$url = if ($LocalOnly) { 'http://127.0.0.1:3101/api/cron/mail-ingest' } else { 'https://bcon.velocitychs.com/api/cron/mail-ingest' }
+$url = if ($LocalOnly) { 'http://127.0.0.1:3101/api/cron/mail-ingest' } else { 'https://bcon.jahdev.com/api/cron/mail-ingest' }
 
 $action = New-ScheduledTaskAction `
   -Execute 'curl.exe' `

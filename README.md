@@ -224,7 +224,7 @@ Tenant operations:
 
 ## Demo login users
 
-- `trey@velocitychs.com` — Trey (super-admin, can switch tenants and access `/admin/*`) — password `hadleymaris`
+- `trey@jahdev.com` — Trey (super-admin, can switch tenants and access `/admin/*`) — password `hadleymaris`
 - `exec@construction.local` — Elena Executive — password `demo1234`
 - `pm@construction.local` — Paula PM — password `demo1234`
 - `super@construction.local` — Sam Superintendent — password `demo1234`

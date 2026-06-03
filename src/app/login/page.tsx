@@ -38,7 +38,7 @@ export default async function LoginPage({
           <footer>
             <p>Demo accounts</p>
             <ul>
-              <li>trey@velocitychs.com (super-admin, password <code>hadleymaris</code>)</li>
+              <li>trey@jahdev.com (super-admin, password <code>hadleymaris</code>)</li>
               <li>exec@construction.local (password <code>demo1234</code>)</li>
               <li>pm@construction.local (password <code>demo1234</code>)</li>
               <li>super@construction.local (password <code>demo1234</code>)</li>

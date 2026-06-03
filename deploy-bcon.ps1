@@ -10,7 +10,7 @@ Set-Location $root
 
 $node = 'C:\Program Files\nodejs\node.exe'
 $npm = 'C:\Program Files\nodejs\npm.cmd'
-$publicUrl = 'https://bcon.velocitychs.com'
+$publicUrl = 'https://bcon.jahdev.com'
 $localPort = 3101
 $nextService = 'bcon-next'
 $tunnelService = 'Cloudflared'

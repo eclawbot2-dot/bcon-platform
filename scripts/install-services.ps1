@@ -1,7 +1,7 @@
 # Idempotent registration of the two Windows services that run bcon in
 # production:
 #
-#   * Cloudflared          - the named-tunnel daemon for bcon.velocitychs.com
+#   * Cloudflared          - the named-tunnel daemon for bcon.jahdev.com
 #                            (installed via `cloudflared service install <TOKEN>`)
 #   * bcon-next            - Next.js production server on port 3101
 #                            (wrapped by NSSM for restart-on-failure +
@@ -20,7 +20,7 @@
 #   - node.exe at C:\Program Files\nodejs\node.exe
 #   - .tunnel-token present in repo root
 #   - .env present in repo root with at minimum AUTH_SECRET + CRON_SECRET +
-#     AUTH_URL=https://bcon.velocitychs.com + DEFAULT_TENANT_SLUG=velocity-demo
+#     AUTH_URL=https://bcon.jahdev.com + DEFAULT_TENANT_SLUG=velocity-demo
 #   - npm run build has been run at least once (otherwise next start has
 #     nothing to serve)
 
@@ -38,14 +38,14 @@ if (-not (Test-Path $node)) { throw "node.exe not found at $node" }
 if (-not (Test-Path $cloudflared)) { throw "cloudflared not found at $cloudflared" }
 
 $tunnelTokenFile = Join-Path $repo '.tunnel-token'
-if (-not (Test-Path $tunnelTokenFile)) { throw "Missing $tunnelTokenFile - paste the cloudflared run token from the bcon-velocitychs CF tunnel into this file." }
+if (-not (Test-Path $tunnelTokenFile)) { throw "Missing $tunnelTokenFile - paste the cloudflared run token from the bcon-jahdev CF tunnel into this file." }
 $tunnelToken = (Get-Content -Raw -Path $tunnelTokenFile).Trim()
 
 $logDir = Join-Path $repo 'logs'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
 
 # -----------------------------------------------------------------
-# 1. Cloudflared service for the bcon-velocitychs tunnel.
+# 1. Cloudflared service for the bcon-jahdev tunnel.
 # -----------------------------------------------------------------
 
 $svc = Get-Service Cloudflared -ErrorAction SilentlyContinue
