@@ -61,6 +61,7 @@ export default async function SettingsPage() {
             <li><Link href="/settings/guests" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">Guest accounts →</Link></li>
             <li><Link href="/settings/observability" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">Observability →</Link></li>
             {showMailLink ? <li><Link href="/settings/workspace-transparency" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">Workspace transparency →</Link></li> : null}
+            {showMailLink ? <li><Link href="/settings/automations" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">Automations →</Link></li> : null}
           </ul>
         </nav>
 

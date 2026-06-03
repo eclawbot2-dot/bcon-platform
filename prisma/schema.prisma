@@ -476,6 +476,86 @@ model Tenant {
   mailConnection            MailConnection?
   mailboxes                 Mailbox[]
   mailMessages              MailMessage[]
+  // Autonomous workflows — per-tenant on/off config + append-only run
+  // history for the clock-driven automation engine. OFF by default; an
+  // admin must opt each workflow in. See src/lib/automations/*.
+  automationConfigs         AutomationConfig[]
+  automationRuns            AutomationRun[]
+}
+
+/**
+ * Per-tenant on/off + tuning for one autonomous workflow.
+ *
+ * The set of workflows that EXIST is defined in code (src/lib/automations/
+ * registry.ts) — this table only persists per-tenant config + last-run
+ * denorm. A row is created lazily (upserted) the first time an admin
+ * touches a workflow; an absent row means "default config, OFF". Newly
+ * shipped workflows therefore always appear in the UI even before any row
+ * exists.
+ *
+ * Invariants: `enabled`, `trustGated`, `autoApply` all default FALSE
+ * (opt-in, advisory-by-default). `nextDueAt` is advanced by the dispatcher
+ * after each run; the `[enabled, nextDueAt]` index backs the due-selection
+ * query. `@@unique([tenantId, workflowKey])` is the per-tenant upsert key.
+ */
+model AutomationConfig {
+  id                     String   @id @default(cuid())
+  tenantId               String
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflowKey            String
+  enabled                Boolean  @default(false)
+  // Two-layer trust gate. `trustGated` is the admin's "I trust this to act"
+  // toggle; `autoApply` is reserved for a future per-action auto-approve.
+  // Both default FALSE — a workflow only ever mutates when its registry
+  // entry declares it can act AND the admin has flipped trustGated.
+  trustGated             Boolean  @default(false)
+  autoApply              Boolean  @default(false)
+  // Null → use the registry default cadence. Admin override in minutes.
+  intervalMinutesOverride Int?
+  lastRunAt              DateTime?
+  nextDueAt              DateTime?
+  lastStatus            String?  // RUNNING | SUCCESS | ERROR | SKIPPED
+  lastSummary           String?
+  lastError             String?
+  updatedById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  runs AutomationRun[]
+
+  @@unique([tenantId, workflowKey])
+  @@index([enabled, nextDueAt])
+  @@index([tenantId])
+}
+
+/**
+ * Append-only run history for the autonomous-workflow engine. One row per
+ * execution (scheduled or manual), recording status, timing, output counts,
+ * whether an LLM was used, and who/what triggered it. Errors and SKIPs are
+ * recorded too so a broken workflow can't look healthy (fail-loud).
+ */
+model AutomationRun {
+  id          String            @id @default(cuid())
+  tenantId    String
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  configId    String?
+  config      AutomationConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
+  workflowKey String
+  status      String            // SUCCESS | ERROR | SKIPPED | RUNNING
+  startedAt   DateTime          @default(now())
+  finishedAt  DateTime?
+  durationMs  Int?
+  summary     String?
+  producedCount Int             @default(0)
+  actionCount   Int             @default(0)
+  error       String?
+  usedLlm     Boolean           @default(false)
+  llmModel    String?
+  triggeredBy String            @default("cron") // cron | manual:<actor>
+
+  @@index([tenantId, workflowKey, startedAt])
+  @@index([tenantId, startedAt])
+  @@index([configId, startedAt])
 }
 
 model BusinessUnit {

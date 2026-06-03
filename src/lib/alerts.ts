@@ -144,10 +144,30 @@ export async function runAlertScan(tenantId: string): Promise<{ ok: boolean; pro
   const keyOf = (a: { entityType: string; entityId: string; title: string }) =>
     `${a.entityType} ${a.entityId} ${a.title}`;
 
-  const existing = await prisma.alertEvent.findMany({
-    where: { tenantId, acknowledgedAt: null },
-    select: { id: true, entityType: true, entityId: true, title: true, body: true, severity: true },
-  });
+  // Only reconcile the entityTypes THIS scan owns. Other producers (notably
+  // the autonomous-workflow engine, which writes advisory AlertEvents under
+  // distinct `Automation*` entityTypes) manage their own rows — the resolve
+  // step below must never delete an alert this scan did not originate, or
+  // the two clock-driven producers would delete each other's output on every
+  // tick. Keep this list in sync with the entityTypes pushed into `out`.
+  const OWNED_ENTITY_TYPES = new Set([
+    "Permit",
+    "InsuranceCert",
+    "RFI",
+    "ContractCommitment",
+    "Inspection",
+    "Vendor",
+    "PayApplication",
+    "LienWaiver",
+    "Submittal",
+  ]);
+
+  const existing = (
+    await prisma.alertEvent.findMany({
+      where: { tenantId, acknowledgedAt: null },
+      select: { id: true, entityType: true, entityId: true, title: true, body: true, severity: true },
+    })
+  ).filter((e) => e.entityType != null && OWNED_ENTITY_TYPES.has(e.entityType));
   const existingByKey = new Map<string, (typeof existing)[number]>();
   for (const e of existing) {
     if (!e.entityType || !e.entityId) continue;
