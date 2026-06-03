@@ -34,6 +34,11 @@ export default async function LoginPage({
           <p>Sign in to your tenant workspace.</p>
         </header>
         <LoginForm callbackUrl={callbackUrl} initialError={errorMessage} />
+        <p style={{ marginTop: "1rem", fontSize: "0.75rem" }}>
+          <a href="/login/reset-password" style={{ color: "#7dd3fc" }}>
+            Forgot your password?
+          </a>
+        </p>
         {process.env.NODE_ENV !== "production" ? (
           <footer>
             <p>Demo accounts</p>

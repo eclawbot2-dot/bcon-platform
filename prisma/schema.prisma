@@ -644,6 +644,29 @@ model User {
   approvals   Approval[]      @relation("ApprovalApprover")
   auditEvents AuditEvent[]    @relation("AuditActor")
   watchers    Watcher[]
+
+  // Self-service password reset (out-of-band email + single-use token).
+  passwordResetTokens PasswordResetToken[]
+}
+
+/// Single-use, time-boxed password-reset token. The raw token is emailed
+/// to the user; only its SHA-256 hash is stored, so a DB read can't be
+/// replayed into a reset. consumedAt makes it one-shot; expiresAt bounds
+/// the window. A fresh request invalidates the user's prior live tokens.
+model PasswordResetToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// SHA-256 hex of the raw token. Never store the raw value.
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  /// Best-effort origin capture for the audit trail (not trusted).
+  requestIp  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Membership {
