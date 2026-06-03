@@ -4,6 +4,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
+import { actorIsAdmin } from "@/lib/permissions";
 import { formatDate, modeLabel, roleLabel } from "@/lib/utils";
 import { ProjectMode } from "@prisma/client";
 import { TestAiKeyButton } from "@/components/settings/test-ai-key-button";
@@ -31,6 +32,7 @@ export default async function SettingsPage() {
   const enabled: string[] = (() => {
     try { return JSON.parse(tenant.enabledModes); } catch { return []; }
   })();
+  const showMailLink = await actorIsAdmin(tenant.id);
 
   return (
     <AppLayout eyebrow="Tenant settings" title={`Configure ${tenant.name}`} description="Primary operating mode, enabled modes, and tenant identity. Changes here reshape the UI and workflow coverage for every project in this tenant.">
@@ -58,6 +60,7 @@ export default async function SettingsPage() {
             <li><Link href="/settings/api" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">API & webhooks →</Link></li>
             <li><Link href="/settings/guests" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">Guest accounts →</Link></li>
             <li><Link href="/settings/observability" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">Observability →</Link></li>
+            {showMailLink ? <li><Link href="/settings/workspace-transparency" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">Workspace transparency →</Link></li> : null}
           </ul>
         </nav>
 

@@ -185,3 +185,26 @@ export async function requireActor(tenantId: string): Promise<CurrentActor> {
   if (!actor.userId) throw new Error("Authentication required.");
   return actor;
 }
+
+/**
+ * True only for the tenant ADMIN role (or a super-admin acting as themselves,
+ * which currentActor resolves to role="ADMIN"). Distinct from `isManager`,
+ * which spans EXECUTIVE/CONTROLLER/SUPERINTENDENT/etc. — used to gate the
+ * workspace-transparency mail feature, which reads employees' mail and must be
+ * locked down to the tenant administrator alone.
+ */
+export function isAdminRole(role: UserRoleTemplate | null | undefined): boolean {
+  return role === "ADMIN";
+}
+
+export async function actorIsAdmin(tenantId: string): Promise<boolean> {
+  const actor = await currentActor(tenantId);
+  return isAdminRole(actor.role);
+}
+
+/** Throw unless the current actor is the tenant ADMIN. */
+export async function requireAdmin(tenantId: string): Promise<CurrentActor> {
+  const actor = await currentActor(tenantId);
+  if (!isAdminRole(actor.role)) throw new Error("Admin role required.");
+  return actor;
+}

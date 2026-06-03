@@ -470,6 +470,12 @@ model Tenant {
   // logged per cron invocation.
   jurisdictionAccounts      TenantJurisdictionAccount[]
   inspectionSyncRuns        InspectionSyncRun[]
+  // Workspace transparency — admin-only, opt-in mail ingestion. One
+  // MailConnection per tenant (Google Workspace OR Microsoft 365), with
+  // per-user Mailbox rows and ingested MailMessage rows, all tenant-scoped.
+  mailConnection            MailConnection?
+  mailboxes                 Mailbox[]
+  mailMessages              MailMessage[]
 }
 
 model BusinessUnit {
@@ -4704,4 +4710,114 @@ model InspectionSyncRun {
 
   @@index([tenantId, startedAt])
   @@index([portalId, startedAt])
+}
+
+// ===========================================================================
+// Workspace transparency — admin-only, opt-in mail ingestion.
+//
+// A tenant admin connects EITHER Google Workspace (service-account JSON +
+// domain-wide delegation) OR Microsoft 365 (Azure app registration:
+// tenantId/clientId/clientSecret, app-only Graph). All secrets are stored
+// ENCRYPTED at rest via lib/rfp-geo.ts encryptSecret(tenantId, …) (AES-256-GCM,
+// per-tenant derived key). The feature is OFF by default (enabled=false) and
+// every page/action/API is gated to the ADMIN role AND the caller's own tenant.
+// Ingestion reads employees' mail, so it is strictly read/triage — it never
+// auto-acts on anything.
+// ===========================================================================
+
+model MailConnection {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// "google" (Workspace domain-wide delegation) | "m365" (Graph app-only).
+  provider        String   @default("google")
+  /// The per-tenant opt-in toggle. OFF by default — no mail is read until an
+  /// admin explicitly enables it.
+  enabled         Boolean  @default(false)
+  // --- Google Workspace ---
+  /// Encrypted service-account JSON key (private_key + client_email).
+  googleServiceAccountJsonEnc String?
+  /// Super-admin / delegated-admin email used as the impersonation subject
+  /// for the Directory API listUsers() call.
+  googleAdminSubject          String?
+  /// Optional Pub/Sub topic for push (not required for the polling path).
+  googlePubsubTopic           String?
+  // --- Microsoft 365 (Graph app-only / client credentials) ---
+  /// Azure AD tenant (directory) id.
+  m365TenantId    String?
+  /// Azure app registration (application/client) id.
+  m365ClientId    String?
+  /// Encrypted Azure app client secret.
+  m365ClientSecretEnc String?
+  // --- Status ---
+  status          String   @default("DISCONNECTED") // DISCONNECTED | CONNECTED | ERROR
+  lastError       String?
+  lastSyncedAt    DateTime?
+  lastUsersSyncAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  mailboxes Mailbox[]
+
+  @@index([enabled])
+}
+
+model Mailbox {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  connectionId String
+  connection   MailConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  /// The mailbox owner's primary email (lowercased).
+  email        String
+  /// Display name from the directory, when available.
+  displayName  String?
+  /// Provider's stable user id (Graph user id; Gmail uses the email itself).
+  providerUserId String?
+  active       Boolean  @default(true)
+  lastSyncedAt DateTime?
+  lastError    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  messages MailMessage[]
+
+  // One mailbox per (tenant, email) — dedupes across re-discovery and keeps
+  // mailboxes isolated per tenant.
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([connectionId])
+}
+
+model MailMessage {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  mailboxId   String
+  mailbox     Mailbox  @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  /// Provider message id (Gmail message id | Graph message id). Deduped per
+  /// mailbox via the @@unique below.
+  externalId  String
+  fromAddress String
+  fromName    String?
+  /// JSON array of recipient addresses.
+  toAddressesJson String @default("[]")
+  subject     String?
+  receivedAt  DateTime
+  snippet     String?
+  bodyText    String?
+  hasAttachments Boolean @default(false)
+  /// JSON array of folder/label names (Gmail labels | Graph folder).
+  labelsJson  String   @default("[]")
+  // --- Classification (read/triage only; never auto-acts) ---
+  classification String? // e.g. AP_INVOICE | AR_PAYMENT | RFI | SUBMITTAL | LIEN | SAFETY | LEAD | OTHER
+  confidence     Float?
+  classModel     String?
+  classReasoning String?
+  createdAt   DateTime @default(now())
+
+  @@unique([mailboxId, externalId])
+  @@index([tenantId, receivedAt])
+  @@index([mailboxId, receivedAt])
+  @@index([tenantId, classification])
 }
