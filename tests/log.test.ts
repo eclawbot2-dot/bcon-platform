@@ -10,15 +10,20 @@ vi.mock("@/lib/metrics", () => ({ observeError: vi.fn() }));
 import { log } from "@/lib/log";
 
 const ORIG_ENV = process.env.NODE_ENV;
+// @types/node types NODE_ENV as a read-only literal; cast so tests can flip it.
+// (This is what keeps the CI `tsc --noEmit` step green — it scans test files.)
+const setNodeEnv = (v: string | undefined) => {
+  (process.env as Record<string, string | undefined>).NODE_ENV = v;
+};
 
 beforeEach(() => {
   // Default to prod so we exercise the JSON-line path which is easier
   // to assert against. Individual tests override to "development".
-  process.env.NODE_ENV = "production";
+  setNodeEnv("production");
 });
 
 afterEach(() => {
-  process.env.NODE_ENV = ORIG_ENV;
+  setNodeEnv(ORIG_ENV);
   vi.restoreAllMocks();
 });
 
@@ -81,7 +86,7 @@ describe("log (production JSON mode)", () => {
 
 describe("log (dev colorized mode)", () => {
   it("uses console methods, not process.stdout.write", () => {
-    process.env.NODE_ENV = "development";
+    setNodeEnv("development");
     const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const consoleInfoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     log.info("hello-dev", { module: "test" });
