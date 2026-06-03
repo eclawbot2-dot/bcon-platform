@@ -20,6 +20,14 @@ import type { WorkflowDef, WorkflowResult } from "@/lib/automations/types";
 /** A run is considered stale (lock released) after this long in RUNNING. */
 const STALE_LOCK_MS = 15 * 60 * 1000;
 
+/**
+ * Guardrail: AutomationRun history older than this is pruned on every
+ * dispatch tick, across ALL tenants, so run history can't grow unbounded
+ * regardless of whether any tenant enables the per-tenant retention sweep
+ * workflow. Mirrors RUN_RETENTION_DAYS in workflows.ts (90 days).
+ */
+const RUN_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
 export type RunOutcome = {
   tenantId: string;
   workflowKey: string;
@@ -136,8 +144,22 @@ export type DispatchSummary = {
   errors: number;
   skipped: number;
   locked: number;
+  /** AutomationRun rows pruned by the global retention guardrail this tick. */
+  pruned: number;
   outcomes: RunOutcome[];
 };
+
+/**
+ * Global retention guardrail — prune AutomationRun rows older than the
+ * retention window across ALL tenants. Idempotent + cheap (indexed delete);
+ * runs once per dispatch tick so history is bounded even for tenants that
+ * never enable the per-tenant retention-sweep workflow.
+ */
+export async function pruneAutomationRuns(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - RUN_RETENTION_MS);
+  const del = await prisma.automationRun.deleteMany({ where: { startedAt: { lt: cutoff } } });
+  return del.count;
+}
 
 /**
  * Cron entry point. Run every enabled + due workflow across all tenants.
@@ -176,7 +198,16 @@ export async function dispatchDueWorkflows(now: Date = new Date()): Promise<Disp
     }
   }
 
-  return { ok: errors === 0, considered: due.length, ran, errors, skipped, locked, outcomes };
+  // Global retention guardrail — keep AutomationRun history bounded. A
+  // failure here must not fail the dispatch sweep.
+  let pruned = 0;
+  try {
+    pruned = await pruneAutomationRuns(now);
+  } catch (err) {
+    console.error("[automations] retention prune failed", err);
+  }
+
+  return { ok: errors === 0, considered: due.length, ran, errors, skipped, locked, pruned, outcomes };
 }
 
 /** Registry helpers re-exported for the admin UI / tests. */

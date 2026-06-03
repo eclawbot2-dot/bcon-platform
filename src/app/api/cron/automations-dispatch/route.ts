@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     startedAt: start,
     finishedAt: Date.now(),
     ok: summary.ok,
-    message: `considered ${summary.considered}; ran ${summary.ran}; skipped ${summary.skipped}; locked ${summary.locked}; ${summary.errors} error(s)`,
+    message: `considered ${summary.considered}; ran ${summary.ran}; skipped ${summary.skipped}; locked ${summary.locked}; pruned ${summary.pruned}; ${summary.errors} error(s)`,
   });
   return NextResponse.json({ durationMs: Date.now() - start, ...summary });
 }

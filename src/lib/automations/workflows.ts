@@ -10,14 +10,18 @@
 
 import { prisma } from "@/lib/prisma";
 import { toNum } from "@/lib/money";
-import { isLlmEnabled } from "@/lib/ai";
+import { isLlmEnabled, llmProvider, aiCall } from "@/lib/ai";
 import { runAlertScan } from "@/lib/alerts";
 import { ingestTenant } from "@/lib/mail/ingest";
 import { eacForecast } from "@/lib/finance-ai";
+import { tenantUnitCostHistory, benchmarkUnitCostHistorical } from "@/lib/estimating-ai";
+import { tenantAskAnything } from "@/lib/copilot-ai";
 import { reconcileAdvisoryAlerts, type AdvisoryAlert } from "@/lib/automations/advisory";
 import type { WorkflowResult, WorkflowRunContext } from "@/lib/automations/types";
 
 const DAY = 24 * 60 * 60 * 1000;
+/** AutomationRun rows older than this are pruned by the retention sweep. */
+export const RUN_RETENTION_DAYS = 90;
 const ok = (summary: string, producedCount = 0, extra: Partial<WorkflowResult> = {}): WorkflowResult => ({
   status: "SUCCESS",
   summary,
@@ -234,8 +238,47 @@ export async function runLatePaymentPredict(ctx: WorkflowRunContext): Promise<Wo
       });
     }
   }
+  // Owner pay-apps approved but not yet paid. There is no explicit dueDate on
+  // PayApplication, so we predict late receivables off net terms from the
+  // approval date (default net-30). An approved-but-unpaid pay-app drifting
+  // past terms is incoming cash at risk.
+  const OWNER_NET_DAYS = 30;
+  const payApps = await prisma.payApplication.findMany({
+    where: { project: { tenantId: ctx.tenantId }, status: "APPROVED", paidAt: null, approvedAt: { not: null } },
+    select: { id: true, periodNumber: true, projectId: true, approvedAt: true, currentPaymentDue: true, project: { select: { code: true } } },
+    take: 300,
+  });
+  let payAppsAtRisk = 0;
+  for (const pa of payApps) {
+    if (!pa.approvedAt) continue;
+    const dueAt = new Date(pa.approvedAt).getTime() + OWNER_NET_DAYS * DAY;
+    const daysToDue = Math.round((dueAt - now) / DAY);
+    if (daysToDue < 0) {
+      payAppsAtRisk += 1;
+      out.push({
+        title: `Owner payment overdue: ${pa.project.code} pay-app #${pa.periodNumber}`,
+        body: `Approved pay-app for $${Math.round(toNum(pa.currentPaymentDue)).toLocaleString()} is ${Math.abs(daysToDue)}d past net-${OWNER_NET_DAYS} from approval and unpaid — owner receipt is likely late. Follow up on the receivable.`,
+        severity: daysToDue < -15 ? "ALERT" : "WARN",
+        entityType: "AutomationLatePayment",
+        entityId: `payapp:${pa.id}`,
+        link: `/projects/${pa.projectId}/pay-apps`,
+        projectId: pa.projectId,
+      });
+    } else if (daysToDue <= 5) {
+      out.push({
+        title: `Owner payment due soon: ${pa.project.code} pay-app #${pa.periodNumber}`,
+        body: `Approved pay-app for $${Math.round(toNum(pa.currentPaymentDue)).toLocaleString()} reaches net-${OWNER_NET_DAYS} in ${daysToDue}d and is unpaid — confirm the owner has it scheduled.`,
+        severity: "WARN",
+        entityType: "AutomationLatePayment",
+        entityId: `payapp:${pa.id}`,
+        link: `/projects/${pa.projectId}/pay-apps`,
+        projectId: pa.projectId,
+      });
+    }
+  }
+
   const r = await reconcileAdvisoryAlerts(ctx.tenantId, ["AutomationLatePayment"], out);
-  return ok(`evaluated ${subs.length} unpaid sub-invoice(s); ${r.created} new late-payment prediction(s), ${r.resolved} resolved`, r.produced);
+  return ok(`evaluated ${subs.length} unpaid sub-invoice(s) + ${payApps.length} approved pay-app(s) (${payAppsAtRisk} overdue); ${r.created} new late-payment prediction(s), ${r.resolved} resolved`, r.produced);
 }
 
 /**
@@ -282,30 +325,215 @@ export async function runFeedbackLoopClose(ctx: WorkflowRunContext): Promise<Wor
   return ok(summary, r.produced);
 }
 
-// ── LLM-needing workflows (SKIP cleanly without a key) ─────────────────────
+/**
+ * Bid-leveling historical benchmark (intelligence-audit bcon #10, NO-LLM).
+ * For every OPEN bid package, compares each priced SubBidLine unit price
+ * against the tenant's OWN historical unit-cost distribution for that cost
+ * code (Tukey-fence outlier detection over all prior priced sub-bid lines).
+ * Flags statistical outliers so an estimator can sanity-check a sub's number
+ * before award. Deterministic; advisory only.
+ */
+export async function runBidBenchmark(ctx: WorkflowRunContext): Promise<WorkflowResult> {
+  // Active/open packages whose bids are still being leveled.
+  const packages = await prisma.bidPackage.findMany({
+    where: { project: { tenantId: ctx.tenantId }, status: { in: ["PLANNING", "INVITED", "COLLECTING", "LEVELING"] } },
+    select: {
+      id: true,
+      name: true,
+      project: { select: { id: true } },
+      subBids: {
+        where: { bidAmount: { not: null } },
+        select: {
+          id: true,
+          vendor: { select: { name: true } },
+          lines: { where: { costCode: { not: null }, unitPrice: { not: null }, quantity: { gt: 0 } }, select: { id: true, costCode: true, description: true, unitPrice: true, quantity: true } },
+        },
+      },
+    },
+    take: 100,
+  });
+
+  // Exclude the lines belonging to packages we're scoring so a package is
+  // never benchmarked against its own (currently-open) bids.
+  const excludeSubBidIds = new Set<string>();
+  for (const pkg of packages) for (const sb of pkg.subBids) excludeSubBidIds.add(sb.id);
+  const history = await tenantUnitCostHistory(ctx.tenantId, { excludeSubBidIds });
+
+  const out: AdvisoryAlert[] = [];
+  let evaluated = 0;
+  for (const pkg of packages) {
+    for (const sb of pkg.subBids) {
+      // Worst (largest |delta|) outlier line per sub-bid drives a single
+      // alert — avoids one mispriced sub producing a dozen notifications.
+      let worst: { line: (typeof sb.lines)[number]; b: ReturnType<typeof benchmarkUnitCostHistorical> } | null = null;
+      for (const line of sb.lines) {
+        if (!line.costCode) continue;
+        const samples = history.get(line.costCode);
+        if (!samples) continue;
+        evaluated += 1;
+        const b = benchmarkUnitCostHistorical(line.costCode, toNum(line.unitPrice), samples);
+        if (b.verdict === "NORMAL" || b.verdict === "NO_DATA") continue;
+        if (!worst || Math.abs(b.deltaPct) > Math.abs(worst.b.deltaPct)) worst = { line, b };
+      }
+      if (worst) {
+        const { line, b } = worst;
+        const dir = b.verdict === "HIGH" ? "above" : "below";
+        out.push({
+          title: `Outlier sub-bid line: ${sb.vendor?.name ?? "vendor"} · ${line.costCode}`,
+          body: `In package "${pkg.name}", ${sb.vendor?.name ?? "this sub"}'s unit price $${toNum(line.unitPrice).toLocaleString()} for ${line.costCode} (${line.description}) is ${Math.abs(Math.round(b.deltaPct))}% ${dir} your historical median of $${b.median.toLocaleString()} (normal band $${b.bandLow.toLocaleString()}–$${b.bandHigh.toLocaleString()}, n=${b.samples}). Verify scope/quantities before award.`,
+          severity: Math.abs(b.deltaPct) > 50 ? "ALERT" : "WARN",
+          entityType: "AutomationBidBenchmark",
+          entityId: sb.id,
+          link: `/projects/${pkg.project.id}/bids`,
+          projectId: pkg.project.id,
+        });
+      }
+    }
+  }
+  const r = await reconcileAdvisoryAlerts(ctx.tenantId, ["AutomationBidBenchmark"], out);
+  return ok(`benchmarked ${evaluated} priced line(s) across ${packages.length} open package(s) vs tenant history; ${r.created} new outlier flag(s), ${r.resolved} resolved`, r.produced);
+}
+
+// ── Maintenance ────────────────────────────────────────────────────────────
 
 /**
- * Proactive copilot digest — an LLM-authored daily summary of what changed.
- * Registered but SKIPS cleanly when no LLM key is configured.
+ * AutomationRun retention sweep (the spec's unbuilt guardrail). Prunes
+ * AutomationRun rows older than RUN_RETENTION_DAYS for THIS tenant so run
+ * history can't grow unbounded. Per-tenant + cadence-gated like every other
+ * workflow; advisory/maintenance only (touches no domain data).
+ */
+export async function runRetentionSweep(ctx: WorkflowRunContext): Promise<WorkflowResult> {
+  const cutoff = new Date(Date.now() - RUN_RETENTION_DAYS * DAY);
+  const del = await prisma.automationRun.deleteMany({
+    where: { tenantId: ctx.tenantId, startedAt: { lt: cutoff } },
+  });
+  return ok(`pruned ${del.count} AutomationRun row(s) older than ${RUN_RETENTION_DAYS}d`, 0);
+}
+
+// ── LLM-needing workflows (SKIP cleanly without a key) ─────────────────────
+
+type DigestShape = { headline: string; bullets: string[] };
+
+/**
+ * Proactive copilot digest — an LLM-authored periodic summary of the tenant's
+ * current state. When a key is present we ask the tenant copilot a fixed set
+ * of analytics questions, then have the LLM weave the deterministic facts into
+ * a short digest; the result is stored as an advisory AiRunLog artifact (which
+ * also feeds the feedback-loop). SKIPS cleanly when no key resolves.
  */
 export async function runCopilotDigest(ctx: WorkflowRunContext): Promise<WorkflowResult> {
   if (!isLlmEnabled()) {
     return { status: "SKIPPED", summary: "no LLM key configured — digest skipped", skippedReason: "no_llm_key", producedCount: 0, actionCount: 0 };
   }
-  // Key present: scaffolded. A future pass composes pageCopilot()/
-  // tenantAskAnything() over recent activity and writes a digest record.
-  // We do NOT mutate domain data here; advisory only.
-  return ok("LLM available — digest generation not yet implemented (no-op)", 0, { usedLlm: false });
+  // Gather deterministic facts via the existing copilot (these never hit an
+  // LLM here — tenantAskAnything's fallback runs the DB queries). We then ask
+  // the model to summarize ONLY these facts (no fabrication).
+  const questions = [
+    "pipeline by stage",
+    "projects over budget",
+    "backlog",
+    "open RFIs",
+    "late schedule tasks",
+  ];
+  const facts: string[] = [];
+  for (const q of questions) {
+    try {
+      const a = await tenantAskAnything(q, ctx.tenantId);
+      if (a.answer) facts.push(`- ${q}: ${a.answer.replace(/\s+/g, " ").trim()}`);
+    } catch { /* skip a question that errors */ }
+  }
+  const factBlock = facts.join("\n") || "- (no activity recorded yet)";
+
+  const digest = await aiCall<DigestShape>({
+    kind: "automation-copilot-digest",
+    tenantId: ctx.tenantId,
+    maxTokens: 700,
+    system: "You are a construction-operations analyst. Summarize ONLY the supplied facts into a crisp executive digest. Never invent numbers or events not present in the facts. Return STRICT JSON: {\"headline\": string, \"bullets\": string[]} with 3-6 bullets.",
+    prompt: `Tenant operations facts:\n${factBlock}\n\nWrite the digest.`,
+    parse: (raw) => {
+      const m = raw.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(m ? m[0] : raw) as Partial<DigestShape>;
+      return { headline: String(parsed.headline ?? "Operations digest"), bullets: Array.isArray(parsed.bullets) ? parsed.bullets.map(String).slice(0, 6) : [] };
+    },
+    // Deterministic fallback never runs when a key is present (aiCall only
+    // uses it on no-key / error / rate-limit) but keeps the type total.
+    fallback: (): DigestShape => ({ headline: "Operations digest", bullets: facts.slice(0, 6).map((f) => f.replace(/^- /, "")) }),
+  });
+
+  const usedLlm = digest.bullets.length > 0 || !!digest.headline;
+  const log = await prisma.aiRunLog.create({
+    data: {
+      tenantId: ctx.tenantId,
+      kind: "automation-copilot-digest",
+      inputHash: String(Date.now()),
+      entityType: "AutomationCopilotDigest",
+      outputJson: JSON.stringify(digest),
+      source: `llm:${llmProvider()}`,
+    },
+  });
+  return ok(`generated copilot digest "${digest.headline.slice(0, 80)}" (${digest.bullets.length} bullet(s)); stored as advisory artifact ${log.id}`, 1, { usedLlm: true, llmModel: llmProvider() });
 }
 
+type NarrativeShape = { title: string; narrative: string };
+
 /**
- * Narrative drafting — LLM drafts of RFI replies / change-order narratives /
- * owner-report prose for human review. Registered but SKIPS cleanly without
- * a key; never auto-sends (advisory drafts only).
+ * Narrative drafting — LLM drafts an owner-report narrative summarizing the
+ * status of each ACTIVE project for human review (the cleanest no-input use
+ * of narrative generation: it needs no new operator input, only existing
+ * project + financial state). Stored as an advisory AiRunLog draft; never
+ * auto-sent. SKIPS cleanly without a key.
  */
 export async function runNarrativeDrafting(ctx: WorkflowRunContext): Promise<WorkflowResult> {
   if (!isLlmEnabled()) {
     return { status: "SKIPPED", summary: "no LLM key configured — narrative drafting skipped", skippedReason: "no_llm_key", producedCount: 0, actionCount: 0 };
   }
-  return ok("LLM available — narrative drafting not yet implemented (no-op)", 0, { usedLlm: false });
+  const projects = await prisma.project.findMany({
+    where: { tenantId: ctx.tenantId, stage: "ACTIVE" },
+    select: { id: true, code: true, name: true },
+    take: 10,
+  });
+  if (projects.length === 0) {
+    return ok("no active projects — nothing to draft", 0, { usedLlm: false });
+  }
+
+  let drafted = 0;
+  for (const p of projects) {
+    const snap = await prisma.projectPnlSnapshot.findUnique({ where: { projectId: p.id } });
+    const openRfis = await prisma.rFI.count({ where: { projectId: p.id, status: { notIn: ["CLOSED", "APPROVED"] } } });
+    const lateTasks = await prisma.scheduleTask.count({ where: { projectId: p.id, endDate: { lt: new Date() }, percentComplete: { lt: 100 } } });
+    const facts = [
+      `Project ${p.code} — ${p.name}`,
+      snap ? `Contract $${toNum(snap.totalContractValue).toLocaleString()}, billed $${toNum(snap.billedToDate).toLocaleString()}, costs $${toNum(snap.costsToDate).toLocaleString()}, % complete ${toNum(snap.percentComplete).toFixed(0)}%, forecast final cost $${toNum(snap.forecastFinalCost).toLocaleString()}` : "No P&L snapshot available",
+      `Open RFIs: ${openRfis}`,
+      `Late/incomplete schedule tasks: ${lateTasks}`,
+    ].join("\n");
+
+    const draft = await aiCall<NarrativeShape>({
+      kind: "automation-owner-report",
+      tenantId: ctx.tenantId,
+      maxTokens: 900,
+      system: "You are a senior construction project manager drafting a monthly owner-report status narrative. Use ONLY the supplied facts; do not invent figures, dates, or events. Write a concise, professional 1-2 paragraph status narrative for the owner. Return STRICT JSON: {\"title\": string, \"narrative\": string}.",
+      prompt: `Project facts:\n${facts}\n\nDraft the owner-report status narrative.`,
+      parse: (raw) => {
+        const m = raw.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(m ? m[0] : raw) as Partial<NarrativeShape>;
+        return { title: String(parsed.title ?? `${p.code} status`), narrative: String(parsed.narrative ?? "") };
+      },
+      fallback: (): NarrativeShape => ({ title: `${p.code} status`, narrative: facts }),
+    });
+    if (!draft.narrative.trim()) continue;
+    await prisma.aiRunLog.create({
+      data: {
+        tenantId: ctx.tenantId,
+        kind: "automation-owner-report",
+        inputHash: `${p.id}:${Date.now()}`,
+        entityType: "AutomationOwnerReport",
+        entityId: p.id,
+        outputJson: JSON.stringify(draft),
+        source: `llm:${llmProvider()}`,
+      },
+    });
+    drafted += 1;
+  }
+  return ok(`drafted ${drafted} owner-report narrative(s) across ${projects.length} active project(s); stored as advisory drafts for review`, drafted, { usedLlm: drafted > 0, llmModel: drafted > 0 ? llmProvider() : undefined });
 }

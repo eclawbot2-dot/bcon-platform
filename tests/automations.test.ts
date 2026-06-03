@@ -57,7 +57,7 @@ async function makeProject(tenantId: string, code: string) {
 describe("registry", () => {
   it("ships the five no-input deterministic workflows + wrapped engines, advisory-only", () => {
     const keys = registry.WORKFLOWS.map((w) => w.key);
-    for (const k of ["alert-scan", "mail-ingest", "schedule-slip-predict", "cashflow-forecast", "margin-fade-warning", "late-payment-predict", "feedback-loop-close"]) {
+    for (const k of ["alert-scan", "mail-ingest", "schedule-slip-predict", "cashflow-forecast", "margin-fade-warning", "late-payment-predict", "feedback-loop-close", "bid-benchmark", "automation-retention"]) {
       expect(keys).toContain(k);
     }
     // No workflow is trust-gatable at launch (all advisory).
@@ -179,5 +179,139 @@ describe("advisory-by-default action clamp", () => {
     spy.mockRestore();
     const run = await prisma.automationRun.findFirst({ where: { tenantId: t.id, workflowKey: "feedback-loop-close" }, orderBy: { startedAt: "desc" } });
     expect(run?.actionCount).toBe(0);
+  });
+});
+
+describe("AutomationRun retention guardrail", () => {
+  it("the per-tenant sweep prunes runs older than the 90d cutoff and keeps recent ones, tenant-scoped", async () => {
+    const t = await freshTenant("retain");
+    const other = await freshTenant("retain-other");
+    const cfg = await prisma.automationConfig.create({ data: { tenantId: t.id, workflowKey: "automation-retention" } });
+    const old = new Date(Date.now() - 100 * 86_400_000);
+    const recent = new Date(Date.now() - 10 * 86_400_000);
+    await prisma.automationRun.create({ data: { tenantId: t.id, configId: cfg.id, workflowKey: "feedback-loop-close", status: "SUCCESS", startedAt: old, finishedAt: old } });
+    await prisma.automationRun.create({ data: { tenantId: t.id, configId: cfg.id, workflowKey: "feedback-loop-close", status: "SUCCESS", startedAt: recent, finishedAt: recent } });
+    // Another tenant's old run must survive a per-tenant sweep.
+    await prisma.automationRun.create({ data: { tenantId: other.id, workflowKey: "feedback-loop-close", status: "SUCCESS", startedAt: old, finishedAt: old } });
+
+    const out = await engine.runWorkflowForTenant(t.id, "automation-retention", "manual:test");
+    expect(out.status).toBe("SUCCESS");
+
+    // The old row for t is gone; the recent row + this sweep's own run remain.
+    const remaining = await prisma.automationRun.findMany({ where: { tenantId: t.id }, orderBy: { startedAt: "asc" } });
+    expect(remaining.some((r) => r.startedAt.getTime() === old.getTime())).toBe(false);
+    expect(remaining.some((r) => Math.abs(r.startedAt.getTime() - recent.getTime()) < 1000)).toBe(true);
+    // Other tenant untouched.
+    const otherRuns = await prisma.automationRun.count({ where: { tenantId: other.id } });
+    expect(otherRuns).toBe(1);
+  });
+
+  it("the global dispatcher prune deletes old runs across ALL tenants", async () => {
+    const a = await freshTenant("gp-a");
+    const b = await freshTenant("gp-b");
+    const old = new Date(Date.now() - 200 * 86_400_000);
+    await prisma.automationRun.create({ data: { tenantId: a.id, workflowKey: "feedback-loop-close", status: "SUCCESS", startedAt: old, finishedAt: old } });
+    await prisma.automationRun.create({ data: { tenantId: b.id, workflowKey: "feedback-loop-close", status: "SUCCESS", startedAt: old, finishedAt: old } });
+    const recentA = await prisma.automationRun.create({ data: { tenantId: a.id, workflowKey: "feedback-loop-close", status: "SUCCESS", startedAt: new Date(), finishedAt: new Date() } });
+
+    const pruned = await engine.pruneAutomationRuns();
+    expect(pruned).toBeGreaterThanOrEqual(2);
+    expect(await prisma.automationRun.findUnique({ where: { id: recentA.id } })).not.toBeNull();
+    expect(await prisma.automationRun.count({ where: { tenantId: a.id, startedAt: { lt: new Date(Date.now() - 90 * 86_400_000) } } })).toBe(0);
+    expect(await prisma.automationRun.count({ where: { tenantId: b.id, startedAt: { lt: new Date(Date.now() - 90 * 86_400_000) } } })).toBe(0);
+  });
+});
+
+describe("bid-benchmark historical outlier detection", () => {
+  it("benchmarkUnitCostHistorical: flags HIGH/LOW outliers vs the tenant's own band and reports NO_DATA below minSamples", async () => {
+    const est = await import("@/lib/estimating-ai");
+    // Tight history around ~100 → an entry at 1000 is a clear HIGH outlier.
+    const history = [95, 98, 100, 102, 105, 99, 101];
+    const high = est.benchmarkUnitCostHistorical("03-30-00", 1000, history);
+    expect(high.verdict).toBe("HIGH");
+    expect(high.samples).toBe(history.length);
+    expect(high.entered).toBe(1000);
+    expect(high.deltaPct).toBeGreaterThan(0);
+
+    const low = est.benchmarkUnitCostHistorical("03-30-00", 5, history);
+    expect(low.verdict).toBe("LOW");
+
+    const normal = est.benchmarkUnitCostHistorical("03-30-00", 100, history);
+    expect(normal.verdict).toBe("NORMAL");
+
+    // Below minSamples → no judgement.
+    expect(est.benchmarkUnitCostHistorical("03-30-00", 100, [100, 101]).verdict).toBe("NO_DATA");
+  });
+
+  it("the workflow raises an advisory alert for an outlier sub-bid line vs tenant history", async () => {
+    const t = await freshTenant("bench");
+    const proj = await makeProject(t.id, "BEN");
+    const vendor = await prisma.vendor.create({ data: { tenantId: t.id, name: "Outlier Sub" } });
+
+    // Build tenant history: several prior priced lines for cost code 03-30-00
+    // clustered ~100/unit, in a SEPARATE (closed/awarded) package so it counts
+    // as history (we only exclude the open packages being scored).
+    const histPkg = await prisma.bidPackage.create({ data: { projectId: proj.id, name: "Hist Concrete", trade: "Concrete", status: "AWARDED" } });
+    const histPrices = [98, 100, 102, 99, 101, 100];
+    for (let i = 0; i < histPrices.length; i++) {
+      const hv = await prisma.vendor.create({ data: { tenantId: t.id, name: `Hist Vendor ${i}` } });
+      const hsb = await prisma.subBid.create({ data: { bidPackageId: histPkg.id, vendorId: hv.id, bidAmount: histPrices[i] * 10 } });
+      await prisma.subBidLine.create({ data: { subBidId: hsb.id, scopeItemKey: "concrete", description: "CIP concrete", costCode: "03-30-00", quantity: 10, unitPrice: histPrices[i], amount: histPrices[i] * 10 } });
+    }
+
+    // Open package with an outlier sub-bid line (1000/unit vs ~100 history).
+    const openPkg = await prisma.bidPackage.create({ data: { projectId: proj.id, name: "New Concrete", trade: "Concrete", status: "LEVELING" } });
+    const sb = await prisma.subBid.create({ data: { bidPackageId: openPkg.id, vendorId: vendor.id, bidAmount: 10000 } });
+    await prisma.subBidLine.create({ data: { subBidId: sb.id, scopeItemKey: "concrete", description: "CIP concrete", costCode: "03-30-00", quantity: 10, unitPrice: 1000, amount: 10000 } });
+
+    const out = await engine.runWorkflowForTenant(t.id, "bid-benchmark", "manual:test");
+    expect(out.status).toBe("SUCCESS");
+
+    const alerts = await prisma.alertEvent.findMany({ where: { tenantId: t.id, entityType: "AutomationBidBenchmark" } });
+    expect(alerts.length).toBe(1);
+    expect(alerts[0].entityId).toBe(sb.id);
+    expect(alerts[0].title).toContain("Outlier sub-bid line");
+  });
+});
+
+describe("LLM workflows: skip-vs-generate branch", () => {
+  it("narrative-drafting and nl-copilot-digest SKIP cleanly with no_llm_key when no key is configured", async () => {
+    const prev = process.env.ENABLE_LLM_CALLS;
+    process.env.ENABLE_LLM_CALLS = "false";
+    const t = await freshTenant("llm-off");
+    const nd = await engine.runWorkflowForTenant(t.id, "narrative-drafting", "manual:test");
+    const dg = await engine.runWorkflowForTenant(t.id, "nl-copilot-digest", "manual:test");
+    expect(nd.status).toBe("SKIPPED");
+    expect(dg.status).toBe("SKIPPED");
+    const ndRun = await prisma.automationRun.findFirst({ where: { tenantId: t.id, workflowKey: "narrative-drafting" }, orderBy: { startedAt: "desc" } });
+    expect(ndRun?.usedLlm).toBe(false);
+    if (prev === undefined) delete process.env.ENABLE_LLM_CALLS; else process.env.ENABLE_LLM_CALLS = prev;
+  });
+
+  it("nl-copilot-digest GENERATES + stores an advisory artifact when a key is present (aiCall mocked)", async () => {
+    const prevEnable = process.env.ENABLE_LLM_CALLS;
+    const prevKey = process.env.OPENAI_API_KEY;
+    process.env.ENABLE_LLM_CALLS = "true";
+    process.env.OPENAI_API_KEY = "sk-test-key";
+
+    // Mock the actual outbound LLM call via global fetch so aiCall returns
+    // our JSON without hitting the network.
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ headline: "All systems nominal", bullets: ["Pipeline healthy", "No over-budget projects"] }) } }] }), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+
+    const t = await freshTenant("llm-on");
+    const out = await engine.runWorkflowForTenant(t.id, "nl-copilot-digest", "manual:test");
+    fetchSpy.mockRestore();
+
+    expect(out.status).toBe("SUCCESS");
+    const run = await prisma.automationRun.findFirst({ where: { tenantId: t.id, workflowKey: "nl-copilot-digest" }, orderBy: { startedAt: "desc" } });
+    expect(run?.usedLlm).toBe(true);
+    const artifact = await prisma.aiRunLog.findFirst({ where: { tenantId: t.id, kind: "automation-copilot-digest" } });
+    expect(artifact).not.toBeNull();
+    expect(artifact!.outputJson).toContain("All systems nominal");
+
+    if (prevEnable === undefined) delete process.env.ENABLE_LLM_CALLS; else process.env.ENABLE_LLM_CALLS = prevEnable;
+    if (prevKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = prevKey;
   });
 });

@@ -21,6 +21,8 @@ import {
   runMarginFadeWarning,
   runLatePaymentPredict,
   runFeedbackLoopClose,
+  runBidBenchmark,
+  runRetentionSweep,
   runCopilotDigest,
   runNarrativeDrafting,
 } from "@/lib/automations/workflows";
@@ -97,6 +99,26 @@ export const WORKFLOWS: WorkflowDef[] = [
     trustGatable: false,
     auditItem: "intel:feedback-loop",
     run: runFeedbackLoopClose,
+  },
+  {
+    key: "bid-benchmark",
+    label: "Bid-leveling historical benchmark",
+    description: "Flags sub-bid unit prices that are statistical outliers (Tukey fences) versus the tenant's OWN historical unit costs for that cost code. Deterministic; advisory only.",
+    defaultIntervalMinutes: 24 * 60,
+    requiresLlmKey: false,
+    trustGatable: false,
+    auditItem: "intel:bid-benchmark",
+    run: runBidBenchmark,
+  },
+  {
+    key: "automation-retention",
+    label: "Automation-run retention sweep",
+    description: "Maintenance: prunes AutomationRun history older than 90 days per tenant so run history can't grow unbounded.",
+    defaultIntervalMinutes: 7 * 24 * 60,
+    requiresLlmKey: false,
+    trustGatable: false,
+    auditItem: "guardrail:run-retention",
+    run: runRetentionSweep,
   },
   // ── LLM-needing (SKIP cleanly without a key) ──
   {
