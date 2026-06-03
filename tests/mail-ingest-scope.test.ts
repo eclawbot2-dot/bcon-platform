@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
@@ -64,6 +64,32 @@ describe("mail ingestion tenant scoping", () => {
     expect(bMsgs[0].fromAddress).toBe("y@ext.com");
     // Tenant A's query never returns tenant B's mail.
     expect(aMsgs.some((m) => m.fromAddress === "y@ext.com")).toBe(false);
+  });
+
+  it("peekWorkspace refuses disabled connections and out-of-tenant mailboxes", async () => {
+    // Stub prisma used inside ingest.ts to our test client.
+    vi.doMock("@/lib/prisma", () => ({ prisma }));
+    const { peekWorkspace } = await import("@/lib/mail/ingest");
+
+    // tenantA's connection is enabled (seeded above) with mailbox user@a.com.
+    // 1) Unknown mailbox for this tenant → refused (never reaches a provider).
+    const r1 = await peekWorkspace(tenantA, "stranger@elsewhere.com");
+    expect(r1.ok).toBe(false);
+    expect(r1.error).toMatch(/unknown mailbox/i);
+    expect(r1.files).toEqual([]);
+    expect(r1.events).toEqual([]);
+
+    // 2) tenantB owns user@b.com — asking tenantA to peek it is refused
+    //    (tenant isolation: a mailbox is only visible to its own tenant).
+    const r2 = await peekWorkspace(tenantA, "user@b.com");
+    expect(r2.ok).toBe(false);
+    expect(r2.error).toMatch(/unknown mailbox/i);
+
+    // 3) A tenant with no connection at all → refused.
+    const d = await prisma.tenant.create({ data: { name: "Mail D", slug: `mD-${Date.now()}`, primaryMode: "VERTICAL" } });
+    const r3 = await peekWorkspace(d.id, "anyone@d.com");
+    expect(r3.ok).toBe(false);
+    expect(r3.error).toMatch(/no connection/i);
   });
 
   it("dedupes within a single mailbox via (mailboxId, externalId)", async () => {

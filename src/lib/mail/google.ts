@@ -6,11 +6,18 @@
  * service-account key, so credentials never cross tenants).
  *
  * The admin grants the service-account Client ID these DWD scopes in
- * Workspace Admin Console → Security → API controls → Domain-wide delegation:
+ * Workspace Admin Console → Security → API controls → Domain-wide delegation
+ * (the FULL workspace-transparency set):
  *   https://www.googleapis.com/auth/admin.directory.user.readonly
- *   https://www.googleapis.com/auth/gmail.readonly
+ *   https://mail.google.com/
+ *   https://www.googleapis.com/auth/gmail.modify
+ *   https://www.googleapis.com/auth/drive
+ *   https://www.googleapis.com/auth/calendar
  * plus an admin email as the impersonation subject (googleAdminSubject) for
  * the Directory listUsers() call.
+ *
+ * Each API call requests only the per-API scope(s) it needs (least surprise on
+ * the token side); the admin must authorize the union above on the SA client id.
  */
 
 import {
@@ -19,11 +26,35 @@ import {
   parseServiceAccountKey,
   type ServiceAccountKey,
 } from "./google-jwt";
-import type { MailProvider, MailUser, MailParsedMessage } from "./provider";
+import type {
+  MailProvider,
+  MailUser,
+  MailParsedMessage,
+  WorkspaceDriveFile,
+  WorkspaceCalendarEvent,
+  WorkspaceListOpts,
+} from "./provider";
 
 export const GOOGLE_DIRECTORY_SCOPE =
   "https://www.googleapis.com/auth/admin.directory.user.readonly";
-export const GOOGLE_GMAIL_READONLY = "https://www.googleapis.com/auth/gmail.readonly";
+/** Full mailbox scope (read + modify) requested for Gmail calls. */
+export const GOOGLE_GMAIL_FULL = "https://mail.google.com/";
+export const GOOGLE_GMAIL_MODIFY = "https://www.googleapis.com/auth/gmail.modify";
+export const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
+export const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
+
+/**
+ * The complete space-separated scope set an admin must authorize for the
+ * service-account client id under Domain-wide delegation. The connect/settings
+ * UI renders this verbatim so the admin pastes the exact string.
+ */
+export const GOOGLE_DWD_SCOPES = [
+  GOOGLE_DIRECTORY_SCOPE,
+  GOOGLE_GMAIL_FULL,
+  GOOGLE_GMAIL_MODIFY,
+  GOOGLE_DRIVE_SCOPE,
+  GOOGLE_CALENDAR_SCOPE,
+].join(" ");
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users";
 
@@ -82,7 +113,7 @@ export class GoogleMailProvider implements MailProvider {
 
   async pullMessages(userEmail: string, since: Date, max = 200): Promise<MailParsedMessage[]> {
     const days = Math.max(1, Math.ceil((Date.now() - since.getTime()) / 86_400_000));
-    const freshToken = () => getServiceAccountToken(this.key_, GOOGLE_GMAIL_READONLY, userEmail.toLowerCase());
+    const freshToken = () => getServiceAccountToken(this.key_, GOOGLE_GMAIL_FULL, userEmail.toLowerCase());
     let token = await freshToken();
     const labelMap = await this.loadLabelMap(token, userEmail).catch(() => new Map<string, string>());
 
@@ -113,6 +144,86 @@ export class GoogleMailProvider implements MailProvider {
       pageToken = data.nextPageToken && scanned < max ? data.nextPageToken : undefined;
     } while (pageToken);
     return out;
+  }
+
+  /**
+   * List a user's Drive files (impersonated via DWD with the drive scope).
+   * Read-only metadata, bounded; ordered by most-recently-modified.
+   */
+  async listDriveFiles(userEmail: string, opts: WorkspaceListOpts = {}): Promise<WorkspaceDriveFile[]> {
+    const max = Math.min(Math.max(1, opts.max ?? 50), 200);
+    const token = await getServiceAccountToken(this.key_, GOOGLE_DRIVE_SCOPE, userEmail.toLowerCase());
+    const url = new URL("https://www.googleapis.com/drive/v3/files");
+    url.searchParams.set("pageSize", String(max));
+    url.searchParams.set("orderBy", "modifiedTime desc");
+    url.searchParams.set("corpora", "user");
+    url.searchParams.set("q", "trashed = false");
+    url.searchParams.set(
+      "fields",
+      "files(id,name,mimeType,size,modifiedTime,webViewLink)",
+    );
+    const data = await gapi<{
+      files?: Array<{
+        id: string;
+        name?: string;
+        mimeType?: string;
+        size?: string;
+        modifiedTime?: string;
+        webViewLink?: string;
+      }>;
+    }>(token, url.toString());
+    return (data.files ?? []).slice(0, max).map((f) => ({
+      id: String(f.id),
+      name: f.name ?? "(untitled)",
+      mimeType: f.mimeType ?? null,
+      size: f.size != null ? Number(f.size) : null,
+      modifiedAt: f.modifiedTime ? new Date(f.modifiedTime) : null,
+      webUrl: f.webViewLink ?? null,
+      isFolder: f.mimeType === "application/vnd.google-apps.folder",
+    }));
+  }
+
+  /**
+   * List a user's upcoming primary-calendar events (impersonated via DWD with
+   * the calendar scope). Read-only, bounded, ordered by start time.
+   */
+  async listCalendarEvents(userEmail: string, opts: WorkspaceListOpts = {}): Promise<WorkspaceCalendarEvent[]> {
+    const max = Math.min(Math.max(1, opts.max ?? 50), 200);
+    const timeMin = (opts.since ?? new Date()).toISOString();
+    const token = await getServiceAccountToken(this.key_, GOOGLE_CALENDAR_SCOPE, userEmail.toLowerCase());
+    const url = new URL(
+      "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+    );
+    url.searchParams.set("maxResults", String(max));
+    url.searchParams.set("singleEvents", "true");
+    url.searchParams.set("orderBy", "startTime");
+    url.searchParams.set("timeMin", timeMin);
+    const data = await gapi<{
+      items?: Array<{
+        id: string;
+        summary?: string;
+        location?: string;
+        start?: { dateTime?: string; date?: string };
+        end?: { dateTime?: string; date?: string };
+        organizer?: { email?: string };
+        attendees?: Array<{ email?: string }>;
+      }>;
+    }>(token, url.toString());
+    return (data.items ?? []).slice(0, max).map((e) => {
+      const allDay = !!e.start?.date && !e.start?.dateTime;
+      const parse = (v?: { dateTime?: string; date?: string }) =>
+        v?.dateTime ? new Date(v.dateTime) : v?.date ? new Date(v.date) : null;
+      return {
+        id: String(e.id),
+        subject: e.summary ?? null,
+        start: parse(e.start),
+        end: parse(e.end),
+        allDay,
+        location: e.location ?? null,
+        organizer: e.organizer?.email ?? null,
+        attendees: (e.attendees ?? []).map((a) => a.email ?? "").filter(Boolean).slice(0, 50),
+      };
+    });
   }
 
   private async loadLabelMap(token: string, userEmail: string): Promise<Map<string, string>> {

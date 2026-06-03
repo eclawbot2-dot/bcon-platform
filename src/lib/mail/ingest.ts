@@ -215,6 +215,56 @@ export async function ingestTenant(
   return { ok: errors.length === 0, mailboxes: mailboxes.length, ingested, scanned, errors: errors.slice(0, 20) };
 }
 
+/**
+ * On-demand, READ-ONLY Drive + Calendar peek for a single user in THIS tenant.
+ *
+ * Unlike ingestTenant(), nothing here is persisted or classified — it is a live
+ * passthrough for the admin transparency UI. Tenant-scoped (loads only this
+ * tenant's connection) and refuses to run unless the connection is `enabled`.
+ * `userEmail` must be one of this tenant's active mailboxes (so an admin can't
+ * pivot to an arbitrary address outside the tenant's discovered directory).
+ */
+export async function peekWorkspace(
+  tenantId: string,
+  userEmail: string,
+  opts: { max?: number } = {},
+): Promise<{
+  ok: boolean;
+  error?: string;
+  files: import("./provider").WorkspaceDriveFile[];
+  events: import("./provider").WorkspaceCalendarEvent[];
+}> {
+  const empty = { files: [], events: [] };
+  const conn = await loadConnection(tenantId);
+  if (!conn) return { ok: false, error: "no connection configured", ...empty };
+  if (!conn.enabled) return { ok: false, error: "connection disabled", ...empty };
+
+  const email = userEmail.toLowerCase();
+  const mailbox = await prisma.mailbox.findFirst({
+    where: { tenantId, email, active: true },
+    select: { id: true },
+  });
+  if (!mailbox) return { ok: false, error: "unknown mailbox for this tenant", ...empty };
+
+  let provider: MailProvider;
+  try {
+    provider = buildProvider(conn);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e), ...empty };
+  }
+
+  const max = Math.min(Math.max(1, opts.max ?? 50), 200);
+  try {
+    const [files, events] = await Promise.all([
+      provider.listDriveFiles(email, { max }),
+      provider.listCalendarEvents(email, { max }),
+    ]);
+    return { ok: true, files, events };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e), ...empty };
+  }
+}
+
 /** Poll every tenant whose connection is enabled. Used by the cron route. */
 export async function ingestAllEnabledTenants(
   sinceDays = 7,

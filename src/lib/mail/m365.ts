@@ -4,17 +4,35 @@
  * Flow (no per-user OAuth; one app registration with admin consent reads the
  * whole tenant):
  *   1. Admin registers an Azure AD app, grants APPLICATION permissions
- *      `Mail.Read` + `User.Read.All`, and clicks "Grant admin consent".
+ *      `Mail.Read` + `User.Read.All` + `Files.Read.All` + `Calendars.Read`,
+ *      and clicks "Grant admin consent".
  *   2. We store tenantId (directory id) + clientId + clientSecret (encrypted).
  *   3. Token: POST https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
  *      grant_type=client_credentials, scope=https://graph.microsoft.com/.default.
  *   4. List users:  GET https://graph.microsoft.com/v1.0/users
  *      Pull mail:   GET https://graph.microsoft.com/v1.0/users/{id}/messages
+ *      Drive files: GET https://graph.microsoft.com/v1.0/users/{id}/drive/root/children
+ *      Calendar:    GET https://graph.microsoft.com/v1.0/users/{id}/events
+ *
+ * All reads are READ-ONLY; the app permissions above are all *.Read.
  */
 
-import type { MailProvider, MailUser, MailParsedMessage } from "./provider";
+import type {
+  MailProvider,
+  MailUser,
+  MailParsedMessage,
+  WorkspaceDriveFile,
+  WorkspaceCalendarEvent,
+  WorkspaceListOpts,
+} from "./provider";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
+
+/**
+ * Graph APPLICATION permissions an admin must grant + consent for the full
+ * workspace-transparency set. Rendered in the connect/settings UI.
+ */
+export const M365_GRAPH_PERMISSIONS = ["Mail.Read", "User.Read.All", "Files.Read.All", "Calendars.Read"];
 
 type M365Config = {
   azureTenantId: string;
@@ -128,6 +146,78 @@ export class M365MailProvider implements MailProvider {
       url = data["@odata.nextLink"];
     }
     return out;
+  }
+
+  /**
+   * List a user's OneDrive root files (read-only metadata, bounded). On-demand
+   * transparency read via Graph `/users/{id}/drive/root/children`.
+   */
+  async listDriveFiles(userEmail: string, opts: WorkspaceListOpts = {}): Promise<WorkspaceDriveFile[]> {
+    const max = Math.min(Math.max(1, opts.max ?? 50), 200);
+    const sel = "id,name,size,file,folder,lastModifiedDateTime,webUrl";
+    const url =
+      `/users/${encodeURIComponent(userEmail)}/drive/root/children` +
+      `?$select=${sel}&$top=${max}&$orderby=lastModifiedDateTime desc`;
+    const data = await this.graph<{
+      value?: Array<{
+        id: string;
+        name?: string;
+        size?: number;
+        file?: { mimeType?: string };
+        folder?: { childCount?: number };
+        lastModifiedDateTime?: string;
+        webUrl?: string;
+      }>;
+    }>(url);
+    return (data.value ?? []).slice(0, max).map((f) => ({
+      id: String(f.id),
+      name: f.name ?? "(untitled)",
+      mimeType: f.file?.mimeType ?? (f.folder ? "folder" : null),
+      size: typeof f.size === "number" ? f.size : null,
+      modifiedAt: f.lastModifiedDateTime ? new Date(f.lastModifiedDateTime) : null,
+      webUrl: f.webUrl ?? null,
+      isFolder: !!f.folder,
+    }));
+  }
+
+  /**
+   * List a user's upcoming calendar events (read-only, bounded). On-demand
+   * transparency read via Graph `/users/{id}/events`, filtered to events that
+   * end on/after `since` (defaults to now), ordered by start time.
+   */
+  async listCalendarEvents(userEmail: string, opts: WorkspaceListOpts = {}): Promise<WorkspaceCalendarEvent[]> {
+    const max = Math.min(Math.max(1, opts.max ?? 50), 200);
+    const sinceIso = (opts.since ?? new Date()).toISOString();
+    const sel = "id,subject,location,start,end,isAllDay,organizer,attendees";
+    const url =
+      `/users/${encodeURIComponent(userEmail)}/events` +
+      `?$select=${sel}&$top=${max}&$orderby=start/dateTime` +
+      `&$filter=end/dateTime ge '${sinceIso}'`;
+    const data = await this.graph<{
+      value?: Array<{
+        id: string;
+        subject?: string;
+        location?: { displayName?: string };
+        start?: { dateTime?: string };
+        end?: { dateTime?: string };
+        isAllDay?: boolean;
+        organizer?: { emailAddress?: { address?: string } };
+        attendees?: Array<{ emailAddress?: { address?: string } }>;
+      }>;
+    }>(url);
+    return (data.value ?? []).slice(0, max).map((e) => ({
+      id: String(e.id),
+      subject: e.subject ?? null,
+      start: e.start?.dateTime ? new Date(e.start.dateTime) : null,
+      end: e.end?.dateTime ? new Date(e.end.dateTime) : null,
+      allDay: !!e.isAllDay,
+      location: e.location?.displayName ?? null,
+      organizer: e.organizer?.emailAddress?.address ?? null,
+      attendees: (e.attendees ?? [])
+        .map((a) => a.emailAddress?.address ?? "")
+        .filter(Boolean)
+        .slice(0, 50),
+    }));
   }
 }
 

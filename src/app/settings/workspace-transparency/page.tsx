@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { currentActor, isAdminRole } from "@/lib/permissions";
 import { formatDateTime } from "@/lib/utils";
+import { GOOGLE_DWD_SCOPES } from "@/lib/mail/google";
+import { M365_GRAPH_PERMISSIONS } from "@/lib/mail/m365";
 
 /**
  * Workspace transparency — admin-only mail-ingestion settings.
@@ -156,13 +158,22 @@ export default async function WorkspaceTransparencyPage({
             <li>
               <span className="text-slate-300">Google Workspace:</span> a service-account JSON key, with that
               service account granted domain-wide delegation in Admin Console (Security → API controls → Domain-wide
-              delegation) for scopes <code className="font-mono">admin.directory.user.readonly</code> +{" "}
-              <code className="font-mono">gmail.readonly</code>, plus a super-admin email as the impersonation subject.
+              delegation), plus a super-admin email as the impersonation subject. Authorize the EXACT scope string
+              below on the service-account client id (Mail + Drive + Calendar transparency):
+              <code className="mt-1 block whitespace-pre-wrap break-all font-mono text-[11px] text-slate-300">
+                {GOOGLE_DWD_SCOPES}
+              </code>
             </li>
             <li>
               <span className="text-slate-300">Microsoft 365:</span> an Azure app registration (tenant id, client id,
-              client secret) with APPLICATION permissions <code className="font-mono">Mail.Read</code> +{" "}
-              <code className="font-mono">User.Read.All</code> and admin consent granted.
+              client secret) with APPLICATION permissions{" "}
+              {M365_GRAPH_PERMISSIONS.map((p, i) => (
+                <span key={p}>
+                  {i > 0 ? " + " : ""}
+                  <code className="font-mono">{p}</code>
+                </span>
+              ))}{" "}
+              and admin consent granted. All read-only (Mail + Files + Calendar transparency).
             </li>
           </ul>
         </section>

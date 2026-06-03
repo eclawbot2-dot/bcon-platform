@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { currentActor, isAdminRole } from "@/lib/permissions";
 import { formatDateTime } from "@/lib/utils";
+import { peekWorkspace } from "@/lib/mail/ingest";
 
 /**
  * Workspace transparency — ingested-mail review.
@@ -16,7 +17,7 @@ import { formatDateTime } from "@/lib/utils";
 export default async function WorkspaceInboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ class?: string; mailbox?: string }>;
+  searchParams: Promise<{ class?: string; mailbox?: string; peek?: string }>;
 }) {
   const tenant = await requireTenant();
   const actor = await currentActor(tenant.id);
@@ -51,6 +52,12 @@ export default async function WorkspaceInboxPage({
     prisma.mailbox.findMany({ where: { tenantId: tenant.id }, orderBy: { email: "asc" }, select: { id: true, email: true } }),
     prisma.mailMessage.groupBy({ by: ["classification"], where: { tenantId: tenant.id }, _count: true }),
   ]);
+
+  // On-demand (NOT ingested) Drive + Calendar peek for one selected mailbox.
+  // Only runs when an admin picks a mailbox via ?peek=<email>; the helper is
+  // tenant-scoped + enabled-gated + restricts to this tenant's mailboxes.
+  const peekEmail = sp.peek?.toLowerCase() || "";
+  const peek = peekEmail ? await peekWorkspace(tenant.id, peekEmail, { max: 25 }) : null;
 
   return (
     <AppLayout
@@ -114,6 +121,85 @@ export default async function WorkspaceInboxPage({
               ],
             }))}
           />
+        </section>
+
+        <section className="card p-4">
+          <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Drive &amp; Calendar (on-demand)</div>
+          <p className="mt-1 text-xs text-slate-400">
+            Read-only peek at a user&apos;s recent Drive/OneDrive files and upcoming calendar events. Fetched live on
+            request — nothing here is ingested, stored, or auto-actioned.
+          </p>
+          <form method="get" className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            {sp.class ? <input type="hidden" name="class" value={sp.class} /> : null}
+            {sp.mailbox ? <input type="hidden" name="mailbox" value={sp.mailbox} /> : null}
+            <select name="peek" defaultValue={peekEmail} className="form-input text-xs">
+              <option value="">Select a mailbox…</option>
+              {mailboxes.map((mb) => (
+                <option key={mb.id} value={mb.email}>
+                  {mb.email}
+                </option>
+              ))}
+            </select>
+            <button className="btn-outline text-xs">Fetch Drive &amp; Calendar</button>
+          </form>
+
+          {peek ? (
+            peek.ok ? (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.15em] text-slate-400">
+                    Drive files <span className="text-slate-600">({peek.files.length})</span>
+                  </div>
+                  <ul className="mt-2 space-y-1 text-xs">
+                    {peek.files.length === 0 ? (
+                      <li className="text-slate-500">No files.</li>
+                    ) : (
+                      peek.files.map((f) => (
+                        <li key={f.id} className="flex items-center justify-between gap-3 border-b border-white/5 py-1">
+                          <span className="min-w-0 truncate text-slate-200">
+                            {f.isFolder ? "📁 " : "📄 "}
+                            {f.webUrl ? (
+                              <a href={f.webUrl} target="_blank" rel="noreferrer" className="hover:underline">
+                                {f.name}
+                              </a>
+                            ) : (
+                              f.name
+                            )}
+                          </span>
+                          <span className="shrink-0 text-slate-500">
+                            {f.modifiedAt ? formatDateTime(f.modifiedAt) : "—"}
+                          </span>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.15em] text-slate-400">
+                    Upcoming calendar <span className="text-slate-600">({peek.events.length})</span>
+                  </div>
+                  <ul className="mt-2 space-y-1 text-xs">
+                    {peek.events.length === 0 ? (
+                      <li className="text-slate-500">No upcoming events.</li>
+                    ) : (
+                      peek.events.map((e) => (
+                        <li key={e.id} className="border-b border-white/5 py-1">
+                          <div className="text-slate-200">{e.subject || "(no title)"}</div>
+                          <div className="text-slate-500">
+                            {e.start ? formatDateTime(e.start) : "—"}
+                            {e.allDay ? " · all-day" : ""}
+                            {e.location ? ` · ${e.location}` : ""}
+                          </div>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 text-xs text-rose-300">Could not fetch: {peek.error}</div>
+            )
+          ) : null}
         </section>
       </div>
     </AppLayout>
