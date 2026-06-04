@@ -16,12 +16,14 @@ jobs:
       DATABASE_URL: file:./prisma/dev.db
       # Disable outbound LLM calls in CI (tests should be hermetic).
       ENABLE_LLM_CALLS: "false"
-      # NextAuth secret — any value is fine for typecheck/test, just
-      # has to be present to avoid the runtime error.
-      NEXTAUTH_SECRET: ci-test-secret-not-for-production
-      AUTH_SECRET: ci-test-secret-not-for-production
-      # Per-tenant secret encryption key — stable across CI runs.
-      BCON_VAULT_KEY: ci-vault-key-not-for-production
+      # NextAuth + vault secrets. `next build` evaluates modules with
+      # NODE_ENV=production, which trips src/lib/env-guard.ts — so these
+      # must be strong, non-placeholder values (the guard rejects empty,
+      # too-short, or the known dev/CI placeholder strings). Still fake
+      # (CI only), just not weak.
+      NEXTAUTH_SECRET: ci-strong-nextauth-secret-0123456789abcdef0123456789abcdef
+      AUTH_SECRET: ci-strong-auth-secret-0123456789abcdef0123456789abcdef
+      BCON_VAULT_KEY: ci-strong-vault-key-0123456789abcdef0123456789abcdef
     steps:
       - uses: actions/checkout@v4
 
@@ -43,6 +45,14 @@ jobs:
 
       - name: Vitest
         run: npx vitest run
+
+      - name: Next build
+        # Full production build — catches route/type/RSC errors that tsc
+        # and vitest miss (e.g. a server/client boundary violation or a
+        # bad dynamic import). NODE_ENV is forced to production by `next
+        # build`, which also exercises src/lib/env-guard.ts against the
+        # strong CI secrets above.
+        run: npx next build
 
       - name: Seed portal catalog (smoke check)
         run: npx tsx prisma/seed-portals.ts

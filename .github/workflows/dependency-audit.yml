@@ -1,0 +1,83 @@
+name: dependency-audit
+
+# Scheduled dependency-security audit. We deliberately keep `npm audit` in
+# the main `ci` workflow non-blocking (a brand-new upstream advisory should
+# not turn every unrelated PR red and block shipping a fix). Instead this
+# workflow runs on a schedule and, when high/critical advisories are
+# present, opens (or updates) a single tracking issue so the backlog is
+# visible without gating merges.
+
+on:
+  schedule:
+    # Weekly, Monday 13:00 UTC.
+    - cron: "0 13 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run npm audit (high+)
+        id: audit
+        run: |
+          set +e
+          npm audit --audit-level=high --json > audit.json
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          # Summarize counts for the issue body.
+          node -e '
+            const a = require("./audit.json");
+            const v = (a.metadata && a.metadata.vulnerabilities) || {};
+            const high = v.high || 0, crit = v.critical || 0;
+            const total = Object.values(v).reduce((s,n)=>s+n,0);
+            const fs = require("fs");
+            fs.writeFileSync("audit-summary.md",
+              `npm audit found **${crit} critical**, **${high} high** (",${total}" total) advisories as of ${new Date().toISOString()}.\n\n` +
+              "Run `npm audit` locally for detail, then `npm audit fix` or bump the offending dependency.\n");
+            // Set an output flag.
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `actionable=${(high+crit)>0}\n`);
+          '
+          exit 0
+
+      - name: Open / update tracking issue
+        if: steps.audit.outputs.actionable == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('audit-summary.md', 'utf8');
+            const title = 'Dependency security: high/critical npm advisories';
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'dependencies,security',
+            });
+            const found = existing.data.find(i => i.title === title);
+            if (found) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: found.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body,
+                labels: ['dependencies', 'security'],
+              });
+            }

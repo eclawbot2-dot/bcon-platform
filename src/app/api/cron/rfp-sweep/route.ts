@@ -52,9 +52,11 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(result);
 }
 
+// GET is status-only and never runs the sweep — schedulers must POST.
+// Previously GET ran the full external scrape, so a "safe" verb triggered
+// outbound scraping cost as a side effect.
 export async function GET(req: NextRequest) {
   const denied = authorize(req);
   if (denied) return denied;
-  const result = await runSweep();
-  return NextResponse.json(result);
+  return NextResponse.json({ ok: true, status: "ready", note: "POST to run the sweep; GET is status-only." });
 }

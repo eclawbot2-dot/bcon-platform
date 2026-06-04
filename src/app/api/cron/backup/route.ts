@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { backupAllTenants } from "@/lib/backup";
 import { observeCronRun } from "@/lib/metrics";
+import { reportError } from "@/lib/report-error";
 
 /**
  * Nightly backup endpoint — intended to be hit by Windows Task Scheduler
@@ -47,6 +48,16 @@ export async function POST(req: NextRequest) {
     ok: failed === 0,
     message: `${ok} ok / ${failed} failed across ${results.length} tenants`,
   });
+  if (failed > 0) {
+    // Surface partial/total backup failure to the error monitor — a silent
+    // failed nightly backup is a disaster-recovery gap.
+    await reportError({
+      scope: "cron/backup",
+      error: `${failed} of ${results.length} tenant backups failed`,
+      level: failed === results.length ? "fatal" : "error",
+      context: { failed, succeeded: ok, tenants: results.filter((r) => !r.ok).map((r) => ({ slug: r.tenantSlug, error: r.error })) },
+    });
+  }
   return NextResponse.json({
     ok: failed === 0,
     durationMs: Date.now() - start,
@@ -57,6 +68,19 @@ export async function POST(req: NextRequest) {
   });
 }
 
+/**
+ * GET is status-only — it does NOT run the backup. Previously GET aliased
+ * to POST, which let a same-origin authenticated GET (or a mis-fired
+ * scheduler) trigger a full backup sweep as a non-idempotent side effect
+ * of a "safe" verb. Schedulers must use POST. (Auth still required so the
+ * endpoint doesn't leak config state to anonymous callers.)
+ */
 export async function GET(req: NextRequest) {
-  return POST(req);
+  const denied = authorize(req);
+  if (denied) return denied;
+  return NextResponse.json({
+    ok: true,
+    status: "ready",
+    note: "POST to this endpoint to run the backup; GET is status-only.",
+  });
 }

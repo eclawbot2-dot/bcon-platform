@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { reportErrorNoWait } from "@/lib/report-error";
 
 export type AuditEventInput = {
   tenantId: string;
@@ -50,7 +51,15 @@ export async function recordAudit(input: AuditEventInput): Promise<void> {
       },
     });
   } catch (err) {
-    console.error("[audit] failed to record event", { entityType, entityId, action, err });
+    // A dropped audit write is exactly the kind of silent failure the
+    // error monitor exists to surface — it means a compliance-relevant
+    // event went unrecorded. Fire-and-forget so we don't compound the
+    // problem by throwing in a path the caller has already committed.
+    reportErrorNoWait({
+      scope: "audit.recordAudit",
+      error: err,
+      context: { entityType, entityId, action },
+    });
   }
 }
 

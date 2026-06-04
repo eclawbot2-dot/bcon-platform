@@ -47,6 +47,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, ...result });
 }
 
+// GET is status-only and never runs the job — schedulers must POST.
 export async function GET(req: NextRequest) {
-  return POST(req);
+  const denied = authorize(req);
+  if (denied) return denied;
+  return NextResponse.json({ ok: true, status: "ready", note: "POST to run; GET is status-only." });
 }

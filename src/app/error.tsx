@@ -19,6 +19,23 @@ export default function ErrorBoundary({
 }) {
   useEffect(() => {
     console.error("[error.tsx]", error);
+    // Beacon to the server-side error monitor (cron/audit share the same
+    // sink). Best-effort, non-PII: digest + message + path only. Never
+    // throws — a monitoring call must not break the error page itself.
+    try {
+      const body = JSON.stringify({
+        digest: error.digest,
+        message: error.message,
+        path: typeof window !== "undefined" ? window.location.pathname : undefined,
+      });
+      if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+        navigator.sendBeacon("/api/observability/client-error", new Blob([body], { type: "application/json" }));
+      } else {
+        void fetch("/api/observability/client-error", { method: "POST", headers: { "content-type": "application/json" }, body, keepalive: true }).catch(() => {});
+      }
+    } catch {
+      /* ignore — never let monitoring crash the error UI */
+    }
   }, [error]);
 
   return (
