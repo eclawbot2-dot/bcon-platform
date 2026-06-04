@@ -10,6 +10,24 @@
 import { prisma } from "@/lib/prisma";
 import { actorFor, logComment, changeSummary, type ActionResult } from "@/lib/approvals";
 import { startWorkflowRun, recordWorkflowDecision, closeWorkflowRun } from "@/lib/workflow";
+import { validateMoneyPatch } from "@/lib/money";
+
+/**
+ * Build a before/after snapshot limited to the given keys, coercing
+ * Prisma Decimal columns to numbers so the audit JSON is portable. Used to
+ * attach tamper-evident money/status diffs to logComment's AuditEvent.
+ */
+function snapshot(row: Record<string, unknown> | null | undefined, keys: readonly string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!row) return out;
+  for (const k of keys) {
+    const v = row[k];
+    out[k] = v != null && typeof v === "object" && typeof (v as { toNumber?: () => number }).toNumber === "function"
+      ? (v as { toNumber: () => number }).toNumber()
+      : v;
+  }
+  return out;
+}
 
 // ---------- CHANGE ORDERS ----------
 export async function submitChangeOrder(id: string, tenantId: string, note?: string): Promise<ActionResult> {
@@ -35,7 +53,8 @@ export async function approveChangeOrder(id: string, tenantId: string, note?: st
     where: { id },
     data: { status: "APPROVED", approvedAt: new Date(), approvedBy: actor.userName, approvalNote: note ?? null, rejectedAt: null, rejectedBy: null, rejectionReason: null },
   });
-  await logComment({ tenantId, entityType: "ChangeOrder", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Approved — ${note}` : "Approved." });
+  const coFields = ["status", "amount"] as const;
+  await logComment({ tenantId, entityType: "ChangeOrder", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Approved — ${note}` : "Approved.", audit: { before: snapshot(co as unknown as Record<string, unknown>, coFields), after: snapshot(entity as unknown as Record<string, unknown>, coFields) } });
   await recordWorkflowDecision({ projectId: co.projectId, entityType: "ChangeOrder", entityId: id, actor, decision: "APPROVED" });
   return { ok: true, entity };
 }
@@ -61,6 +80,8 @@ export async function editChangeOrder(id: string, tenantId: string, patch: { tit
   const lockedStates = ["APPROVED", "EXECUTED", "VOID"];
   const canEdit = lockedStates.includes(co.status) ? actor.isManager : actor.canEdit;
   if (!canEdit) return { ok: false, error: `Cannot edit while status is ${co.status} without manager role.` };
+  const valid = validateMoneyPatch(patch, { money: ["amount"], percent: ["markupPct"] });
+  if (!valid.ok) return { ok: false, error: valid.error };
   const data: Record<string, unknown> = { ...patch };
   if (lockedStates.includes(co.status)) {
     data.status = "PENDING";
@@ -68,9 +89,10 @@ export async function editChangeOrder(id: string, tenantId: string, patch: { tit
     data.approvedBy = null;
     data.approvalNote = null;
   }
+  const fields = ["amount", "markupPct", "status"] as const;
   const summary = changeSummary(co as unknown as Record<string, unknown>, patch);
   const entity = await prisma.changeOrder.update({ where: { id }, data });
-  await logComment({ tenantId, entityType: "ChangeOrder", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no visible changes)"}${lockedStates.includes(co.status) ? " — status reverted to PENDING for re-approval." : ""}` });
+  await logComment({ tenantId, entityType: "ChangeOrder", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no visible changes)"}${lockedStates.includes(co.status) ? " — status reverted to PENDING for re-approval." : ""}`, audit: { before: snapshot(co as unknown as Record<string, unknown>, fields), after: snapshot(entity as unknown as Record<string, unknown>, fields) } });
   return { ok: true, entity };
 }
 
@@ -98,7 +120,8 @@ export async function approvePayApp(id: string, tenantId: string, note?: string)
     where: { id },
     data: { status: "APPROVED", approvedAt: new Date(), approvedBy: actor.userName, approvalNote: note ?? null },
   });
-  await logComment({ tenantId, entityType: "PayApplication", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Approved — ${note}` : "Approved." });
+  const paFields = ["status", "currentPaymentDue"] as const;
+  await logComment({ tenantId, entityType: "PayApplication", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Approved — ${note}` : "Approved.", audit: { before: snapshot(pa as unknown as Record<string, unknown>, paFields), after: snapshot(entity as unknown as Record<string, unknown>, paFields) } });
   await recordWorkflowDecision({ projectId: pa.projectId, entityType: "PayApplication", entityId: id, actor, decision: "APPROVED" });
   return { ok: true, entity };
 }
@@ -124,7 +147,8 @@ export async function markPayAppPaid(id: string, tenantId: string, note?: string
   if (!pa) return { ok: false, error: "Pay application not found." };
   if (pa.status !== "APPROVED") return { ok: false, error: `Must be APPROVED before PAID.` };
   const entity = await prisma.payApplication.update({ where: { id }, data: { status: "PAID", paidAt: new Date(), paidBy: actor.userName } });
-  await logComment({ tenantId, entityType: "PayApplication", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "PAY", body: note ? `Marked paid. ${note}` : "Marked paid." });
+  const paidFields = ["status", "currentPaymentDue"] as const;
+  await logComment({ tenantId, entityType: "PayApplication", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "PAY", body: note ? `Marked paid. ${note}` : "Marked paid.", audit: { before: snapshot(pa as unknown as Record<string, unknown>, paidFields), after: snapshot(entity as unknown as Record<string, unknown>, paidFields) } });
   await closeWorkflowRun({ projectId: pa.projectId, entityType: "PayApplication", entityId: id, status: "CLOSED" });
   return { ok: true, entity };
 }
@@ -135,11 +159,14 @@ export async function editPayApp(id: string, tenantId: string, patch: { workComp
   const locked = pa.status === "APPROVED" || pa.status === "PAID";
   if (locked && !actor.isManager) return { ok: false, error: `Cannot edit an ${pa.status} pay app without manager role.` };
   if (!actor.canEdit) return { ok: false, error: "Insufficient role to edit." };
+  const valid = validateMoneyPatch(patch, { money: ["workCompletedToDate", "materialsStoredToDate", "retainageHeld", "currentPaymentDue"] });
+  if (!valid.ok) return { ok: false, error: valid.error };
   const data: Record<string, unknown> = { ...patch };
   if (locked) { data.status = "SUBMITTED"; data.approvedAt = null; data.approvedBy = null; }
+  const fields = ["workCompletedToDate", "materialsStoredToDate", "retainageHeld", "currentPaymentDue", "status"] as const;
   const summary = changeSummary(pa as unknown as Record<string, unknown>, patch);
   const entity = await prisma.payApplication.update({ where: { id }, data });
-  await logComment({ tenantId, entityType: "PayApplication", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no visible changes)"}${locked ? " — reverted to SUBMITTED for re-approval." : ""}` });
+  await logComment({ tenantId, entityType: "PayApplication", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no visible changes)"}${locked ? " — reverted to SUBMITTED for re-approval." : ""}`, audit: { before: snapshot(pa as unknown as Record<string, unknown>, fields), after: snapshot(entity as unknown as Record<string, unknown>, fields) } });
   return { ok: true, entity };
 }
 
@@ -347,11 +374,14 @@ export async function editPunch(id: string, tenantId: string, patch: { title?: s
 export async function approveSubInvoice(id: string, tenantId: string, note?: string): Promise<ActionResult> {
   const actor = await actorFor(tenantId);
   if (!actor.isManager) return { ok: false, error: "Only managers (Controller / PM) can approve." };
+  const before = await prisma.subInvoice.findFirst({ where: { id, project: { tenantId } } });
+  if (!before) return { ok: false, error: "Sub invoice not found." };
   const entity = await prisma.subInvoice.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "APPROVED", approvedAt: new Date(), approvedBy: actor.userName, approvalNote: note ?? null },
   });
-  await logComment({ tenantId, entityType: "SubInvoice", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Approved — ${note}` : "Approved." });
+  const siFields = ["status", "amount", "netDue"] as const;
+  await logComment({ tenantId, entityType: "SubInvoice", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Approved — ${note}` : "Approved.", audit: { before: snapshot(before as unknown as Record<string, unknown>, siFields), after: snapshot(entity as unknown as Record<string, unknown>, siFields) } });
   await startWorkflowRun({ tenantId, projectId: entity.projectId, module: "sub-invoices", entityType: "SubInvoice", entityId: id });
   await recordWorkflowDecision({ projectId: entity.projectId, entityType: "SubInvoice", entityId: id, actor, decision: "APPROVED" });
   return { ok: true, entity };
@@ -371,11 +401,14 @@ export async function rejectSubInvoice(id: string, tenantId: string, reason: str
 export async function markSubInvoicePaid(id: string, tenantId: string, note?: string): Promise<ActionResult> {
   const actor = await actorFor(tenantId);
   if (!actor.isManager) return { ok: false, error: "Only managers can mark paid." };
+  const before = await prisma.subInvoice.findFirst({ where: { id, project: { tenantId } } });
+  if (!before) return { ok: false, error: "Sub invoice not found." };
   const entity = await prisma.subInvoice.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "PAID", paidAt: new Date(), paidBy: actor.userName },
   });
-  await logComment({ tenantId, entityType: "SubInvoice", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "PAY", body: note ? `Paid. ${note}` : "Marked paid." });
+  const siFields = ["status", "amount", "netDue"] as const;
+  await logComment({ tenantId, entityType: "SubInvoice", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "PAY", body: note ? `Paid. ${note}` : "Marked paid.", audit: { before: snapshot(before as unknown as Record<string, unknown>, siFields), after: snapshot(entity as unknown as Record<string, unknown>, siFields) } });
   await closeWorkflowRun({ projectId: entity.projectId, entityType: "SubInvoice", entityId: id, status: "CLOSED" });
   return { ok: true, entity };
 }
@@ -384,9 +417,12 @@ export async function editSubInvoice(id: string, tenantId: string, patch: { amou
   if (!actor.canEdit) return { ok: false, error: "Insufficient role." };
   const before = await prisma.subInvoice.findFirst({ where: { id, project: { tenantId } } });
   if (!before) return { ok: false, error: "Sub invoice not found." };
+  const valid = validateMoneyPatch(patch, { money: ["amount", "retainageHeld", "netDue"] });
+  if (!valid.ok) return { ok: false, error: valid.error };
+  const fields = ["amount", "retainageHeld", "netDue", "status"] as const;
   const summary = changeSummary(before as unknown as Record<string, unknown>, patch);
   const entity = await prisma.subInvoice.update({ where: { id }, data: patch });
-  await logComment({ tenantId, entityType: "SubInvoice", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no changes)"}` });
+  await logComment({ tenantId, entityType: "SubInvoice", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no changes)"}`, audit: { before: snapshot(before as unknown as Record<string, unknown>, fields), after: snapshot(entity as unknown as Record<string, unknown>, fields) } });
   return { ok: true, entity };
 }
 
@@ -394,11 +430,14 @@ export async function editSubInvoice(id: string, tenantId: string, patch: { amou
 export async function approvePurchaseOrder(id: string, tenantId: string, note?: string): Promise<ActionResult> {
   const actor = await actorFor(tenantId);
   if (!actor.isManager) return { ok: false, error: "Only managers can approve." };
+  const before = await prisma.purchaseOrder.findFirst({ where: { id, project: { tenantId } } });
+  if (!before) return { ok: false, error: "PO not found." };
   const entity = await prisma.purchaseOrder.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "APPROVED", approvedAt: new Date(), approvedBy: actor.userName, approvalNote: note ?? null },
   });
-  await logComment({ tenantId, entityType: "PurchaseOrder", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Approved — ${note}` : "Approved." });
+  const poFields = ["status", "amount"] as const;
+  await logComment({ tenantId, entityType: "PurchaseOrder", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Approved — ${note}` : "Approved.", audit: { before: snapshot(before as unknown as Record<string, unknown>, poFields), after: snapshot(entity as unknown as Record<string, unknown>, poFields) } });
   await startWorkflowRun({ tenantId, projectId: entity.projectId, module: "purchase-orders", entityType: "PurchaseOrder", entityId: id });
   await recordWorkflowDecision({ projectId: entity.projectId, entityType: "PurchaseOrder", entityId: id, actor, decision: "APPROVED" });
   return { ok: true, entity };
@@ -419,9 +458,12 @@ export async function editPurchaseOrder(id: string, tenantId: string, patch: { d
   if (!actor.canEdit) return { ok: false, error: "Insufficient role." };
   const before = await prisma.purchaseOrder.findFirst({ where: { id, project: { tenantId } } });
   if (!before) return { ok: false, error: "PO not found." };
+  const valid = validateMoneyPatch(patch, { money: ["amount"] });
+  if (!valid.ok) return { ok: false, error: valid.error };
+  const fields = ["amount", "status"] as const;
   const summary = changeSummary(before as unknown as Record<string, unknown>, patch);
   const entity = await prisma.purchaseOrder.update({ where: { id }, data: patch });
-  await logComment({ tenantId, entityType: "PurchaseOrder", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no changes)"}` });
+  await logComment({ tenantId, entityType: "PurchaseOrder", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no changes)"}`, audit: { before: snapshot(before as unknown as Record<string, unknown>, fields), after: snapshot(entity as unknown as Record<string, unknown>, fields) } });
   return { ok: true, entity };
 }
 
@@ -429,11 +471,14 @@ export async function editPurchaseOrder(id: string, tenantId: string, patch: { d
 export async function executeContract(id: string, tenantId: string, note?: string): Promise<ActionResult> {
   const actor = await actorFor(tenantId);
   if (!actor.isManager) return { ok: false, error: "Only managers can execute contracts." };
+  const before = await prisma.contract.findFirst({ where: { id, project: { tenantId } } });
+  if (!before) return { ok: false, error: "Contract not found." };
   const entity = await prisma.contract.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "EXECUTED", executedAt: new Date(), executedBy: actor.userName, approvedAt: new Date(), approvedBy: actor.userName, approvalNote: note ?? null },
   });
-  await logComment({ tenantId, entityType: "Contract", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Executed. ${note}` : "Executed." });
+  const ctFields = ["status", "currentValue"] as const;
+  await logComment({ tenantId, entityType: "Contract", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Executed. ${note}` : "Executed.", audit: { before: snapshot(before as unknown as Record<string, unknown>, ctFields), after: snapshot(entity as unknown as Record<string, unknown>, ctFields) } });
   await startWorkflowRun({ tenantId, projectId: entity.projectId, module: "contracts", entityType: "Contract", entityId: id });
   await recordWorkflowDecision({ projectId: entity.projectId, entityType: "Contract", entityId: id, actor, decision: "APPROVED" });
   return { ok: true, entity };
@@ -455,9 +500,12 @@ export async function editContract(id: string, tenantId: string, patch: { title?
   if (!actor.canEdit) return { ok: false, error: "Insufficient role." };
   const before = await prisma.contract.findFirst({ where: { id, project: { tenantId } } });
   if (!before) return { ok: false, error: "Contract not found." };
+  const valid = validateMoneyPatch(patch, { money: ["currentValue"], percent: ["retainagePct"] });
+  if (!valid.ok) return { ok: false, error: valid.error };
+  const fields = ["currentValue", "retainagePct", "status"] as const;
   const summary = changeSummary(before as unknown as Record<string, unknown>, patch);
   const entity = await prisma.contract.update({ where: { id }, data: patch });
-  await logComment({ tenantId, entityType: "Contract", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no changes)"}` });
+  await logComment({ tenantId, entityType: "Contract", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no changes)"}`, audit: { before: snapshot(before as unknown as Record<string, unknown>, fields), after: snapshot(entity as unknown as Record<string, unknown>, fields) } });
   return { ok: true, entity };
 }
 
@@ -465,11 +513,14 @@ export async function editContract(id: string, tenantId: string, patch: { title?
 export async function approveLienWaiver(id: string, tenantId: string, note?: string): Promise<ActionResult> {
   const actor = await actorFor(tenantId);
   if (!actor.isManager) return { ok: false, error: "Only managers can accept lien waivers." };
+  const before = await prisma.lienWaiver.findFirst({ where: { id, project: { tenantId } } });
+  if (!before) return { ok: false, error: "Waiver not found." };
   const entity = await prisma.lienWaiver.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "RECEIVED", receivedAt: new Date(), receivedBy: actor.userName, approvedAt: new Date(), approvedBy: actor.userName, approvalNote: note ?? null },
   });
-  await logComment({ tenantId, entityType: "LienWaiver", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Accepted. ${note}` : "Accepted." });
+  const lwFields = ["status", "amount"] as const;
+  await logComment({ tenantId, entityType: "LienWaiver", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "APPROVE", body: note ? `Accepted. ${note}` : "Accepted.", audit: { before: snapshot(before as unknown as Record<string, unknown>, lwFields), after: snapshot(entity as unknown as Record<string, unknown>, lwFields) } });
   await startWorkflowRun({ tenantId, projectId: entity.projectId, module: "lien-waivers", entityType: "LienWaiver", entityId: id });
   await recordWorkflowDecision({ projectId: entity.projectId, entityType: "LienWaiver", entityId: id, actor, decision: "APPROVED" });
   return { ok: true, entity };
@@ -491,8 +542,11 @@ export async function editLienWaiver(id: string, tenantId: string, patch: { part
   if (!actor.canEdit) return { ok: false, error: "Insufficient role." };
   const before = await prisma.lienWaiver.findFirst({ where: { id, project: { tenantId } } });
   if (!before) return { ok: false, error: "Waiver not found." };
+  const valid = validateMoneyPatch(patch, { money: ["amount"] });
+  if (!valid.ok) return { ok: false, error: valid.error };
+  const fields = ["amount", "status"] as const;
   const summary = changeSummary(before as unknown as Record<string, unknown>, patch);
   const entity = await prisma.lienWaiver.update({ where: { id }, data: patch });
-  await logComment({ tenantId, entityType: "LienWaiver", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no changes)"}` });
+  await logComment({ tenantId, entityType: "LienWaiver", entityId: id, actorName: actor.userName, actorId: actor.userId, kind: "EDIT", body: `Edited: ${summary || "(no changes)"}`, audit: { before: snapshot(before as unknown as Record<string, unknown>, fields), after: snapshot(entity as unknown as Record<string, unknown>, fields) } });
   return { ok: true, entity };
 }

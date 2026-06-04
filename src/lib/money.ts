@@ -74,3 +74,67 @@ export function fromCents(cents: MoneyLike): number {
 export function eqMoney(a: MoneyLike, b: MoneyLike, toleranceCents: number = 1): boolean {
   return Math.abs(toCents(a) - toCents(b)) <= toleranceCents;
 }
+
+// ---------------------------------------------------------------------------
+// Money-field validation
+//
+// Edit routes (record-actions.ts) previously spread a client-supplied
+// `patch` straight into prisma.update with no bounds, so a negative or
+// absurd amount (or a NaN/Infinity smuggled through JSON) would persist and
+// corrupt every downstream rollup (WIP, AP aging, bonding capacity). These
+// validators reject such values BEFORE the write.
+// ---------------------------------------------------------------------------
+
+import { z } from "zod";
+
+/** Hard ceiling for any single money field. $1e12 (a trillion dollars) is
+ *  comfortably above any real construction line item while still catching
+ *  fat-finger / overflow garbage. */
+export const MONEY_CEILING = 1_000_000_000_000;
+
+/** A non-negative, finite dollar amount with at most a trillion-dollar
+ *  ceiling. Rejects NaN/Infinity (zod's .finite()) and negatives. */
+export const moneyAmount = z
+  .number({ error: "must be a number" })
+  .finite("must be a finite number")
+  .nonnegative("must be ≥ 0")
+  .max(MONEY_CEILING, `must be ≤ ${MONEY_CEILING}`);
+
+/** A percentage field (markup, retainage). 0–100, finite. */
+export const percentValue = z
+  .number({ error: "must be a number" })
+  .finite("must be a finite number")
+  .min(0, "must be ≥ 0")
+  .max(100, "must be ≤ 100");
+
+export type MoneyValidationResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Validate the money/percent fields present in an edit patch. Only the
+ * keys listed in `moneyFields` / `percentFields` are checked; non-money
+ * keys (notes, titles, dates) pass through untouched. `undefined` values
+ * are skipped (partial patch — not being changed). Returns the first
+ * failure as a human-readable message so callers can surface it.
+ */
+export function validateMoneyPatch(
+  patch: Record<string, unknown>,
+  fields: { money?: readonly string[]; percent?: readonly string[] },
+): MoneyValidationResult {
+  for (const key of fields.money ?? []) {
+    const v = patch[key];
+    if (v === undefined) continue;
+    const parsed = moneyAmount.safeParse(v);
+    if (!parsed.success) {
+      return { ok: false, error: `${key} ${parsed.error.issues[0]?.message ?? "is invalid"}.` };
+    }
+  }
+  for (const key of fields.percent ?? []) {
+    const v = patch[key];
+    if (v === undefined) continue;
+    const parsed = percentValue.safeParse(v);
+    if (!parsed.success) {
+      return { ok: false, error: `${key} ${parsed.error.issues[0]?.message ?? "is invalid"}.` };
+    }
+  }
+  return { ok: true };
+}

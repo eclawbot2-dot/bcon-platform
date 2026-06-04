@@ -52,6 +52,15 @@ export async function logComment(params: {
   actorId: string | null;
   kind: CommentKind;
   body: string;
+  /**
+   * Optional tamper-evident before/after snapshot. When supplied (for
+   * money/status state transitions — mark-paid, approvals, COs, contracts,
+   * edits) the emitted AuditEvent carries the structured field-level diff,
+   * not just the free-text note. This is the difference between an audit
+   * trail that says "Marked paid." and one that proves what the amount and
+   * status were before and after.
+   */
+  audit?: { before?: Record<string, unknown>; after?: Record<string, unknown> };
 }): Promise<void> {
   await prisma.recordComment.create({
     data: {
@@ -73,7 +82,9 @@ export async function logComment(params: {
       entityType: params.entityType,
       entityId: params.entityId,
       action: params.kind,
-      after: { note: params.body },
+      // Always include the note; attach the structured diff when provided.
+      before: params.audit?.before,
+      after: { note: params.body, ...(params.audit?.after ?? {}) },
       source: "record-actions",
     });
   }
