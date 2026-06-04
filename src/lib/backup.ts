@@ -158,7 +158,11 @@ export function verifyBackupContents(payload: string): void {
   } catch (err) {
     throw new Error(`JSON parse failed: ${err instanceof Error ? err.message : String(err)}`);
   }
-  const requiredKeys = ["tenant", "rowCounts", "data"];
+  // NOTE: must match the shape emitted by backupTenant(), which writes
+  // { meta, rowCounts, data }. The earlier version required "tenant",
+  // which no real backup file contains — so every genuine backup silently
+  // failed its own post-write integrity check and got marked failed.
+  const requiredKeys = ["meta", "rowCounts", "data"];
   for (const k of requiredKeys) {
     if (!(k in parsed)) throw new Error(`backup missing top-level key "${k}"`);
   }
@@ -474,5 +478,284 @@ async function collectTenantData(tenantId: string) {
     budgetLines,
     revenueProjections,
     pnlSnapshots,
+  };
+}
+
+// ===========================================================================
+// RESTORE
+// ===========================================================================
+
+/**
+ * Restore order: each backup `data` collection mapped to its Prisma
+ * delegate name, listed in FK-dependency order (parents before children).
+ * This mirrors collectTenantData()'s collection order, which is already
+ * topological. The tenant row itself is restored first, outside this list.
+ *
+ * Keeping this as an explicit list (rather than reflecting over the dump)
+ * makes the dependency ordering auditable and means an unknown/renamed key
+ * fails loudly instead of inserting in the wrong order.
+ */
+const RESTORE_ORDER: ReadonlyArray<readonly [dataKey: string, delegate: string]> = [
+  ["businessUnits", "businessUnit"],
+  ["memberships", "membership"],
+  ["companies", "company"],
+  ["contacts", "contact"],
+  ["vendors", "vendor"],
+  ["insuranceCerts", "insuranceCert"],
+  ["projects", "project"],
+  ["workflowTemplates", "workflowTemplate"],
+  ["notificationRules", "notificationRule"],
+  ["historicalEstimates", "historicalEstimate"],
+  ["opportunities", "opportunity"],
+  ["rfpSources", "rfpSource"],
+  ["rfpListings", "rfpListing"],
+  ["bidDrafts", "bidDraft"],
+  ["bidDraftSections", "bidDraftSection"],
+  ["bidDraftLineItems", "bidDraftLineItem"],
+  ["complianceChecks", "complianceCheck"],
+  ["complianceItems", "complianceItem"],
+  ["chartOfAccounts", "chartOfAccount"],
+  ["financialStatements", "financialStatement"],
+  ["journalEntries", "journalEntryRow"],
+  ["invoiceInbox", "invoiceInboxConnection"],
+  ["invoiceInboxMessages", "invoiceInboxMessage"],
+  ["alertRules", "alertRule"],
+  ["alertEvents", "alertEvent"],
+  ["historicalImports", "historicalImport"],
+  ["historicalImportRows", "historicalImportRow"],
+  ["aiRuns", "aiRunLog"],
+  ["recordComments", "recordComment"],
+  ["candidates", "candidate"],
+  ["jobRequisitions", "jobRequisition"],
+  ["submissions", "submission"],
+  ["placements", "placement"],
+  ["commissionRules", "commissionRule"],
+  ["commissionAccruals", "commissionAccrual"],
+  ["captureRecords", "captureRecord"],
+  ["captureMilestones", "captureMilestone"],
+  ["colorTeamReviews", "colorTeamReview"],
+  ["goNoGoDecisions", "goNoGoDecision"],
+  ["teamingPartners", "teamingPartner"],
+  ["onboardingPaths", "onboardingPath"],
+  ["onboardingSteps", "onboardingStep"],
+  ["bidProfile", "tenantBidProfile"],
+  ["auditEvents", "auditEvent"],
+  ["threads", "thread"],
+  ["threadMessages", "threadMessage"],
+  ["tasks", "task"],
+  ["rfis", "rFI"],
+  ["submittals", "submittal"],
+  ["documents", "document"],
+  ["drawings", "drawing"],
+  ["drawingSheets", "drawingSheet"],
+  ["specSections", "specSection"],
+  ["dailyLogs", "dailyLog"],
+  ["crewAssignments", "crewAssignment"],
+  ["productionEntries", "productionEntry"],
+  ["quantities", "quantityBudget"],
+  ["tickets", "ticket"],
+  ["safetyIncidents", "safetyIncident"],
+  ["punchItems", "punchItem"],
+  ["meetings", "meeting"],
+  ["inspections", "inspection"],
+  ["inspectionChecklistItems", "inspectionChecklistItem"],
+  ["inspectionAttachments", "inspectionAttachment"],
+  ["permits", "permit"],
+  ["contracts", "contract"],
+  ["contractCommitments", "contractCommitment"],
+  ["payApplications", "payApplication"],
+  ["payApplicationLines", "payApplicationLine"],
+  ["lienWaivers", "lienWaiver"],
+  ["changeOrders", "changeOrder"],
+  ["changeOrderLines", "changeOrderLine"],
+  ["purchaseOrders", "purchaseOrder"],
+  ["subInvoices", "subInvoice"],
+  ["timeEntries", "timeEntry"],
+  ["timeEntryComments", "timeEntryComment"],
+  ["bidPackages", "bidPackage"],
+  ["subBids", "subBid"],
+  ["warrantyItems", "warrantyItem"],
+  ["workflowRuns", "workflowRun"],
+  ["watchers", "watcher"],
+  ["approvalRoutes", "approvalRoute"],
+  ["approvals", "approval"],
+  ["equipmentRecords", "equipmentRecord"],
+  ["materialRecords", "materialRecord"],
+  ["scheduleTasks", "scheduleTask"],
+  ["scheduleDependencies", "scheduleDependency"],
+  ["budgets", "budget"],
+  ["budgetLines", "budgetLine"],
+  ["revenueProjections", "revenueProjection"],
+  ["pnlSnapshots", "projectPnlSnapshot"],
+];
+
+// ISO-8601 datetime detector. The backup serializer writes Date columns as
+// ISO strings (so the JSON is portable), but Prisma's createMany expects
+// Date objects for DateTime fields — so we coerce matching strings back.
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+function coerceRow(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (typeof v === "string" && ISO_DATETIME.test(v)) {
+      const d = new Date(v);
+      out[k] = Number.isNaN(d.getTime()) ? v : d;
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+export type RestoreTenantOptions = {
+  /**
+   * Authorization gate. restoreTenant is destructive (it writes a whole
+   * tenant graph) and MUST be super-admin only. The caller passes the
+   * result of a super-admin check; restore refuses to run when false.
+   */
+  isSuperAdmin: boolean;
+  /**
+   * Dry-run (default true). When true, validate + report planned row
+   * counts WITHOUT writing anything. The caller must explicitly pass
+   * `confirm: true` (and dryRun: false) to actually write.
+   */
+  dryRun?: boolean;
+  /** Must be true to perform a real write. Belt-and-suspenders with dryRun. */
+  confirm?: boolean;
+};
+
+export type RestoreTenantResult = {
+  ok: boolean;
+  dryRun: boolean;
+  tenantId?: string;
+  tenantSlug?: string;
+  planned: Record<string, number>;
+  restored?: Record<string, number>;
+  error?: string;
+};
+
+/**
+ * Restore one tenant's data graph from a backup JSON payload (the string
+ * written by backupTenant). Walks RESTORE_ORDER (FK dependency order),
+ * inserting with skipDuplicates so a partial-overlap restore is safe.
+ *
+ *   - Super-admin gated (opts.isSuperAdmin).
+ *   - Defaults to dry-run: returns planned counts and writes nothing unless
+ *     the caller passes { dryRun: false, confirm: true }.
+ *   - The whole write runs in a transaction so a mid-restore failure rolls
+ *     back rather than leaving a half-restored tenant.
+ *
+ * Returns a result object (never throws for expected failures like bad
+ * payload / not authorized); unexpected DB errors propagate the transaction
+ * rollback into result.error.
+ */
+export async function restoreTenant(payload: string, opts: RestoreTenantOptions): Promise<RestoreTenantResult> {
+  const dryRun = opts.dryRun !== false; // default true
+
+  if (!opts.isSuperAdmin) {
+    return { ok: false, dryRun, planned: {}, error: "restore requires super-admin" };
+  }
+
+  // Validate shape (throws → caught) before doing anything.
+  try {
+    verifyBackupContents(payload);
+  } catch (err) {
+    return { ok: false, dryRun, planned: {}, error: `invalid backup: ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  const parsed = JSON.parse(payload) as {
+    meta?: { tenantId?: string; tenantSlug?: string };
+    data: Record<string, unknown>;
+  };
+  const data = parsed.data;
+  const tenantRow = data.tenant as Record<string, unknown> | null | undefined;
+  if (!tenantRow || typeof tenantRow !== "object") {
+    return { ok: false, dryRun, planned: {}, error: "backup data.tenant missing" };
+  }
+
+  // Plan: count rows per collection.
+  const planned: Record<string, number> = {};
+  planned.tenant = 1;
+  for (const [key] of RESTORE_ORDER) {
+    const rows = data[key];
+    planned[key] = Array.isArray(rows) ? rows.length : 0;
+  }
+
+  if (dryRun || !opts.confirm) {
+    return {
+      ok: true,
+      dryRun: true,
+      tenantId: parsed.meta?.tenantId,
+      tenantSlug: parsed.meta?.tenantSlug,
+      planned,
+      error: !dryRun && !opts.confirm ? "confirm:true required to write" : undefined,
+    };
+  }
+
+  const restored: Record<string, number> = {};
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Upsert the tenant first so all FKs resolve.
+      const { id } = tenantRow as { id: string };
+      const tenantData = coerceRow(tenantRow as Record<string, unknown>);
+      await (tx as unknown as Record<string, { upsert: (a: unknown) => Promise<unknown> }>).tenant.upsert({
+        where: { id },
+        create: tenantData,
+        update: tenantData,
+      });
+      restored.tenant = 1;
+
+      for (const [key, delegate] of RESTORE_ORDER) {
+        const rows = data[key];
+        if (!Array.isArray(rows) || rows.length === 0) {
+          restored[key] = 0;
+          continue;
+        }
+        const model = (tx as unknown as Record<string, {
+          createMany: (a: unknown) => Promise<{ count: number }>;
+          findMany: (a: unknown) => Promise<Array<{ id: string }>>;
+        }>)[delegate];
+        if (!model) throw new Error(`unknown prisma delegate "${delegate}" for backup key "${key}"`);
+
+        let coerced = (rows as Array<Record<string, unknown>>).map(coerceRow);
+
+        // SQLite's createMany does NOT support skipDuplicates, so to stay
+        // idempotent we filter out rows whose primary key already exists.
+        // Every model in the dump keys on a scalar `id`.
+        const ids = coerced.map((r) => r.id).filter((v): v is string => typeof v === "string");
+        if (ids.length > 0) {
+          const existing = await model.findMany({ where: { id: { in: ids } }, select: { id: true } });
+          if (existing.length > 0) {
+            const have = new Set(existing.map((e) => e.id));
+            coerced = coerced.filter((r) => !(typeof r.id === "string" && have.has(r.id)));
+          }
+        }
+
+        if (coerced.length === 0) {
+          restored[key] = 0;
+          continue;
+        }
+        const res = await model.createMany({ data: coerced });
+        restored[key] = res.count;
+      }
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      dryRun: false,
+      tenantId: parsed.meta?.tenantId,
+      tenantSlug: parsed.meta?.tenantSlug,
+      planned,
+      error: `restore failed (rolled back): ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  return {
+    ok: true,
+    dryRun: false,
+    tenantId: parsed.meta?.tenantId,
+    tenantSlug: parsed.meta?.tenantSlug,
+    planned,
+    restored,
   };
 }
