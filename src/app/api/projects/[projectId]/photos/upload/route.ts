@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
+import { requireEditor } from "@/lib/permissions";
 import { getStorage } from "@/lib/storage";
 import { recordAudit } from "@/lib/audit";
 import { auth } from "@/lib/auth";
@@ -19,6 +20,14 @@ const MAX_PHOTOS_PER_REQUEST = 25;
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId: string }> }) {
   const tenant = await requireTenant();
+  // Writing photos is an edit. Viewers (read-only roles) must be rejected;
+  // requireTenant alone only proves the caller has *some* access to the
+  // tenant, not edit rights. Surface as 403 rather than a 500.
+  try {
+    await requireEditor(tenant.id);
+  } catch {
+    return NextResponse.json({ error: "Editor-level role required to upload photos." }, { status: 403 });
+  }
   const { projectId } = await ctx.params;
   const project = await prisma.project.findFirst({ where: { id: projectId, tenantId: tenant.id } });
   if (!project) return NextResponse.json({ error: "project not found" }, { status: 404 });
@@ -63,11 +72,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
       body: buf,
       contentType: detected,  // server-side classification, not client-supplied
     });
+    // Serve through the authenticated, tenant-scoped streaming route rather
+    // than the raw /uploads/ path (which nothing serves and which would
+    // break tenant isolation if exposed via public/). The key is
+    // tenant-prefixed by the storage adapter.
+    const servedUrl = `/api/files/${put.key.split("/").map(encodeURIComponent).join("/")}`;
     const photo = await prisma.projectPhoto.create({
       data: {
         projectId,
         albumId,
-        fileUrl: put.url,
+        fileUrl: servedUrl,
         caption,
         capturedAt: capturedAt && !Number.isNaN(capturedAt.getTime()) ? capturedAt : null,
         geoLat: Number.isFinite(geoLat) ? geoLat : null,
@@ -77,7 +91,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
         uploadedByName: session?.user?.name ?? null,
       },
     });
-    created.push({ id: photo.id, url: put.url });
+    created.push({ id: photo.id, url: servedUrl });
   }
 
   await recordAudit({
