@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import path from "node:path";
-import fs from "node:fs";
-import os from "node:os";
 import type { PrismaClient } from "@prisma/client";
+import { useTempDevDb } from "./_db";
 
 /**
  * Autonomous-workflow engine tests. Exercise:
@@ -20,11 +18,9 @@ import type { PrismaClient } from "@prisma/client";
  * Same temp-DB strategy as alerts.test.ts.
  */
 
-const devDb = path.resolve(__dirname, "..", "prisma", "dev.db");
-if (!fs.existsSync(devDb)) throw new Error("dev.db not found — run `npx prisma db push` first");
-const tmpDbPath = path.join(os.tmpdir(), `bcon-test-automations-${Date.now()}.db`);
-fs.copyFileSync(devDb, tmpDbPath);
-process.env.DATABASE_URL = `file:${tmpDbPath}`;
+// Copy dev.db to a throwaway temp file and bind DATABASE_URL to it before
+// the @/lib/prisma singleton is imported below (shared _db helper).
+const { cleanupFile } = useTempDevDb("automations");
 
 vi.mock("@/lib/notify", () => ({ notifyForAlert: vi.fn(async () => 0) }));
 
@@ -40,7 +36,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma?.$disconnect();
-  try { fs.unlinkSync(tmpDbPath); } catch { /* ignore */ }
+  cleanupFile();
 });
 
 async function freshTenant(label: string) {

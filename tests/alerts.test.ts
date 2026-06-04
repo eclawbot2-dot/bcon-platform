@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import path from "node:path";
-import fs from "node:fs";
-import os from "node:os";
 import type { PrismaClient } from "@prisma/client";
+import { useTempDevDb } from "./_db";
 
 /**
  * Alert-engine tests (round-3 review). Exercise:
@@ -17,12 +15,9 @@ import type { PrismaClient } from "@prisma/client";
  * is mocked so we can count dispatch attempts without touching any channel.
  */
 
-// Prepare the temp DB and env *before* any module that imports prisma loads.
-const devDb = path.resolve(__dirname, "..", "prisma", "dev.db");
-if (!fs.existsSync(devDb)) throw new Error("dev.db not found — run `npx prisma db push` first");
-const tmpDbPath = path.join(os.tmpdir(), `bcon-test-alerts-${Date.now()}.db`);
-fs.copyFileSync(devDb, tmpDbPath);
-process.env.DATABASE_URL = `file:${tmpDbPath}`;
+// Prepare the temp DB and env *before* any module that imports prisma loads
+// (shared _db helper copies dev.db and binds DATABASE_URL to the copy).
+const { cleanupFile } = useTempDevDb("alerts");
 
 vi.mock("@/lib/notify", () => ({
   notifyForAlert: vi.fn(async () => 1),
@@ -41,7 +36,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma?.$disconnect();
-  try { fs.unlinkSync(tmpDbPath); } catch { /* ignore */ }
+  cleanupFile();
 });
 
 async function freshTenant(label: string) {

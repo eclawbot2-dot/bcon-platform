@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import path from "node:path";
-import fs from "node:fs";
-import os from "node:os";
-import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import type { PrismaClient } from "@prisma/client";
+import { freshPrisma } from "./_db";
 
 /**
  * Workspace-transparency ingestion must stay tenant-scoped:
@@ -12,20 +9,18 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
  *   - The (mailboxId, externalId) unique constraint dedupes within a mailbox
  *     but does NOT collide across two tenants' mailboxes that share an
  *     external id (which Gmail/Graph ids can, across different mail systems).
+ *
+ * Uses an own-client Prisma against a throwaway copy of dev.db (shared
+ * _db helper) so the live developer database is never written.
  */
 
 let prisma: PrismaClient;
-let tmpDbPath: string;
+let cleanup: () => Promise<void>;
 let tenantA: string;
 let tenantB: string;
 
 beforeAll(async () => {
-  const devDb = path.resolve(__dirname, "..", "prisma", "dev.db");
-  if (!fs.existsSync(devDb)) throw new Error("dev.db missing — run npx prisma db push first");
-  tmpDbPath = path.join(os.tmpdir(), `bcon-test-mail-${Date.now()}.db`);
-  fs.copyFileSync(devDb, tmpDbPath);
-  const adapter = new PrismaBetterSqlite3({ url: `file:${tmpDbPath}` });
-  prisma = new PrismaClient({ adapter });
+  ({ prisma, cleanup } = freshPrisma("mail"));
   const a = await prisma.tenant.create({ data: { name: "Mail A", slug: `mA-${Date.now()}`, primaryMode: "VERTICAL" } });
   const b = await prisma.tenant.create({ data: { name: "Mail B", slug: `mB-${Date.now()}`, primaryMode: "VERTICAL" } });
   tenantA = a.id;
@@ -33,8 +28,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await prisma?.$disconnect();
-  try { fs.unlinkSync(tmpDbPath); } catch { /* ignore */ }
+  await cleanup();
 });
 
 async function seedMailbox(tenantId: string, email: string) {
