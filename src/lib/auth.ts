@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { consumeRateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { ssoProviders } from "@/lib/sso-providers";
 import { canUserLogin } from "@/lib/auth/login-policy";
+// Side-effect import: fails fast in production if AUTH_SECRET/NEXTAUTH_SECRET
+// or BCON_VAULT_KEY is missing or a dev/CI placeholder.
+import "@/lib/env-guard";
 
 const config: NextAuthConfig = {
   session: {

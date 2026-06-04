@@ -10,8 +10,12 @@
  */
 
 import crypto from "node:crypto";
+import { DEV_VAULT_KEY_DEFAULT } from "@/lib/env-guard";
 
-const MASTER_KEY = process.env.BCON_VAULT_KEY ?? "bcon-local-dev-key-change-in-prod-!!!!!!";
+// Importing env-guard runs assertProdSecrets() at load time, which throws
+// in production when BCON_VAULT_KEY is missing or equals the dev default
+// below — so we can never silently ship the dev key to prod.
+const MASTER_KEY = process.env.BCON_VAULT_KEY ?? DEV_VAULT_KEY_DEFAULT;
 
 function deriveKey(tenantId: string): Buffer {
   return crypto.createHash("sha256").update(`${MASTER_KEY}:${tenantId}`).digest();
