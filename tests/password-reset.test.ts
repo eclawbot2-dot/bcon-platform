@@ -1,21 +1,35 @@
 /**
  * Self-service password-reset flow: request (found / not-found) +
- * confirm (valid / expired / reused) against the live dev SQLite file,
- * matching the convention used by the other DB-touching tests
- * (tenant-isolation.test.ts). The lib uses the singleton prisma client
- * which points at prisma/dev.db, so the test seeds/reads that same file
- * directly via better-sqlite3.
+ * confirm (valid / expired / reused). The lib uses the singleton prisma
+ * client AND (via requestPasswordReset) the persistent rate-limiter, both
+ * of which bind to DATABASE_URL. We copy dev.db to a throwaway temp file
+ * and point both the singleton and our raw seeding handle at the copy, so
+ * the live developer database is never written (previously this test also
+ * wrote rate-limiter rows into dev.db).
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import path from "node:path";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from "vitest";
 import Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
+import { useTempDevDb } from "./_db";
 
-const dbFile = path.resolve(process.cwd(), "prisma", "dev.db");
+// Set DATABASE_URL to the temp copy. Static `import` statements are
+// hoisted, so the lib (and its prisma singleton + persistent rate-limiter,
+// both of which bind to DATABASE_URL at load) is imported DYNAMICALLY in
+// beforeAll — after this assignment runs — to guarantee it binds to the
+// temp copy and not dev.db.
+const { dbPath: dbFile, cleanupFile } = useTempDevDb("password-reset");
 
-// Import after env is settled.
-import { requestPasswordReset, confirmPasswordReset } from "@/lib/auth/password-reset";
+let requestPasswordReset: typeof import("@/lib/auth/password-reset").requestPasswordReset;
+let confirmPasswordReset: typeof import("@/lib/auth/password-reset").confirmPasswordReset;
+
+beforeAll(async () => {
+  ({ requestPasswordReset, confirmPasswordReset } = await import("@/lib/auth/password-reset"));
+});
+
+afterAll(() => {
+  cleanupFile();
+});
 
 const EMAIL = "pwreset-test@example.test";
 let userId = "";
