@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { ssoProviders } from "@/lib/sso-providers";
+import { canUserLogin } from "@/lib/auth/login-policy";
 
 const config: NextAuthConfig = {
   session: {
@@ -56,6 +57,14 @@ const config: NextAuthConfig = {
         const ok = await bcrypt.compare(password, user.password);
         if (!ok) return null;
 
+        // Access policy — "provisioned accounts only" unless a tenant opts
+        // into external logins (super-admins always allowed). Blocks any
+        // valid-credential email that isn't a member of any tenant.
+        if (!(await canUserLogin(user.id, user.superAdmin))) {
+          console.warn(`[auth] login blocked by access policy for ${email} (no membership; external logins off)`);
+          return null;
+        }
+
         // Successful auth — clear the throttle so a user who fat-fingered
         // their password a few times doesn't get locked out post-fix.
         resetRateLimit(key);
@@ -67,6 +76,26 @@ const config: NextAuthConfig = {
     ...ssoProviders(),
   ],
   callbacks: {
+    // Gate the SSO/OAuth providers (Okta / Azure AD / Google / Auth0) with
+    // the SAME access policy as credentials. The credentials provider runs
+    // canUserLogin inside authorize(); OAuth providers bypass authorize, so
+    // enforce it here. An OAuth identity is admitted only if it resolves to
+    // an existing, active provisioned User (member of some tenant) — or a
+    // super-admin, or any provisioned user once a tenant has opted into
+    // external logins. No User row → denied (we do NOT auto-create external
+    // accounts). The credentials provider returns its own user object and
+    // has already been gated, so it short-circuits as authorized here.
+    async signIn({ user, account }) {
+      if (!account || account.provider === "credentials") return true;
+      const email = user?.email?.trim().toLowerCase();
+      if (!email) return false;
+      const dbUser = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true, active: true, superAdmin: true },
+      });
+      if (!dbUser || !dbUser.active) return false;
+      return canUserLogin(dbUser.id, dbUser.superAdmin);
+    },
     async jwt({ token, user }) {
       if (user) {
         token.userId = (user as { id: string }).id;

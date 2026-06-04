@@ -45,10 +45,14 @@ export async function getCurrentTenant() {
   }
 
   if (slug) {
+    // Member of the named tenant, OR the tenant opted into external logins.
     const t = await prisma.tenant.findFirst({
       where: {
         slug,
-        memberships: { some: { userId: session.userId } },
+        OR: [
+          { memberships: { some: { userId: session.userId } } },
+          { allowExternalEmailLogins: true },
+        ],
       },
     });
     if (t) return t;
@@ -59,7 +63,14 @@ export async function getCurrentTenant() {
     include: { tenant: true },
     orderBy: { createdAt: "asc" },
   });
-  return m?.tenant ?? null;
+  if (m?.tenant) return m.tenant;
+
+  // No membership anywhere — fall back to an external-logins-enabled tenant
+  // (oldest first) so a permitted external user lands somewhere usable.
+  return prisma.tenant.findFirst({
+    where: { allowExternalEmailLogins: true },
+    orderBy: { createdAt: "asc" },
+  });
 }
 
 /** Shortcut that throws if no tenant is configured for the current caller. */

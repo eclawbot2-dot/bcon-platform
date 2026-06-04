@@ -400,6 +400,13 @@ model Tenant {
   // USD + en-US so existing US tenants are unchanged.
   currency          String      @default("USD")
   locale            String      @default("en-US")
+  // Access control (per-tenant). When false (the default) only provisioned
+  // accounts — users holding a Membership in some tenant — may log in;
+  // platform super-admins are always exempt. When true, this tenant also
+  // admits provisioned users who are NOT members of it. See
+  // src/lib/auth/login-policy.ts (canUserLogin) and the admin-gated toggle
+  // on the main settings page.
+  allowExternalEmailLogins Boolean @default(false)
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 

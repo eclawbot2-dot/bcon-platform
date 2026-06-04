@@ -8,6 +8,7 @@ import { actorIsAdmin } from "@/lib/permissions";
 import { formatDate, modeLabel, roleLabel } from "@/lib/utils";
 import { ProjectMode } from "@prisma/client";
 import { TestAiKeyButton } from "@/components/settings/test-ai-key-button";
+import { AccessControlForm } from "./access-control-form";
 
 const ROLE_TEMPLATES = ["ADMIN", "EXECUTIVE", "MANAGER", "PROJECT_ENGINEER", "SUPERINTENDENT", "FOREMAN", "CONTROLLER", "SAFETY_MANAGER", "QUALITY_MANAGER", "VIEWER"] as const;
 
@@ -51,6 +52,7 @@ export default async function SettingsPage() {
             <li><a href="#tenants" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">All tenants</a></li>
             <li><a href="#team" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">Team</a></li>
             <li><a href="#sso" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">SSO</a></li>
+            {showMailLink ? <li><a href="#access-control" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">Access control</a></li> : null}
             <li><a href="#ai-keys" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">AI keys</a></li>
             <li><a href="#audit" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">Audit</a></li>
             <li><a href="#backup" className="rounded-lg border border-white/10 px-3 py-1.5 hover:border-cyan-500/40">Backup</a></li>
@@ -221,6 +223,16 @@ export default async function SettingsPage() {
           </div>
           <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-slate-500">SSO wiring is scaffolded but not live — contact support to enable for production.</p>
         </section>
+
+        {showMailLink ? (
+          <section id="access-control" className="card p-6 scroll-mt-20">
+            <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Access control</div>
+            <p className="mt-1 text-sm text-slate-400">
+              Controls who may sign in to this tenant. Locked to provisioned members by default.
+            </p>
+            <AccessControlForm initial={tenant.allowExternalEmailLogins} />
+          </section>
+        ) : null}
 
         <section id="ai-keys" className="card p-6 scroll-mt-20">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">AI provider keys</div>
