@@ -1,0 +1,149 @@
+# bcon (construction-project) — Operational Runbook
+
+> Verified against the repo's deploy/CI/backup scripts and `process.env`
+> usage. Anything not confirmed in-repo is marked **VERIFY**.
+
+## 1. What it is
+
+bcon is a multi-tenant construction management platform supporting three
+operating modes (Simple PM, Vertical Building, Heavy Civil) from one codebase.
+
+- **Tenancy:** multi-tenant (`Tenant → Business Unit → Project`). Super-admins
+  with no tenant cookie land on `DEFAULT_TENANT_SLUG` if set, else the oldest
+  tenant. SSO providers (Okta/Azure AD/Google/Auth0) optional per env.
+- **Live URL:** https://bcon.jahdev.com (cloudflared tunnel). Public/canonical
+  per `.env.example` comment is also `bcon.velocitychs.com` — **VERIFY** which
+  hostname is canonical in prod. Local: http://localhost:3101.
+
+## 2. Run / deploy
+
+- **Services** (both registered by `scripts/install-services.ps1`, LocalSystem,
+  auto-start, restart-on-failure):
+  - `bcon-next` — NSSM-wrapped `node next start -p 3101`.
+  - `Cloudflared` — the named-tunnel daemon for bcon.jahdev.com, installed via
+    `cloudflared service install <token>` (token from `<repo>\.tunnel-token`,
+    the `bcon-jahdev` CF tunnel).
+- **Port:** 3101.
+
+First-time host setup: ensure `.tunnel-token` + `.env` exist, `npm run build`
+once, then `powershell -ExecutionPolicy Bypass -File scripts\install-services.ps1`.
+
+Routine deploy/rebuild: `deploy-bcon.ps1` reinstalls deps, regenerates Prisma,
+`db push`, seeds, builds, restarts `bcon-next`, and health-checks local + public.
+Flags: `-SkipBuild`, `-RestartTunnel`.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy-bcon.ps1
+```
+
+**Prisma engine DLL lock (Windows):** the running service locks
+`better-sqlite3` / Prisma native binaries. Stop the service before regenerating:
+
+```bash
+net stop bcon-next
+npm run db:generate
+net start bcon-next
+```
+
+## 3. Environment variables
+
+Values REDACTED. `src/lib/env-guard.ts` runs at `next build` (NODE_ENV=production)
+and **refuses to boot** if required secrets are missing/placeholder/too-short.
+
+**Required (production)**
+- `AUTH_SECRET` — NextAuth. `openssl rand -hex 32`.
+- `BCON_VAULT_KEY` — per-tenant secret-encryption (vault) key; encrypted-at-rest
+  portal credentials depend on it (`lib/rfp-geo.ts`). Must not equal dev default.
+- `CRON_SECRET` — Bearer gating `/api/cron/*` (incl. `/api/cron/backup`).
+
+**Auth / URL**
+- `AUTH_TRUST_HOST` (`true`), `AUTH_URL` (canonical, e.g.
+  `https://bcon.jahdev.com`), `NEXTAUTH_URL`, `APP_URL` — reset/redirect links.
+- `DEFAULT_TENANT_SLUG` — optional landing tenant for super-admins
+  (e.g. `velocity-demo`).
+
+**Database**
+- `DATABASE_URL` — optional; defaults to `file:./prisma/dev.db`. Postgres URL
+  also supported by the schema.
+
+**SSO providers** (all optional, enable per provider)
+- Okta: `OKTA_CLIENT_ID`, `OKTA_CLIENT_SECRET`, `OKTA_ISSUER`
+- Azure AD: `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET`, `AZURE_AD_TENANT_ID`
+- Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- Auth0: `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_ISSUER`
+
+**Email** (optional; unset = log-only)
+- `EMAIL_TRANSPORT`, `EMAIL_FROM`, `RESEND_API_KEY`, `SENDGRID_API_KEY`,
+  `NOTIFY_TRANSPORT`.
+
+**Integrations / AI / portals** (optional)
+- `SAM_GOV_API_KEY` — SAM.gov scraper.
+- `ENABLE_LLM_CALLS`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `ANTHROPIC_API_KEY`,
+  `ANTHROPIC_MODEL` — AI; deterministic mock fallback when unset.
+- `QUEUE_TRANSPORT`, `STORAGE_TRANSPORT` (+ `STORAGE_S3_*` as in `lib/storage.ts`:
+  `STORAGE_S3_BUCKET/REGION/ENDPOINT/ACCESS_KEY/SECRET_KEY/PUBLIC_URL`).
+
+**Observability / backups**
+- `ERROR_WEBHOOK_URL`, `ERROR_REPORT_SOURCE` (e.g. `bcon-prod`), `SENTRY_DSN`.
+- `BACKUP_RETENTION_DAYS` — physical backup retention (default 14).
+
+## 4. Database
+
+- **Provider:** SQLite via `@prisma/adapter-better-sqlite3`, file
+  `prisma/dev.db` (WAL). Schema is Postgres-promotable.
+- **Schema management:** **`prisma db push`** (NOT migrations). `deploy-bcon.ps1`
+  runs `db:generate` + `db:push`; CI uses `db push --accept-data-loss`.
+- **Audit triggers:** `scripts/install-audit-triggers.ts` installs append-only
+  triggers — reinstall after a restore. **VERIFY** whether deploy reinstalls
+  them automatically (not wired into `deploy-bcon.ps1`; run manually after
+  restore: `npx tsx scripts/install-audit-triggers.ts`).
+
+**Backup** — `npx tsx scripts/db-backup.ts` (or Task Scheduler via
+`scripts/register-db-backup-task.ps1`): WAL checkpoint + `VACUUM INTO`
+`backups/db/<ts>.db`, runs `integrity_check`, prunes > `BACKUP_RETENTION_DAYS`.
+A logical per-tenant JSON export also exists (`src/lib/backup.ts`).
+
+**Restore:**
+```bash
+net stop bcon-next
+copy /Y backups\db\<ts>.db prisma\dev.db
+del prisma\dev.db-wal prisma\dev.db-shm
+npx tsx scripts/install-audit-triggers.ts
+net start bcon-next
+```
+
+## 5. CI
+
+`.github/workflows/ci.yml` on push/PR to `main` (Node 22; strong CI secrets so
+`env-guard` passes): `npm ci` → `prisma generate` → `prisma db push
+--accept-data-loss` → **`tsc --noEmit`** → **`vitest run`** → **`next build`**
+→ seed-portals smoke. `dependency-audit.yml` + npm-audit/SBOM steps are
+advisory. The three bold steps must stay green.
+
+## 6. Health / observability
+
+- **Health:** `GET /api/health` — reports db, `QUEUE_TRANSPORT`,
+  `STORAGE_TRANSPORT`, `NOTIFY_TRANSPORT`, NODE_ENV; elevated detail with
+  `Authorization: Bearer <CRON_SECRET>`.
+- **Error reporting:** `ERROR_WEBHOOK_URL` (+ `ERROR_REPORT_SOURCE`), `SENTRY_DSN`.
+- **Watchdog:** none in-repo beyond NSSM restart-on-exit + SCM recovery actions
+  (Cloudflared auto-restarts at 20s). `deploy-bcon.ps1` health-checks after restart.
+
+## 7. Common ops
+
+- **Logs:** `logs\bcon-next.out.log`, `logs\bcon-next.err.log` (NSSM, rotated
+  at 5 MiB).
+- **Rotate a secret:** edit `.env`, then `net stop bcon-next && net start
+  bcon-next` (or re-run `install-services.ps1` to refresh `AppEnvironmentExtra`).
+  Rotating `BCON_VAULT_KEY` invalidates all encrypted-at-rest portal creds —
+  re-enter them after rotation.
+- **Add a user / make an admin:** users/roles are managed in-app via tenant
+  admin pages (`/api/tenant/*`, `/api/admin/tenants/*`); the seed
+  (`prisma/seed.ts`) creates demo tenants + admins. **VERIFY** the seeded admin
+  credentials for the target tenant.
+- **Create a tenant:** super-admin via `/api/admin/tenants/create` (in-app).
+- **Run a cron manually:** `curl -H "Authorization: Bearer <CRON_SECRET>"
+  http://localhost:3101/api/cron/<name>`. Cron routes: `alert-scan`,
+  `audit-prune`, `automations-dispatch`, `backup`, `inspections-sync`,
+  `mail-ingest`, `rfp-sweep`, `verify-portals`, `weather-capture`. Schedules
+  are registered by the `scripts/register-*-task.ps1` Task Scheduler scripts.
