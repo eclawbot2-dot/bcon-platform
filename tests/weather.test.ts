@@ -127,5 +127,39 @@ describe("captureWeatherForProject", () => {
     const res = await captureWeatherForProject(project.id);
     expect(res.ok).toBe(true);
     expect(res.action).toBe("no-coords");
+    // graceful: a coordinate-less project must not get a phantom log row
+    const count = await prisma.dailyLog.count({ where: { projectId: project.id } });
+    expect(count).toBe(0);
+  });
+
+  it("returns no-weather (and writes nothing) when the upstream fetch fails", async () => {
+    const project = await newProjectWithCoords(47.6, -122.33);
+    // Non-OK response -> fetchCurrentWeather returns null -> action no-weather.
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("upstream down", { status: 503 }),
+    );
+    try {
+      const res = await captureWeatherForProject(project.id);
+      expect(res.ok).toBe(true);
+      expect(res.action).toBe("no-weather");
+      const count = await prisma.dailyLog.count({ where: { projectId: project.id } });
+      expect(count).toBe(0); // no half-written log on a failed pull
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("is idempotent across repeated sweeps — never creates a duplicate same-day log", async () => {
+    const project = await newProjectWithCoords(41.88, -87.63);
+    const spy = mockMeteo(1, 70);
+    try {
+      await captureWeatherForProject(project.id); // created
+      await captureWeatherForProject(project.id); // skipped-has-weather
+      await captureWeatherForProject(project.id); // skipped-has-weather
+      const count = await prisma.dailyLog.count({ where: { projectId: project.id } });
+      expect(count).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
