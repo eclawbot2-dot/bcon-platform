@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { roundCents, sumMoney, multiplyMoney, subtractMoney, addMoney, percentOf, toCents, fromCents, eqMoney } from "../src/lib/money";
+import { roundCents, sumMoney, multiplyMoney, subtractMoney, addMoney, percentOf, toCents, fromCents, eqMoney, burdenedLaborCost } from "../src/lib/money";
 
 describe("money — Float drift safety", () => {
   it("0.1 + 0.2 sums exactly to 0.30, not 0.30000000000000004", () => {
@@ -49,5 +49,33 @@ describe("money — Float drift safety", () => {
     expect(eqMoney(0.1 + 0.2, 0.3)).toBe(true);
     expect(eqMoney(100.001, 100.00)).toBe(true);
     expect(eqMoney(100.02, 100.00)).toBe(false);
+  });
+});
+
+describe("burdenedLaborCost — exact base+burden math", () => {
+  it("adds an exact burden leg on top of base labor", () => {
+    // 40h × $35/h = $1400 base; 32% burden = $448; total $1848.
+    expect(burdenedLaborCost(1400, 32)).toBe(1848);
+  });
+
+  it("rounds the burden leg to cents (no IEEE drift)", () => {
+    // $1234.56 base @ 12.5% burden = $154.32 → total $1388.88.
+    expect(burdenedLaborCost(1234.56, 12.5)).toBe(1388.88);
+  });
+
+  it("treats a Prisma Decimal burdenRate (duck-typed .toNumber) identically", () => {
+    const decimalBurden = { toNumber: () => 32 }; // mirrors a Decimal column value
+    expect(burdenedLaborCost(1400, decimalBurden)).toBe(1848);
+  });
+
+  it("zero burden returns base unchanged; null burden treated as 0", () => {
+    expect(burdenedLaborCost(1400, 0)).toBe(1400);
+    expect(burdenedLaborCost(1400, null)).toBe(1400);
+  });
+
+  it("is stable summed across many lines (penny-exact)", () => {
+    // Three lines at $0.10 base with a 50% burden each = $0.15 line, $0.45 total.
+    const lines = [0.1, 0.1, 0.1].map((b) => burdenedLaborCost(b, 50));
+    expect(sumMoney(lines)).toBe(0.45);
   });
 });

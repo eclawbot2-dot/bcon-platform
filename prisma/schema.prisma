@@ -1065,7 +1065,7 @@ model Employee {
   baseRate        Decimal   @default(0)
   fringeRate      Decimal   @default(0) // hourly fringes for union/prevailing wage
   perDiemRate     Decimal   @default(0)
-  burdenRate      Float     @default(0) // employer taxes + benefits as % of base (percentage, not dollars)
+  burdenRate      Decimal   @default(0) // employer taxes + benefits as % of base (percentage, not dollars). Decimal so base×burden% stays exact end-to-end into PayrollRunLine.burden.
   // Tax / withholding setup (high-level; details in payroll system)
   w4Filing        String?
   state           String?

@@ -60,6 +60,21 @@ export function percentOf(amount: MoneyLike, ratePct: MoneyLike): number {
   return multiplyMoney(amount, toNum(ratePct) / 100);
 }
 
+/**
+ * Burdened labor cost = base labor + (base labor × burden%).
+ *
+ * `baseLabor` is the gross hourly-rate × hours figure (dollars). `burdenPct`
+ * is the employer-tax + benefits load expressed as a percentage of base
+ * (e.g. 32 means 32%), matching Employee.burdenRate. Both legs route through
+ * the cents-safe primitives so the burden leg never drifts and the sum is
+ * exact — this is what hits PayrollRunLine.burden / totalCost.
+ */
+export function burdenedLaborCost(baseLabor: MoneyLike, burdenPct: MoneyLike): number {
+  const base = roundCents(baseLabor);
+  const burden = percentOf(base, burdenPct);
+  return addMoney(base, burden);
+}
+
 /** Convert dollars to integer cents (useful for cents-only models). */
 export function toCents(dollars: MoneyLike): number {
   return Math.round(toNum(dollars) * 100);
