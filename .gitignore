@@ -9,6 +9,9 @@ uploads/
 prisma/dev.db
 prisma/dev.db-journal
 prisma/*.db
+# SQLite WAL/SHM sidecars (created at runtime by better-sqlite3 in WAL mode)
+prisma/*.db-wal
+prisma/*.db-shm
 backups/
 *.log
 npm-debug.log*
