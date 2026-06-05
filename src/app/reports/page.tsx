@@ -1,3 +1,8 @@
+/* eslint-disable @next/next/no-html-link-for-pages --
+   The CSV export links below point at /api/reports/* route handlers that
+   stream a file download, not Next.js *pages*. A plain <a> is correct here;
+   <Link> would attempt a client-side navigation and break the download. The
+   rule matches the path shape and can't tell these are API routes. */
 import { AppLayout } from "@/components/layout/app-layout";
 import { SortableTable } from "@/components/SortableTable";
 import {

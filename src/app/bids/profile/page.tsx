@@ -59,7 +59,7 @@ export default async function BidProfilePage() {
         <section className="card p-6">
           <div className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--accent, #67e8f9)" }}>Matching profile</div>
           <p className="mt-2 text-sm" style={{ color: "var(--faint)" }}>
-            Comma- or newline-separated lists. Empty fields mean "no preference" and get a neutral 0.5 fit score.
+            Comma- or newline-separated lists. Empty fields mean &quot;no preference&quot; and get a neutral 0.5 fit score.
           </p>
           <form action="/api/bid-profile/save" method="post" className="mt-4 grid gap-4">
             <div>
@@ -71,7 +71,7 @@ export default async function BidProfilePage() {
               <div>
                 <label htmlFor="bp-sa" className="form-label">Set-asides we qualify for</label>
                 <ChipInput name="qualifiedSetAsides" defaultValue={qualifiedSetAsides.join("\n")} placeholder="Add set-aside (e.g. SDVOSB)…" />
-                <p className="mt-1 text-xs" style={{ color: "var(--faint)" }}>Listings restricted to set-asides we don't hold drop to 0 score on this signal. Unrestricted listings still score 0.7.</p>
+                <p className="mt-1 text-xs" style={{ color: "var(--faint)" }}>Listings restricted to set-asides we don&apos;t hold drop to 0 score on this signal. Unrestricted listings still score 0.7.</p>
               </div>
               <div>
                 <label htmlFor="bp-tiers" className="form-label">Preferred agency tiers</label>
@@ -113,7 +113,7 @@ export default async function BidProfilePage() {
               <div>
                 <label htmlFor="bp-block" className="form-label">Block keywords</label>
                 <ChipInput name="blockKeywords" defaultValue={blockKeywords.join("\n")} placeholder="Add keyword (e.g. demolition only)…" />
-                <p className="mt-1 text-xs" style={{ color: "var(--faint)" }}>Any match drives the keyword fit to 0 — useful for scopes you don't pursue.</p>
+                <p className="mt-1 text-xs" style={{ color: "var(--faint)" }}>Any match drives the keyword fit to 0 — useful for scopes you don&apos;t pursue.</p>
               </div>
             </div>
 
@@ -121,7 +121,7 @@ export default async function BidProfilePage() {
               <label htmlFor="bp-hot" className="form-label">Hot threshold ({profile?.hotThreshold ?? 70})</label>
               <input id="bp-hot" name="hotThreshold" type="range" min={50} max={95} step={5} defaultValue={profile?.hotThreshold ?? 70} className="w-full" />
               <p className="mt-1 text-xs" style={{ color: "var(--faint)" }}>
-                Listings scoring at-or-above this become "hot." Sources with auto-draft enabled fire the bid pipeline automatically when their listings cross this score.
+                Listings scoring at-or-above this become &quot;hot.&quot; Sources with auto-draft enabled fire the bid pipeline automatically when their listings cross this score.
               </p>
             </div>
 

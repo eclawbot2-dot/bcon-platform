@@ -308,7 +308,7 @@ export default async function SettingsPage() {
         <section id="backup" className="card p-6 scroll-mt-20">
           <div className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--accent, #67e8f9)" }}>Backup status</div>
           <p className="mt-2 text-sm" style={{ color: "var(--faint)" }}>
-            Read-only view of this tenant's nightly backup. Configuration (enabled flag, external directory, run-now) lives on the super-admin tenant page.
+            Read-only view of this tenant&apos;s nightly backup. Configuration (enabled flag, external directory, run-now) lives on the super-admin tenant page.
           </p>
           <div className="mt-3 grid gap-2 md:grid-cols-2 text-sm">
             <div>

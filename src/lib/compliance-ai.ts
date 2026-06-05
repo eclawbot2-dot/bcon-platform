@@ -280,7 +280,7 @@ export async function draftChangeOrderJustification(coId: string, tenantId: stri
       const cv = toNum(co.project.contractValue);
       const pctOfContract = cv > 0 ? (toNum(co.amount) / cv) * 100 : 0;
 
-      let costBreakdownLines: string[] = [`Subtotal of direct costs: $${subtotal.toLocaleString()}`];
+      const costBreakdownLines: string[] = [`Subtotal of direct costs: $${subtotal.toLocaleString()}`];
       for (const cat of ["LABOR", "MATERIAL", "EQUIPMENT", "SUB"]) {
         if (byCategory[cat]) costBreakdownLines.push(`  ${cat.charAt(0) + cat.slice(1).toLowerCase()}: $${Math.round(byCategory[cat]).toLocaleString()}`);
       }

@@ -30,7 +30,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
                 <span className={"inline-flex rounded-full border px-3 py-0.5 text-xs uppercase tracking-[0.18em] " + (t.sentiment === "POS" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200" : t.sentiment === "NEG" ? "border-rose-500/40 bg-rose-500/10 text-rose-200" : "border-amber-500/40 bg-amber-500/10 text-amber-200")}>{t.sentiment}</span>
                 <div className="text-lg font-semibold text-white">{t.theme}</div>
               </div>
-              {t.quoteExcerpt ? <p className="mt-3 text-sm text-slate-400 italic">"{t.quoteExcerpt}…"</p> : null}
+              {t.quoteExcerpt ? <p className="mt-3 text-sm text-slate-400 italic">&ldquo;{t.quoteExcerpt}…&rdquo;</p> : null}
             </section>
           ))}
           <section className="card p-6">

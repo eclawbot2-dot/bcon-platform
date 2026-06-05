@@ -44,14 +44,14 @@ export default async function AdminTenantDetailPage({
         <section className="card p-5" style={{ borderColor: "rgba(34, 211, 238, 0.4)" }}>
           <div className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--accent, #67e8f9)" }}>One-time admin credential</div>
           <p className="mt-2 text-sm" style={{ color: "var(--heading)" }}>
-            New admin user just created. Copy this temp password and hand it to <code className="font-mono">{sp.adminEmail}</code> out-of-band — they'll change it on first login.
+            New admin user just created. Copy this temp password and hand it to <code className="font-mono">{sp.adminEmail}</code> out-of-band — they&apos;ll change it on first login.
           </p>
           <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto_auto]">
             <code className="rounded-lg p-2 font-mono text-sm" style={{ background: "var(--hover-bg)", color: "var(--heading)" }}>{sp.adminTemp}</code>
-            <Link href={`/admin/tenants/${tenantId}`} className="btn-outline text-xs">I've copied it — dismiss</Link>
+            <Link href={`/admin/tenants/${tenantId}`} className="btn-outline text-xs">I&apos;ve copied it — dismiss</Link>
           </div>
           <p className="mt-2 text-xs" style={{ color: "var(--faint)" }}>
-            This banner only renders while these query params are in the URL. Once you click dismiss, the password is gone — there's no way to retrieve it later. If you lose it, super-admins can reset it via the user's detail page.
+            This banner only renders while these query params are in the URL. Once you click dismiss, the password is gone — there&apos;s no way to retrieve it later. If you lose it, super-admins can reset it via the user&apos;s detail page.
           </p>
         </section>
       ) : null}

@@ -13,7 +13,7 @@ export default async function Home() {
         <div className="card p-8">
           <h2 className="text-lg font-semibold" style={{ color: "var(--heading)" }}>Welcome.</h2>
           <p className="mt-2 text-sm" style={{ color: "var(--faint)" }}>
-            Your account isn't linked to a tenant yet. Ask your administrator to add you to a tenant, or contact the platform operator.
+            Your account isn&apos;t linked to a tenant yet. Ask your administrator to add you to a tenant, or contact the platform operator.
           </p>
         </div>
       </AppLayout>
@@ -29,7 +29,7 @@ export default async function Home() {
       >
         <div className="grid gap-6">
           <section className="card p-8 border-cyan-500/30 bg-gradient-to-br from-cyan-950/40 to-slate-950">
-            <h2 className="text-2xl font-semibold text-white">Welcome, let's get you set up</h2>
+            <h2 className="text-2xl font-semibold text-white">Welcome, let&apos;s get you set up</h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-300">
               Construction OS supports simple PM, vertical building, and heavy civil teams in one workspace. Most onboardings finish in under 15 minutes.
             </p>

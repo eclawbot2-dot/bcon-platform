@@ -132,7 +132,7 @@ export default async function CapturePage() {
         )}
 
         <p className="text-xs" style={{ color: "var(--faint)" }}>
-          Decisions are append-only — a CONDITIONAL_GO followed by a NO_GO writes both rows so the rationale chain stays auditable. Use the inline "Decide" column above.
+          Decisions are append-only — a CONDITIONAL_GO followed by a NO_GO writes both rows so the rationale chain stays auditable. Use the inline &quot;Decide&quot; column above.
         </p>
 
         <div className="text-xs" style={{ color: "var(--faint)" }}>

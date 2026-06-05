@@ -41,7 +41,7 @@ export default function TrustPage() {
         <ul>
           <li>Every query against the data layer is scoped by <code>tenantId</code>. <code>requireTenant()</code> enforces this at the route boundary.</li>
           <li>Cross-tenant data leakage paths blocked by Prisma WHERE clauses; static analysis catches missed scopes during code review.</li>
-          <li>The audit log tables include <code>tenantId</code> so even compliance evidence can't leak across customers.</li>
+          <li>The audit log tables include <code>tenantId</code> so even compliance evidence can&apos;t leak across customers.</li>
         </ul>
       </Section>
 
@@ -76,14 +76,14 @@ export default function TrustPage() {
         <ul>
           <li>Edge middleware enforces Origin/Host check on every non-GET API request.</li>
           <li>Per-tenant LLM keys form has additional defense-in-depth Origin check.</li>
-          <li>React's automatic JSX escaping covers stored content; user input is parameterized via Prisma (no raw SQL).</li>
+          <li>React&apos;s automatic JSX escaping covers stored content; user input is parameterized via Prisma (no raw SQL).</li>
           <li>CSV exports defang formula-injection leaders (<code>=</code>, <code>+</code>, <code>-</code>, <code>@</code>, tab) per OWASP guidance.</li>
         </ul>
       </Section>
 
       <Section title="AI provider posture">
         <ul>
-          <li>Tenants may configure their own OpenAI / Anthropic API keys so AI usage bills directly to the customer's provider account.</li>
+          <li>Tenants may configure their own OpenAI / Anthropic API keys so AI usage bills directly to the customer&apos;s provider account.</li>
           <li>Per-tenant rate limit (60 calls/min) caps runaway loops; over-limit calls fall back to deterministic mock and warn.</li>
           <li>AI prompts and responses are logged in <code>AiRunLog</code> with tenant scope; not shared cross-tenant.</li>
           <li>No customer data is sent to a model provider unless ENABLE_LLM_CALLS is true and a key is configured.</li>
@@ -106,7 +106,7 @@ export default function TrustPage() {
       </Section>
 
       <footer className="mt-12 border-t border-white/10 pt-6 text-xs text-slate-500">
-        <p>Have a procurement question this page didn't answer? Email <a href="mailto:hello@bcon.jahdev.com" className="text-cyan-300 hover:underline">hello@bcon.jahdev.com</a>.</p>
+        <p>Have a procurement question this page didn&apos;t answer? Email <a href="mailto:hello@bcon.jahdev.com" className="text-cyan-300 hover:underline">hello@bcon.jahdev.com</a>.</p>
         <p className="mt-2">Back to <Link href="/" className="text-cyan-300 hover:underline">Construction OS</Link>.</p>
       </footer>
     </main>

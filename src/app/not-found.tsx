@@ -12,7 +12,7 @@ export default function NotFound() {
       <div className="login-card text-center">
         <header>
           <h1 style={{ color: "var(--heading)" }}>404</h1>
-          <p style={{ color: "var(--faint)" }}>That page doesn't exist or you don't have access to it.</p>
+          <p style={{ color: "var(--faint)" }}>That page doesn&apos;t exist or you don&apos;t have access to it.</p>
         </header>
         <div className="mt-6 flex justify-center gap-3">
           <Link href="/" className="btn-primary">Go home</Link>

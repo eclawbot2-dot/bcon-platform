@@ -79,7 +79,7 @@ export default async function BidsPortfolioPage() {
 
         <section className="card p-6">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Pipeline funnel</div>
-          <p className="mt-1 text-xs text-slate-400">Listings by status — what's queued, what you're chasing, what closed.</p>
+          <p className="mt-1 text-xs text-slate-400">Listings by status — what&apos;s queued, what you&apos;re chasing, what closed.</p>
           <div className="mt-4 grid gap-2">
             {["NEW", "TRIAGED", "QUALIFIED", "PURSUING", "SUBMITTED", "WON", "LOST", "DECLINED"].map((status) => {
               const count = countByStatus(status);
