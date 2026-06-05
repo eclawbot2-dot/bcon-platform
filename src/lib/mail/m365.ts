@@ -136,7 +136,7 @@ export class M365MailProvider implements MailProvider {
     const out: MailParsedMessage[] = [];
     while (url && out.length < max) {
       const data: {
-        value?: Array<any>;
+        value?: GraphMessage[];
         "@odata.nextLink"?: string;
       } = await this.graph(url);
       for (const m of data.value ?? []) {
@@ -221,10 +221,23 @@ export class M365MailProvider implements MailProvider {
   }
 }
 
-function parseGraphMessage(m: any): MailParsedMessage {
+type GraphRecipient = { emailAddress?: { address?: string; name?: string } };
+type GraphMessage = {
+  id?: string;
+  subject?: string;
+  from?: GraphRecipient;
+  toRecipients?: GraphRecipient[];
+  receivedDateTime?: string;
+  bodyPreview?: string;
+  body?: { contentType?: string; content?: string };
+  hasAttachments?: boolean;
+  parentFolderId?: string;
+};
+
+function parseGraphMessage(m: GraphMessage): MailParsedMessage {
   const fromAddr = (m.from?.emailAddress?.address || "").toLowerCase() || "unknown@unknown";
   const fromName = m.from?.emailAddress?.name || null;
-  const to = ((m.toRecipients ?? []) as Array<any>)
+  const to = (m.toRecipients ?? [])
     .map((r) => (r.emailAddress?.address || "").toLowerCase())
     .filter(Boolean);
   const contentType = m.body?.contentType;

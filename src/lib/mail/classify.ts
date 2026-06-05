@@ -89,7 +89,7 @@ function buildPrompt(input: MailClassifyInput): string {
 
 function parseLlm(raw: string, input: MailClassifyInput): MailClassification {
   const cleaned = raw.replace(/^```(?:json)?/i, "").replace(/```\s*$/, "").trim();
-  let parsed: any;
+  let parsed: { classification?: string; confidence?: number; reasoning?: string };
   try {
     parsed = JSON.parse(cleaned);
   } catch {
@@ -97,12 +97,16 @@ function parseLlm(raw: string, input: MailClassifyInput): MailClassification {
     if (!m) return classifyDeterministic(input);
     parsed = JSON.parse(m[0]);
   }
-  const cls = (MAIL_CLASSES as readonly string[]).includes(parsed.classification)
+  const cls = (MAIL_CLASSES as readonly string[]).includes(parsed.classification ?? "")
     ? (parsed.classification as MailClass)
     : "OTHER";
+  const confidence =
+    typeof parsed.confidence === "number" && Number.isFinite(parsed.confidence)
+      ? Math.max(0, Math.min(1, parsed.confidence))
+      : 0.5;
   return {
     classification: cls,
-    confidence: Number.isFinite(parsed.confidence) ? Math.max(0, Math.min(1, parsed.confidence)) : 0.5,
+    confidence,
     model: "llm",
     reasoning: typeof parsed.reasoning === "string" ? parsed.reasoning.slice(0, 1000) : null,
   };

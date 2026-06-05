@@ -242,7 +242,7 @@ export class GoogleMailProvider implements MailProvider {
     messageId: string,
     labelMap: Map<string, string>,
   ): Promise<MailParsedMessage> {
-    const m = await gapi<any>(
+    const m = await gapi<GmailMessage>(
       token,
       `${GMAIL_BASE}/${encodeURIComponent(userEmail)}/messages/${messageId}?format=full`,
     );
@@ -252,7 +252,7 @@ export class GoogleMailProvider implements MailProvider {
     const toList = splitAddresses(h("to")).map((a) => parseAddress(a).address || "").filter(Boolean);
     const dateRaw = h("date");
     const { text } = extractBodies(m.payload);
-    const hasAttachments = (function walk(part: any): boolean {
+    const hasAttachments = (function walk(part: GmailPart | undefined): boolean {
       if (!part) return false;
       if (part.filename && part.body?.attachmentId) return true;
       return (part.parts || []).some(walk);
@@ -280,6 +280,23 @@ export class GoogleMailProvider implements MailProvider {
   }
 }
 
+// Minimal shapes for the Gmail `messages.get?format=full` payload we touch.
+type GmailHeader = { name: string; value: string };
+type GmailPart = {
+  mimeType?: string;
+  filename?: string;
+  body?: { data?: string; attachmentId?: string };
+  parts?: GmailPart[];
+  headers?: GmailHeader[];
+};
+type GmailMessage = {
+  id?: string;
+  snippet?: string;
+  internalDate?: string;
+  labelIds?: string[];
+  payload?: GmailPart;
+};
+
 function parseAddress(raw: string): { name: string | null; address: string | null } {
   const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/.exec(raw);
   if (m) return { name: m[1].trim() || null, address: m[2].trim().toLowerCase() };
@@ -301,10 +318,10 @@ function splitAddresses(raw: string): string[] {
   return out;
 }
 
-function extractBodies(payload: any): { text: string | null } {
+function extractBodies(payload: GmailPart | undefined): { text: string | null } {
   let text: string | null = null;
   let html: string | null = null;
-  function walk(p: any) {
+  function walk(p: GmailPart | undefined) {
     if (!p) return;
     const data = p.body?.data;
     if (data) {
