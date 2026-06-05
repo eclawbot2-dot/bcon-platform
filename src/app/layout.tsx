@@ -7,7 +7,8 @@ import { FlashToast } from "@/components/ui/flash-toast";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // No maximumScale/userScalable lock — pinch-zoom must stay available
+  // (WCAG 1.4.4 Resize Text); field crews zoom into photos/specs on phones.
   viewportFit: "cover",
   themeColor: "#0f172a",
 };

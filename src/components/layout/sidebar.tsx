@@ -115,7 +115,7 @@ export async function Sidebar() {
         </Link>
       ) : null}
 
-      <nav className="px-3 py-3 space-y-4">
+      <nav aria-label="Primary" className="px-3 py-3 space-y-4">
         {navGroups.map((group) => (
           <div key={group.title}>
             <div className="px-3 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: "var(--heading)" }}>{group.title}</div>
@@ -132,7 +132,7 @@ export async function Sidebar() {
                   >
                     <Icon className="h-4 w-4 text-cyan-300" />
                     <span className="flex-1">{item.label}</span>
-                    {badge ? <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold text-rose-200">{badge}</span> : null}
+                    {badge ? <span aria-label={`${badge} unacknowledged alerts`} className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold text-rose-200">{badge}</span> : null}
                   </Link>
                 );
               })}
