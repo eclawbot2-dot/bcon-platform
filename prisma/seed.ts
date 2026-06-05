@@ -374,14 +374,64 @@ async function main() {
         },
       });
 
+      const now = new Date();
+      const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000);
+      const subPrefix = project.mode === ProjectMode.VERTICAL ? "SUB" : "SUB-CIV";
+      // A spread of ball-in-court states so the register/aging dashboard
+      // shows reviewer-held (overdue), contractor-held, and closed rows.
       await prisma.submittal.create({
         data: {
           projectId: project.id,
-          number: project.mode === ProjectMode.VERTICAL ? "SUB-033" : "SUB-CIV-008",
+          number: `${subPrefix}-033`,
           title: project.mode === ProjectMode.VERTICAL ? "Storefront system" : "Ductile iron pipe and fittings",
           specSection: project.mode === ProjectMode.VERTICAL ? "084113" : "331111",
           status: WorkflowStatus.UNDER_REVIEW,
           longLead: project.mode === ProjectMode.VERTICAL,
+          currentReviewerEmail: "architect@designteam.example.com",
+          sentToReviewerAt: daysAgo(21),
+          submittedAt: daysAgo(22),
+          submittedBy: "Paula PM",
+        },
+      });
+      await prisma.submittal.create({
+        data: {
+          projectId: project.id,
+          number: `${subPrefix}-034`,
+          title: project.mode === ProjectMode.VERTICAL ? "Elevator shop drawings" : "Precast manhole structures",
+          specSection: project.mode === ProjectMode.VERTICAL ? "142100" : "334100",
+          status: WorkflowStatus.UNDER_REVIEW,
+          longLead: true,
+          currentReviewerEmail: "engineer@designteam.example.com",
+          sentToReviewerAt: daysAgo(6),
+          submittedAt: daysAgo(7),
+          submittedBy: "Paula PM",
+        },
+      });
+      await prisma.submittal.create({
+        data: {
+          projectId: project.id,
+          number: `${subPrefix}-035`,
+          title: project.mode === ProjectMode.VERTICAL ? "Curtainwall samples" : "Pipe bedding gradation",
+          specSection: project.mode === ProjectMode.VERTICAL ? "084413" : "312323",
+          status: WorkflowStatus.REJECTED,
+          resubmittalCount: 1,
+          rejectedAt: daysAgo(18),
+          rejectedBy: "architect@designteam.example.com",
+          rejectionReason: "Revise and resubmit — finish does not match approved sample.",
+          updatedAt: daysAgo(18),
+        },
+      });
+      await prisma.submittal.create({
+        data: {
+          projectId: project.id,
+          number: `${subPrefix}-031`,
+          title: project.mode === ProjectMode.VERTICAL ? "Concrete mix design" : "Aggregate base mix design",
+          specSection: project.mode === ProjectMode.VERTICAL ? "033000" : "320111",
+          status: WorkflowStatus.APPROVED,
+          submittedAt: daysAgo(40),
+          submittedBy: "Paula PM",
+          approvedAt: daysAgo(33),
+          approvedBy: "engineer@designteam.example.com",
         },
       });
     }
@@ -1000,19 +1050,62 @@ async function seedLifecycle(project: { id: string; name: string; code: string; 
       status: BidPackageStatus.LEVELING,
     },
   });
+  // Shared scope-item sheet for this package — every bidder prices the
+  // same keys so the leveling matrix lines up apples-to-apples.
+  const scopeSheet =
+    project.mode === ProjectMode.HEAVY_CIVIL
+      ? [
+          { key: "100-MOBILIZATION", description: "Mobilization & traffic control", weight: 0.1 },
+          { key: "200-EXCAVATION", description: "Trench excavation & shoring", weight: 0.35 },
+          { key: "300-PIPE", description: "Pipe & fittings install", weight: 0.4 },
+          { key: "400-RESTORATION", description: "Backfill, compaction & restoration", weight: 0.15 },
+        ]
+      : project.mode === ProjectMode.VERTICAL
+        ? [
+            { key: "100-FORMWORK", description: "Formwork & shoring", weight: 0.25 },
+            { key: "200-REBAR", description: "Reinforcing steel", weight: 0.3 },
+            { key: "300-PLACEMENT", description: "Concrete placement & finishing", weight: 0.35 },
+            { key: "400-CURE", description: "Curing, testing & cleanup", weight: 0.1 },
+          ]
+        : [
+            { key: "100-TRIM", description: "Interior trim & casework", weight: 0.55 },
+            { key: "200-DOORS", description: "Door & hardware install", weight: 0.3 },
+            { key: "300-PUNCH", description: "Punch & touch-up", weight: 0.15 },
+          ];
+
   for (let i = 0; i < vendors.length; i++) {
     const v = vendors[i];
-    await prisma.subBid.create({
+    const total = multiplyMoney(bidPkg.estimatedValue, 0.94 + i * 0.04);
+    const subBid = await prisma.subBid.create({
       data: {
         bidPackageId: bidPkg.id,
         vendorId: v.id,
-        bidAmount: multiplyMoney(bidPkg.estimatedValue, 0.94 + i * 0.04),
+        bidAmount: total,
         daysToComplete: 45 + i * 5,
         inclusions: "Labor, material, equipment, supervision.",
         exclusions: "Permits, testing, owner-furnished items.",
         status: i === 0 ? SubBidStatus.SELECTED : i === vendors.length - 1 ? SubBidStatus.DECLINED : SubBidStatus.SUBMITTED,
         submittedAt: new Date("2026-04-20"),
       },
+    });
+    // Line-item detail so the leveling matrix has data. The last bidder
+    // excludes the final scope (so the GC sees an exclusion), and the
+    // middle bidder is a high outlier on the largest scope item.
+    await prisma.subBidLine.createMany({
+      data: scopeSheet.map((s, j) => {
+        const base = multiplyMoney(total, s.weight);
+        const isExcluded = i === vendors.length - 1 && j === scopeSheet.length - 1;
+        const isOutlier = i === 1 && j === scopeSheet.findIndex((x) => x.weight === Math.max(...scopeSheet.map((y) => y.weight)));
+        const amount = isExcluded ? 0 : isOutlier ? multiplyMoney(base, 1.6) : base;
+        return {
+          subBidId: subBid.id,
+          scopeItemKey: s.key,
+          description: s.description,
+          amount,
+          inclusion: !isExcluded,
+          notes: isExcluded ? "By others" : isOutlier ? "Premium scope assumption" : null,
+        };
+      }),
     });
   }
 

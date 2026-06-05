@@ -2,9 +2,11 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
+import { EmptyState } from "@/components/ui/empty-state";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate } from "@/lib/utils";
+import { NotebookPen } from "lucide-react";
 
 export default async function DailyLogsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -42,7 +44,11 @@ export default async function DailyLogsPage({ params }: { params: Promise<{ proj
               {log.notes ? <div className="mt-2 text-xs text-slate-500">{log.notes}</div> : null}
             </div>
           ))}
-          {project.dailyLogs.length === 0 ? <div className="card p-8 text-center text-slate-500">No daily logs yet.</div> : null}
+          {project.dailyLogs.length === 0 ? (
+            <div className="card p-6">
+              <EmptyState icon={NotebookPen} title="No daily logs yet" description="Field daily reports — manpower, weather, and work performed — will appear here once the superintendent starts logging." />
+            </div>
+          ) : null}
         </section>
       </div>
     </AppLayout>

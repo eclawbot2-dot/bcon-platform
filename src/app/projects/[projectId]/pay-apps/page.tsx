@@ -32,6 +32,10 @@ export default async function PayAppsPage({ params }: { params: Promise<{ projec
       <div className="grid gap-6">
         <ProjectTabs projectId={project.id} active="pay-apps" mode={project.mode} />
 
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/projects/${project.id}/pay-apps/reconciliation`} className="btn-outline text-xs">SOV reconciliation report</Link>
+        </div>
+
         <section className="grid gap-4 md:grid-cols-4">
           <Stat label="Draws filed" value={project.payApplications.length} />
           <Stat label="Billed to date" value={formatCurrency(totalBilled)} />

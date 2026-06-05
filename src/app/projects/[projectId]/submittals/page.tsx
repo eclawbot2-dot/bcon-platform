@@ -23,6 +23,9 @@ export default async function SubmittalsPage({ params }: { params: Promise<{ pro
     <AppLayout eyebrow={`${project.code} · Submittals`} title={project.name} description="Shop drawings and material approvals routed by spec section.">
       <div className="grid gap-6">
         <ProjectTabs projectId={project.id} active="submittals" mode={project.mode} />
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/projects/${project.id}/submittals/register`} className="btn-outline text-xs">Register · ball-in-court aging</Link>
+        </div>
         <section className="grid gap-4 md:grid-cols-3">
           <Stat label="Total submittals" value={project.submittals.length} />
           <Stat label="Long-lead items" value={longLead} tone="warn" />

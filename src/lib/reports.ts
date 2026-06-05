@@ -11,10 +11,11 @@
  * R5 estimateAccuracyReport — bid estimate vs actual at completion
  * R6 resourceHeatmap — labor + equipment allocation across projects
  * R7 bondingCapacityReport — surety reporting by entity
+ * R8 sovReconciliation — schedule-of-values vs pay-app billing
  */
 
 import { prisma } from "@/lib/prisma";
-import { sumMoney, subtractMoney, multiplyMoney, toNum } from "@/lib/money";
+import { sumMoney, subtractMoney, multiplyMoney, toNum, type MoneyLike } from "@/lib/money";
 
 // ─── R1 — Surety-grade WIP report ──────────────────────────────────
 
@@ -256,5 +257,122 @@ export async function bondingCapacityReport(tenantId: string): Promise<BondingRo
     totalBilledToDate: billed,
     workInProgress: subtractMoney(cost, billed),
     backlog: subtractMoney(contract, billed),
+  };
+}
+
+// ─── R8 — Schedule-of-values vs pay-app reconciliation ─────────────
+//
+// The SOV (the G703 schedule of values) is the contract broken into line
+// items, each with a scheduled value. Each pay application bills against
+// those lines cumulatively. This report reconciles the two: per SOV line
+// it shows scheduled value, billed-to-date, % complete, retainage held,
+// and balance to finish — then rolls up to a project total and flags
+// over-billing (billed beyond the scheduled value).
+//
+// Pure over fetched data so it unit-tests without a DB. `payApps` is the
+// project's pay applications ordered oldest→newest; the cumulative
+// `totalCompleted` / `retainage` on the *latest* period a line appears in
+// is authoritative (G703 lines carry running totals).
+
+export type SovPayAppLineLike = {
+  lineNumber: number;
+  costCode: string | null;
+  description: string;
+  scheduledValue: MoneyLike;
+  totalCompleted: MoneyLike;
+  retainage: MoneyLike;
+};
+
+export type SovPayAppLike = {
+  periodNumber: number;
+  status: string;
+  lines: SovPayAppLineLike[];
+};
+
+export type SovReconLine = {
+  key: string;
+  lineNumber: number;
+  costCode: string | null;
+  description: string;
+  scheduledValue: number;
+  billedToDate: number;
+  percentComplete: number;
+  retainageHeld: number;
+  balanceToFinish: number;
+  /** Amount billed beyond the scheduled value (0 when within budget). */
+  overBilled: number;
+};
+
+export type SovReconReport = {
+  lines: SovReconLine[];
+  totals: {
+    scheduledValue: number;
+    billedToDate: number;
+    percentComplete: number;
+    retainageHeld: number;
+    balanceToFinish: number;
+    overBilled: number;
+    /** SOV scheduled total vs. sum of pay-app line scheduled values. A
+     *  non-zero delta means the SOV drifted from the contract (e.g. an
+     *  unincorporated change order). */
+    underBilled: number;
+  };
+  /** True if any line is billed beyond its scheduled value. */
+  hasOverBilling: boolean;
+};
+
+const sovKey = (l: SovPayAppLineLike): string => `${l.lineNumber}|${l.costCode ?? ""}|${l.description}`;
+
+export function reconcileSov(payApps: SovPayAppLike[]): SovReconReport {
+  // Latest period wins for each SOV line (cumulative totals).
+  const byKey = new Map<string, { period: number; line: SovPayAppLineLike }>();
+  const ordered = [...payApps].sort((a, b) => a.periodNumber - b.periodNumber);
+  for (const app of ordered) {
+    for (const line of app.lines) {
+      const key = sovKey(line);
+      const prev = byKey.get(key);
+      if (!prev || app.periodNumber >= prev.period) byKey.set(key, { period: app.periodNumber, line });
+    }
+  }
+
+  const lines: SovReconLine[] = Array.from(byKey.entries()).map(([key, { line }]) => {
+    const scheduled = toNum(line.scheduledValue);
+    const billed = toNum(line.totalCompleted);
+    const retainage = toNum(line.retainage);
+    const balance = subtractMoney(scheduled, billed);
+    const over = Math.max(0, subtractMoney(billed, scheduled));
+    return {
+      key,
+      lineNumber: line.lineNumber,
+      costCode: line.costCode,
+      description: line.description,
+      scheduledValue: scheduled,
+      billedToDate: billed,
+      percentComplete: scheduled > 0 ? Math.round((billed / scheduled) * 1000) / 10 : 0,
+      retainageHeld: retainage,
+      balanceToFinish: balance,
+      overBilled: over,
+    };
+  });
+  lines.sort((a, b) => a.lineNumber - b.lineNumber || a.description.localeCompare(b.description));
+
+  const scheduledTotal = sumMoney(lines.map((l) => l.scheduledValue));
+  const billedTotal = sumMoney(lines.map((l) => l.billedToDate));
+  const retainageTotal = sumMoney(lines.map((l) => l.retainageHeld));
+  const overTotal = sumMoney(lines.map((l) => l.overBilled));
+  const balanceTotal = subtractMoney(scheduledTotal, billedTotal);
+
+  return {
+    lines,
+    totals: {
+      scheduledValue: scheduledTotal,
+      billedToDate: billedTotal,
+      percentComplete: scheduledTotal > 0 ? Math.round((billedTotal / scheduledTotal) * 1000) / 10 : 0,
+      retainageHeld: retainageTotal,
+      balanceToFinish: balanceTotal,
+      overBilled: overTotal,
+      underBilled: Math.max(0, balanceTotal),
+    },
+    hasOverBilling: overTotal > 0,
   };
 }

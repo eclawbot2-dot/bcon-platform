@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
+import { EmptyState } from "@/components/ui/empty-state";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDateTime } from "@/lib/utils";
+import { ImageOff } from "lucide-react";
 
 export default async function ProjectPhotosPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -78,7 +80,11 @@ export default async function ProjectPhotosPage({ params }: { params: Promise<{ 
               </div>
             </article>
           ))}
-          {photos.length === 0 ? <div className="col-span-full card p-8 text-center text-slate-400">No photos yet — upload above.</div> : null}
+          {photos.length === 0 ? (
+            <div className="col-span-full card p-6">
+              <EmptyState icon={ImageOff} title="No photos yet" description="Upload field photos above — capture is enabled for mobile cameras and EXIF geo/timestamp is preserved." />
+            </div>
+          ) : null}
         </section>
       </div>
     </AppLayout>
