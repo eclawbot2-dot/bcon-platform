@@ -376,6 +376,9 @@ export async function approveSubInvoice(id: string, tenantId: string, note?: str
   if (!actor.isManager) return { ok: false, error: "Only managers (Controller / PM) can approve." };
   const before = await prisma.subInvoice.findFirst({ where: { id, project: { tenantId } } });
   if (!before) return { ok: false, error: "Sub invoice not found." };
+  if (before.status !== "RECEIVED" && before.status !== "UNDER_REVIEW") {
+    return { ok: false, error: `Cannot approve while status is ${before.status}. Must be RECEIVED or UNDER_REVIEW.` };
+  }
   const entity = await prisma.subInvoice.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "APPROVED", approvedAt: new Date(), approvedBy: actor.userName, approvalNote: note ?? null },
@@ -390,6 +393,9 @@ export async function rejectSubInvoice(id: string, tenantId: string, reason: str
   const actor = await actorFor(tenantId);
   if (!actor.isManager) return { ok: false, error: "Only managers can reject." };
   if (!reason || reason.trim().length < 3) return { ok: false, error: "Reason required." };
+  const before = await prisma.subInvoice.findFirst({ where: { id, project: { tenantId } } });
+  if (!before) return { ok: false, error: "Sub invoice not found." };
+  if (before.status === "PAID") return { ok: false, error: "Cannot reject a sub invoice that has already been paid." };
   const entity = await prisma.subInvoice.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "REJECTED", rejectedAt: new Date(), rejectedBy: actor.userName, rejectionReason: reason.trim() },
@@ -403,6 +409,7 @@ export async function markSubInvoicePaid(id: string, tenantId: string, note?: st
   if (!actor.isManager) return { ok: false, error: "Only managers can mark paid." };
   const before = await prisma.subInvoice.findFirst({ where: { id, project: { tenantId } } });
   if (!before) return { ok: false, error: "Sub invoice not found." };
+  if (before.status !== "APPROVED") return { ok: false, error: `Must be APPROVED before PAID. Current: ${before.status}.` };
   const entity = await prisma.subInvoice.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "PAID", paidAt: new Date(), paidBy: actor.userName },
@@ -473,6 +480,9 @@ export async function executeContract(id: string, tenantId: string, note?: strin
   if (!actor.isManager) return { ok: false, error: "Only managers can execute contracts." };
   const before = await prisma.contract.findFirst({ where: { id, project: { tenantId } } });
   if (!before) return { ok: false, error: "Contract not found." };
+  if (before.status !== "DRAFT" && before.status !== "NEGOTIATING") {
+    return { ok: false, error: `Cannot execute while status is ${before.status}. Must be DRAFT or NEGOTIATING.` };
+  }
   const entity = await prisma.contract.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "EXECUTED", executedAt: new Date(), executedBy: actor.userName, approvedAt: new Date(), approvedBy: actor.userName, approvalNote: note ?? null },
@@ -487,6 +497,11 @@ export async function rejectContract(id: string, tenantId: string, reason: strin
   const actor = await actorFor(tenantId);
   if (!actor.isManager) return { ok: false, error: "Only managers can reject." };
   if (!reason || reason.trim().length < 3) return { ok: false, error: "Reason required." };
+  const before = await prisma.contract.findFirst({ where: { id, project: { tenantId } } });
+  if (!before) return { ok: false, error: "Contract not found." };
+  if (before.status !== "DRAFT" && before.status !== "NEGOTIATING") {
+    return { ok: false, error: `Cannot terminate from status ${before.status}. Only a DRAFT or NEGOTIATING contract can be terminated here.` };
+  }
   const entity = await prisma.contract.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "TERMINATED", rejectedAt: new Date(), rejectedBy: actor.userName, rejectionReason: reason.trim() },
@@ -515,6 +530,7 @@ export async function approveLienWaiver(id: string, tenantId: string, note?: str
   if (!actor.isManager) return { ok: false, error: "Only managers can accept lien waivers." };
   const before = await prisma.lienWaiver.findFirst({ where: { id, project: { tenantId } } });
   if (!before) return { ok: false, error: "Waiver not found." };
+  if (before.status !== "PENDING") return { ok: false, error: `Cannot accept while status is ${before.status}. Must be PENDING.` };
   const entity = await prisma.lienWaiver.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "RECEIVED", receivedAt: new Date(), receivedBy: actor.userName, approvedAt: new Date(), approvedBy: actor.userName, approvalNote: note ?? null },
@@ -529,6 +545,9 @@ export async function rejectLienWaiver(id: string, tenantId: string, reason: str
   const actor = await actorFor(tenantId);
   if (!actor.isManager) return { ok: false, error: "Only managers can reject." };
   if (!reason || reason.trim().length < 3) return { ok: false, error: "Reason required." };
+  const before = await prisma.lienWaiver.findFirst({ where: { id, project: { tenantId } } });
+  if (!before) return { ok: false, error: "Waiver not found." };
+  if (before.status !== "PENDING") return { ok: false, error: `Cannot reject while status is ${before.status}. Must be PENDING.` };
   const entity = await prisma.lienWaiver.update({
     where: { id, project: { tenantId } } as never,
     data: { status: "REJECTED", rejectedAt: new Date(), rejectedBy: actor.userName, rejectionReason: reason.trim() },

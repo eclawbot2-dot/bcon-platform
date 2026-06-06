@@ -29,14 +29,18 @@ let prisma: PrismaClient;
 let editChangeOrder: typeof import("@/lib/record-actions").editChangeOrder;
 let markPayAppPaid: typeof import("@/lib/record-actions").markPayAppPaid;
 let approvePayApp: typeof import("@/lib/record-actions").approvePayApp;
+let markSubInvoicePaid: typeof import("@/lib/record-actions").markSubInvoicePaid;
+let executeContract: typeof import("@/lib/record-actions").executeContract;
+let rejectLienWaiver: typeof import("@/lib/record-actions").rejectLienWaiver;
 
 let tenantId = "";
 let projectId = "";
 let adminUserId = "";
+let vendorId = "";
 
 beforeAll(async () => {
   ({ prisma } = await import("@/lib/prisma"));
-  ({ editChangeOrder, markPayAppPaid, approvePayApp } = await import("@/lib/record-actions"));
+  ({ editChangeOrder, markPayAppPaid, approvePayApp, markSubInvoicePaid, executeContract, rejectLienWaiver } = await import("@/lib/record-actions"));
 
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const tenant = await prisma.tenant.create({
@@ -56,6 +60,9 @@ beforeAll(async () => {
     data: { tenantId, name: "RA Project", code: `RA-${stamp}`, mode: "VERTICAL" },
   });
   projectId = project.id;
+
+  const vendor = await prisma.vendor.create({ data: { tenantId, name: `Vendor ${stamp}` } });
+  vendorId = vendor.id;
 
   // currentActor() sees this session and matches the ADMIN membership above.
   authMock.mockResolvedValue({ userId: adminUserId, superAdmin: false });
@@ -172,5 +179,54 @@ describe("markPayAppPaid — tamper-evident before/after audit", () => {
     });
     expect(audit).toBeTruthy();
     expect(JSON.parse(audit!.afterJson ?? "{}").status).toBe("APPROVED");
+  });
+});
+
+describe("lifecycle status guards — money-out / terminal-state protection", () => {
+  // Server-side guards mirroring the UI gating. A direct POST that skips the
+  // UI must not be able to (a) pay an unapproved/rejected sub invoice,
+  // (b) execute an already-executed contract, or (c) reject a terminal lien
+  // waiver. These are defense-in-depth: the buttons are hidden, but the
+  // endpoints are the real authority.
+
+  it("markSubInvoicePaid refuses a REJECTED sub invoice (no money out without approval)", async () => {
+    const inv = await prisma.subInvoice.create({
+      data: { projectId, vendorId, invoiceNumber: `INV-${Date.now()}`, amount: 5000, netDue: 4500, status: "REJECTED", invoiceDate: new Date("2026-01-15") },
+    });
+    const res = await markSubInvoicePaid(inv.id, tenantId);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/APPROVED/);
+    const after = await prisma.subInvoice.findUnique({ where: { id: inv.id } });
+    expect(after?.status).toBe("REJECTED"); // unchanged, not PAID
+  });
+
+  it("markSubInvoicePaid allows an APPROVED sub invoice", async () => {
+    const inv = await prisma.subInvoice.create({
+      data: { projectId, vendorId, invoiceNumber: `INV-OK-${Date.now()}`, amount: 5000, netDue: 4500, status: "APPROVED", invoiceDate: new Date("2026-01-15") },
+    });
+    const res = await markSubInvoicePaid(inv.id, tenantId);
+    expect(res.ok).toBe(true);
+    const after = await prisma.subInvoice.findUnique({ where: { id: inv.id } });
+    expect(after?.status).toBe("PAID");
+  });
+
+  it("executeContract refuses an already-EXECUTED contract (no re-execute)", async () => {
+    const ct = await prisma.contract.create({
+      data: { projectId, counterparty: "Acme", contractNumber: `C-${Date.now()}`, title: "Test", type: "SUBCONTRACT", status: "EXECUTED" },
+    });
+    const res = await executeContract(ct.id, tenantId);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/DRAFT or NEGOTIATING/);
+  });
+
+  it("rejectLienWaiver refuses a non-PENDING (RECEIVED) waiver", async () => {
+    const w = await prisma.lienWaiver.create({
+      data: { projectId, waiverType: "CONDITIONAL_PARTIAL", partyName: "Sub Co", throughDate: new Date("2026-01-31"), amount: 1000, status: "RECEIVED" },
+    });
+    const res = await rejectLienWaiver(w.id, tenantId, "changed my mind");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/PENDING/);
+    const after = await prisma.lienWaiver.findUnique({ where: { id: w.id } });
+    expect(after?.status).toBe("RECEIVED"); // unchanged
   });
 });
