@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
+import { requireEditor } from "@/lib/permissions";
 
 /**
  * Import a project schedule from CSV. Expected columns (case-
@@ -18,6 +19,15 @@ import { requireTenant } from "@/lib/tenant";
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId: string }> }) {
   const tenant = await requireTenant();
+  // Re-importing wipes and replaces the entire baseline schedule — a
+  // destructive edit. requireTenant alone proves only that the caller can
+  // see the tenant, so previously a read-only viewer could erase a project's
+  // whole schedule. Require an edit-capable role.
+  try {
+    await requireEditor(tenant.id);
+  } catch {
+    return NextResponse.json({ error: "Editor-level role required to import a schedule." }, { status: 403 });
+  }
   const { projectId } = await ctx.params;
   const project = await prisma.project.findFirst({ where: { id: projectId, tenantId: tenant.id } });
   if (!project) return NextResponse.json({ error: "project not found" }, { status: 404 });
@@ -26,19 +36,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "csv file required" }, { status: 422 });
   const text = await file.text();
-
-  // Capture pre-import baseline
-  const existing = await prisma.scheduleTask.findMany({ where: { projectId } });
-  if (existing.length > 0) {
-    await prisma.scheduleBaseline.create({
-      data: {
-        projectId,
-        label: `Pre-import ${new Date().toISOString().slice(0, 10)}`,
-        reason: "Schedule re-imported",
-        payloadJson: JSON.stringify(existing),
-      },
-    });
-  }
 
   // Parse CSV
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
@@ -56,9 +53,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
     return NextResponse.json({ error: "missing required columns: name, start, finish" }, { status: 422 });
   }
 
-  // Wipe existing
-  await prisma.scheduleTask.deleteMany({ where: { projectId } });
-
+  // Parse + validate every row BEFORE touching the database, so a malformed
+  // file never reaches the destructive wipe below.
   const tasks: { name: string; start: Date; end: Date; duration: number; pct: number; wbs?: string }[] = [];
   for (let r = 1; r < lines.length; r++) {
     const cells = parseCsvLine(lines[r]!);
@@ -71,11 +67,29 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
     const wbs = iWbs >= 0 ? cells[iWbs] : undefined;
     tasks.push({ name, start, end, duration: duration || 1, pct: pct || 0, wbs });
   }
+  if (tasks.length === 0) {
+    return NextResponse.json({ error: "no valid task rows found (need name + parseable start/finish)" }, { status: 422 });
+  }
 
-  let imported = 0;
-  for (const t of tasks) {
-    await prisma.scheduleTask.create({
-      data: {
+  // Snapshot baseline, wipe, and re-create as ONE atomic unit. The previous
+  // code deleted the live schedule and then created the new tasks in a loop
+  // with no transaction, so any failure mid-import (a bad row, a crash) left
+  // the project with a half-deleted, half-rebuilt schedule and no way back.
+  const baselineTaken = await prisma.$transaction(async (tx) => {
+    const existing = await tx.scheduleTask.findMany({ where: { projectId } });
+    if (existing.length > 0) {
+      await tx.scheduleBaseline.create({
+        data: {
+          projectId,
+          label: `Pre-import ${new Date().toISOString().slice(0, 10)}`,
+          reason: "Schedule re-imported",
+          payloadJson: JSON.stringify(existing),
+        },
+      });
+    }
+    await tx.scheduleTask.deleteMany({ where: { projectId } });
+    await tx.scheduleTask.createMany({
+      data: tasks.map((t) => ({
         projectId,
         name: t.name,
         startDate: t.start,
@@ -83,12 +97,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
         durationDays: t.duration,
         percentComplete: t.pct,
         wbs: t.wbs,
-      },
+      })),
     });
-    imported += 1;
-  }
+    return existing.length > 0;
+  });
 
-  return NextResponse.json({ imported, baseline: existing.length > 0 });
+  return NextResponse.json({ imported: tasks.length, baseline: baselineTaken });
 }
 
 /**
