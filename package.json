@@ -11,8 +11,9 @@
     "test:watch": "vitest",
     "db:generate": "npx prisma generate",
     "db:push": "npx prisma db push",
+    "db:migrate": "npx prisma migrate deploy",
     "db:seed": "npx tsx prisma/seed.ts",
-    "setup": "npm run db:generate && npm run db:push && npm run db:seed"
+    "setup": "npm run db:generate && npm run db:migrate && npm run db:seed"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

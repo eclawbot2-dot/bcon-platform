@@ -1,52 +1,69 @@
 /**
- * Install SQLite triggers that make AuditEvent append-only — prevents
- * UPDATE and DELETE on the table. Defense-in-depth for compliance:
- * even if a malicious actor with DB access tries to tamper with the
- * audit log, the trigger raises an error and rolls back.
+ * Install PostgreSQL triggers that make AuditEvent append-only — prevents
+ * UPDATE and (optionally) DELETE on the table. Defense-in-depth for
+ * compliance: even if a malicious actor with DB access tries to tamper
+ * with the audit log, the trigger raises an exception and the statement
+ * rolls back.
  *
- * Run after every prisma db push: `npx tsx scripts/install-audit-triggers.ts`.
- * Idempotent — drops and recreates the triggers each time.
+ * Run after applying migrations: `npx tsx scripts/install-audit-triggers.ts`.
+ * Idempotent — CREATE OR REPLACE on the functions, DROP/CREATE on triggers.
  *
- * On Postgres (future), the equivalent is RULE statements or row-
- * level security policies. The trigger names + intent stay the same.
+ * UPDATE is always blocked. DELETE is only blocked in strict mode
+ * (BCON_AUDIT_IMMUTABLE=true); otherwise DELETE is permitted so the
+ * audit-prune cron can age out rows past the retention SLA.
  */
 
 import "dotenv/config";
-import path from "path";
-import Database from "better-sqlite3";
+import { Client } from "pg";
 
-function main() {
-  const url = process.env.DATABASE_URL ?? `file:${path.join(process.cwd(), "prisma", "dev.db")}`;
-  const file = url.replace(/^file:/, "");
-  const db = new Database(file);
+async function main() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString || !/^postgres(ql)?:\/\//.test(connectionString)) {
+    throw new Error("DATABASE_URL must be a postgresql:// connection string.");
+  }
+  const client = new Client({ connectionString });
+  await client.connect();
   try {
-    db.exec(`
-      DROP TRIGGER IF EXISTS audit_event_no_update;
-      DROP TRIGGER IF EXISTS audit_event_no_delete;
+    // UPDATE guard — always installed.
+    await client.query(`
+      CREATE OR REPLACE FUNCTION audit_event_no_update() RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'AuditEvent is append-only; UPDATE not permitted';
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+    await client.query(`DROP TRIGGER IF EXISTS audit_event_no_update ON "AuditEvent";`);
+    await client.query(`
       CREATE TRIGGER audit_event_no_update
         BEFORE UPDATE ON "AuditEvent"
-        BEGIN
-          SELECT RAISE(ABORT, 'AuditEvent is append-only; UPDATE not permitted');
-        END;
+        FOR EACH ROW EXECUTE FUNCTION audit_event_no_update();
     `);
-    // DELETE trigger only installed in strict mode. Without it, the
-    // audit-prune cron can age out old rows. Strict mode (immutable)
-    // keeps every row forever, even past retention SLA.
+
+    // DELETE guard — strict (immutable) mode only.
+    await client.query(`DROP TRIGGER IF EXISTS audit_event_no_delete ON "AuditEvent";`);
     if (process.env.BCON_AUDIT_IMMUTABLE === "true") {
-      db.exec(`
+      await client.query(`
+        CREATE OR REPLACE FUNCTION audit_event_no_delete() RETURNS trigger AS $$
+        BEGIN
+          RAISE EXCEPTION 'AuditEvent is append-only; DELETE blocked by BCON_AUDIT_IMMUTABLE';
+        END;
+        $$ LANGUAGE plpgsql;
+      `);
+      await client.query(`
         CREATE TRIGGER audit_event_no_delete
           BEFORE DELETE ON "AuditEvent"
-          BEGIN
-            SELECT RAISE(ABORT, 'AuditEvent is append-only; DELETE blocked by BCON_AUDIT_IMMUTABLE');
-          END;
+          FOR EACH ROW EXECUTE FUNCTION audit_event_no_delete();
       `);
       console.log("audit triggers installed (immutable mode — UPDATE + DELETE blocked)");
     } else {
       console.log("audit triggers installed (UPDATE blocked; DELETE permitted for prune cron — set BCON_AUDIT_IMMUTABLE=true to lock)");
     }
   } finally {
-    db.close();
+    await client.end();
   }
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

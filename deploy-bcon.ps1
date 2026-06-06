@@ -19,9 +19,9 @@ if (-not (Test-Path $node)) { throw "Node not found at $node" }
 
 # bcon-next and Cloudflared are registered as Windows services (see
 # scripts/install-services.ps1). This script is now a deploy-rebuild
-# loop: it (re)installs deps, regenerates Prisma client, pushes schema,
-# seeds, builds, then restarts the bcon-next service so it picks up the
-# new .next/ output. If the services don't exist yet, run
+# loop: it (re)installs deps, regenerates Prisma client, applies Postgres
+# migrations, seeds, builds, then restarts the bcon-next service so it
+# picks up the new .next/ output. If the services don't exist yet, run
 # scripts/install-services.ps1 once first.
 $svcNext = Get-Service $nextService -ErrorAction SilentlyContinue
 $svcTunnel = Get-Service $tunnelService -ErrorAction SilentlyContinue
@@ -32,11 +32,11 @@ Write-Host 'Installing dependencies if needed...'
 & $npm install --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'npm install failed' }
 
-Write-Host 'Pushing Prisma schema...'
+Write-Host 'Applying Prisma migrations (Postgres)...'
 & $npm run db:generate | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'prisma generate failed' }
-& $npm run db:push | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'prisma db push failed' }
+& $npm run db:migrate | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'prisma migrate deploy failed' }
 
 Write-Host 'Seeding demo tenants if DB is empty...'
 & $npm run db:seed | Out-Null

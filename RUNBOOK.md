@@ -29,15 +29,16 @@ First-time host setup: ensure `.tunnel-token` + `.env` exist, `npm run build`
 once, then `powershell -ExecutionPolicy Bypass -File scripts\install-services.ps1`.
 
 Routine deploy/rebuild: `deploy-bcon.ps1` reinstalls deps, regenerates Prisma,
-`db push`, seeds, builds, restarts `bcon-next`, and health-checks local + public.
-Flags: `-SkipBuild`, `-RestartTunnel`.
+runs `prisma migrate deploy`, seeds, builds, restarts `bcon-next`, and
+health-checks local + public. Flags: `-SkipBuild`, `-RestartTunnel`.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy-bcon.ps1
 ```
 
-**Prisma engine DLL lock (Windows):** the running service locks
-`better-sqlite3` / Prisma native binaries. Stop the service before regenerating:
+**Prisma engine DLL lock (Windows):** the running service locks Prisma /
+native binaries (the local `prisma/rate-limit.db` sidecar). Stop the service
+before regenerating:
 
 ```bash
 net stop bcon-next
@@ -63,8 +64,12 @@ and **refuses to boot** if required secrets are missing/placeholder/too-short.
   (e.g. `velocity-demo`).
 
 **Database**
-- `DATABASE_URL` — optional; defaults to `file:./prisma/dev.db`. Postgres URL
-  also supported by the schema.
+- `DATABASE_URL` — **required**; a `postgresql://` connection string. The app
+  (`src/lib/prisma.ts`) and Prisma CLI (`prisma.config.ts`) both refuse a
+  non-Postgres URL. Local dev/CI default: the `bcon` / `bcon_test` databases on
+  `127.0.0.1:5432`.
+- `TEST_DATABASE_URL` — Postgres URL the vitest suite runs against (defaults to
+  a local `bcon_test` database; CI sets it to the disposable service DB).
 
 **SSO providers** (all optional, enable per provider)
 - Okta: `OKTA_CLIENT_ID`, `OKTA_CLIENT_SECRET`, `OKTA_ISSUER`
@@ -89,36 +94,47 @@ and **refuses to boot** if required secrets are missing/placeholder/too-short.
 
 ## 4. Database
 
-- **Provider:** SQLite via `@prisma/adapter-better-sqlite3`, file
-  `prisma/dev.db` (WAL). Schema is Postgres-promotable.
-- **Schema management:** **`prisma db push`** (NOT migrations). `deploy-bcon.ps1`
-  runs `db:generate` + `db:push`; CI uses `db push --accept-data-loss`.
-- **Audit triggers:** `scripts/install-audit-triggers.ts` installs append-only
-  triggers — reinstall after a restore. **VERIFY** whether deploy reinstalls
-  them automatically (not wired into `deploy-bcon.ps1`; run manually after
-  restore: `npx tsx scripts/install-audit-triggers.ts`).
+- **Provider:** PostgreSQL 16 via `@prisma/adapter-pg`. `DATABASE_URL` is a
+  `postgresql://` connection string (local: `bcon` on `127.0.0.1:5432`). The
+  legacy `prisma/dev.db` SQLite file is retained only as a cold fallback and is
+  no longer used by the app. (One exception: the brute-force rate limiter keeps
+  a tiny *local* SQLite sidecar `prisma/rate-limit.db` for its synchronous
+  hot-path counter — host-local throttling state, not application data.)
+- **Schema management:** **Prisma migrations** (`prisma/migrations`).
+  `deploy-bcon.ps1` runs `db:generate` + `db:migrate` (`prisma migrate deploy`);
+  CI runs `prisma migrate deploy` against a `postgres:16` service. Create a new
+  migration with `npx prisma migrate dev --name <change>`.
+- **Audit triggers:** `scripts/install-audit-triggers.ts` installs Postgres
+  append-only triggers on `AuditEvent` (UPDATE always blocked; DELETE blocked
+  only when `BCON_AUDIT_IMMUTABLE=true`, else the prune cron may age out rows).
+  Reinstall after a restore — not wired into `deploy-bcon.ps1`:
+  `npx tsx scripts/install-audit-triggers.ts`.
 
 **Backup** — `npx tsx scripts/db-backup.ts` (or Task Scheduler via
-`scripts/register-db-backup-task.ps1`): WAL checkpoint + `VACUUM INTO`
-`backups/db/<ts>.db`, runs `integrity_check`, prunes > `BACKUP_RETENTION_DAYS`.
-A logical per-tenant JSON export also exists (`src/lib/backup.ts`).
+`scripts/register-db-backup-task.ps1`): `pg_dump --format=custom` to
+`backups/db/<ts>.dump`, verified via `pg_restore --list`, prunes >
+`BACKUP_RETENTION_DAYS`. Requires the Postgres client tools on PATH (set
+`PG_BIN` to e.g. `C:\Program Files\PostgreSQL\16\bin` if not). A logical
+per-tenant JSON export also exists (`src/lib/backup.ts`).
 
 **Restore:**
 ```bash
 net stop bcon-next
-copy /Y backups\db\<ts>.db prisma\dev.db
-del prisma\dev.db-wal prisma\dev.db-shm
+# Drop/recreate the target database, then restore the custom-format dump:
+pg_restore --clean --if-exists --no-owner --no-privileges \
+  --dbname "postgresql://bcon:bcon_dev@127.0.0.1:5432/bcon" backups/db/<ts>.dump
 npx tsx scripts/install-audit-triggers.ts
 net start bcon-next
 ```
 
 ## 5. CI
 
-`.github/workflows/ci.yml` on push/PR to `main` (Node 22; strong CI secrets so
-`env-guard` passes): `npm ci` → `prisma generate` → `prisma db push
---accept-data-loss` → **`tsc --noEmit`** → **`vitest run`** → **`next build`**
-→ seed-portals smoke. `dependency-audit.yml` + npm-audit/SBOM steps are
-advisory. The three bold steps must stay green.
+`.github/workflows/ci.yml` on push/PR to `main` (Node 22; a health-checked
+`postgres:16` service; strong CI secrets so `env-guard` passes): `npm ci` →
+`prisma generate` → `prisma migrate deploy` → **`tsc --noEmit`** →
+**`vitest run`** → **`next build`** → seed-portals smoke. `DATABASE_URL` /
+`TEST_DATABASE_URL` point at the service DB. `dependency-audit.yml` +
+npm-audit/SBOM steps are advisory. The three bold steps must stay green.
 
 ## 6. Health / observability
 

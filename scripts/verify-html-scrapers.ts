@@ -15,9 +15,8 @@
  */
 
 import "dotenv/config";
-import path from "path";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { dispatchCrawl } from "../src/lib/scrapers";
 
 type Row = {
@@ -79,8 +78,9 @@ async function probeOne(catalog: Awaited<ReturnType<typeof PrismaClient.prototyp
 }
 
 async function main() {
-  const url = process.env.DATABASE_URL ?? `file:${path.join(process.cwd(), "prisma", "dev.db")}`;
-  const adapter = new PrismaBetterSqlite3({ url: url.startsWith("file:") ? url : `file:${url}` });
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) throw new Error("DATABASE_URL is required (postgresql://).");
+  const adapter = new PrismaPg({ connectionString });
   const prisma = new PrismaClient({ adapter });
   try {
     // Probe every catalog row that claims to be auto-scraped. Manual
