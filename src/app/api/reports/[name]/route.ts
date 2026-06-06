@@ -9,6 +9,7 @@ import {
   estimateAccuracyReport,
   resourceHeatmap,
   bondingCapacityReport,
+  ballInCourtAgingReport,
 } from "@/lib/reports";
 
 /**
@@ -64,12 +65,19 @@ async function runReport(name: string, tenantId: string, url: URL): Promise<unkn
     case "estimate-accuracy": return estimateAccuracyReport(tenantId);
     case "resource-heatmap": return resourceHeatmap(tenantId, clampedInt(url.searchParams.get("weeks"), 8, 1, 104));
     case "bonding-capacity": return bondingCapacityReport(tenantId);
+    case "ball-in-court": return ballInCourtAgingReport(tenantId);
     default: return null;
   }
 }
 
 function toCsvFromArray(data: unknown): string {
-  const arr = Array.isArray(data) ? data : (data && typeof data === "object" && "byOwner" in data ? (data as { byOwner: unknown[] }).byOwner : [data]);
+  const arr = Array.isArray(data)
+    ? data
+    : data && typeof data === "object" && "byOwner" in data
+      ? (data as { byOwner: unknown[] }).byOwner
+      : data && typeof data === "object" && "items" in data
+        ? (data as { items: unknown[] }).items // ball-in-court aging: export the per-item rows
+        : [data];
   if (!Array.isArray(arr) || arr.length === 0) return "";
   const headers = Object.keys(arr[0] as Record<string, unknown>);
   const rows = (arr as Record<string, unknown>[]).map((r) =>

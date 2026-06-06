@@ -16,6 +16,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { sumMoney, subtractMoney, multiplyMoney, toNum, type MoneyLike } from "@/lib/money";
+import { buildBallInCourtAging, type BallInCourtAging } from "@/lib/ball-in-court";
 
 // ─── R1 — Surety-grade WIP report ──────────────────────────────────
 
@@ -375,4 +376,60 @@ export function reconcileSov(payApps: SovPayAppLike[]): SovReconReport {
     },
     hasOverBilling: overTotal > 0,
   };
+}
+
+// ─── R9 — Portfolio ball-in-court aging (RFIs + submittals) ────────
+//
+// Tenant-wide "what's stuck, with whom, for how long" across every
+// project. Reuses the pure aging engine in src/lib/ball-in-court.ts so the
+// math is unit-tested in isolation; this function only does the scoped
+// fetch + project-label join.
+export async function ballInCourtAgingReport(
+  tenantId: string,
+  now: Date = new Date(),
+): Promise<BallInCourtAging> {
+  const [rfis, submittals] = await Promise.all([
+    prisma.rFI.findMany({
+      where: { project: { tenantId }, status: { notIn: ["APPROVED", "CLOSED"] } },
+      select: {
+        id: true, number: true, subject: true, status: true, projectId: true,
+        dueDate: true, ballInCourt: true, currentReviewerEmail: true,
+        sentToReviewerAt: true, submittedAt: true, respondedAt: true,
+        rejectedAt: true, createdAt: true, updatedAt: true,
+        project: { select: { name: true } },
+      },
+    }),
+    prisma.submittal.findMany({
+      where: { project: { tenantId }, status: { not: "APPROVED" } },
+      select: {
+        id: true, number: true, title: true, specSection: true, status: true,
+        longLead: true, resubmittalCount: true, currentReviewerEmail: true,
+        sentToReviewerAt: true, submittedAt: true, approvedAt: true,
+        rejectedAt: true, createdAt: true, updatedAt: true, projectId: true,
+        project: { select: { name: true } },
+      },
+    }),
+  ]);
+
+  return buildBallInCourtAging(
+    {
+      rfis: rfis.map((r) => ({
+        id: r.id, number: r.number, subject: r.subject, status: r.status,
+        projectId: r.projectId, projectName: r.project.name,
+        dueDate: r.dueDate, ballInCourt: r.ballInCourt,
+        currentReviewerEmail: r.currentReviewerEmail, sentToReviewerAt: r.sentToReviewerAt,
+        submittedAt: r.submittedAt, respondedAt: r.respondedAt, rejectedAt: r.rejectedAt,
+        createdAt: r.createdAt, updatedAt: r.updatedAt,
+      })),
+      submittals: submittals.map((s) => ({
+        id: s.id, number: s.number, title: s.title, specSection: s.specSection,
+        status: s.status, longLead: s.longLead, resubmittalCount: s.resubmittalCount,
+        currentReviewerEmail: s.currentReviewerEmail, sentToReviewerAt: s.sentToReviewerAt,
+        submittedAt: s.submittedAt, approvedAt: s.approvedAt, rejectedAt: s.rejectedAt,
+        createdAt: s.createdAt, updatedAt: s.updatedAt,
+        projectId: s.projectId, projectName: s.project.name,
+      })),
+    },
+    now,
+  );
 }

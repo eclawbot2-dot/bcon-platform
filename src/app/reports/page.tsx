@@ -151,6 +151,19 @@ export default async function ReportsPage() {
         </section>
 
         <section className="card p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Ball-in-court aging</div>
+              <p className="mt-1 text-xs text-slate-400">Open RFIs + submittals across the portfolio, by who owes the next move and how long it has waited.</p>
+            </div>
+            <div className="flex gap-2">
+              <a href="/reports/ball-in-court" className="btn-primary text-xs">Open</a>
+              <a href="/api/reports/ball-in-court?format=csv" className="btn-outline text-xs">Export CSV</a>
+            </div>
+          </div>
+        </section>
+
+        <section className="card p-6">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">More reports</div>
           <div className="mt-3 grid gap-2 md:grid-cols-2 text-xs">
             <a href="/api/reports/margin-fade?format=csv" className="panel p-3 hover:border-cyan-500/40">Margin-fade trend (CSV)</a>
