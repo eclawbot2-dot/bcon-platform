@@ -1480,10 +1480,46 @@ model Meeting {
   title       String
   meetingType String
   scheduledAt DateTime
+  // When the meeting actually took place (vs the planned scheduledAt).
+  // Null until minutes are recorded.
+  occurredAt  DateTime?
+  location    String?
+  // Freeform attendee roster (names / companies), recorded with minutes.
+  attendees   String?
+  // Meeting minutes / discussion notes.
   notes       String?
+  actionItems MeetingActionItem[]
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
 
   @@index([projectId])
+}
+
+// An action item captured in meeting minutes — the "who owes what, by
+// when" that turns minutes into accountability. Open/overdue items feed a
+// per-project register so commitments don't get lost between meetings.
+model MeetingActionItem {
+  id          String                  @id @default(cuid())
+  meetingId   String
+  meeting     Meeting                 @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  description String
+  assignee    String?
+  dueDate     DateTime?
+  status      MeetingActionItemStatus @default(OPEN)
+  completedAt DateTime?
+  completedBy String?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@index([meetingId])
+  @@index([status])
+}
+
+enum MeetingActionItemStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
 }
 
 model DailyLog {

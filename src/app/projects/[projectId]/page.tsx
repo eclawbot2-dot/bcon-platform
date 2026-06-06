@@ -226,10 +226,10 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
             </div>
 
             <div className="card p-5">
-              <CardTitle title="Meetings / workflow runs" href="/workflows" />
+              <CardTitle title="Meetings / workflow runs" href={`/projects/${project.id}/meetings`} />
               <div className="mt-4 space-y-3 text-sm text-slate-300">
                 {project.meetings.map((meeting) => (
-                  <Link key={meeting.id} href="/workflows" className="block rounded-2xl border border-white/5 bg-white/5 p-4 transition hover:border-cyan-500/30">
+                  <Link key={meeting.id} href={`/projects/${project.id}/meetings/${meeting.id}`} className="block rounded-2xl border border-white/5 bg-white/5 p-4 transition hover:border-cyan-500/30">
                     <div className="font-medium text-white">{meeting.title}</div>
                     <div className="mt-1 text-xs text-slate-500">{meeting.meetingType} · {formatDateTime(meeting.scheduledAt)}</div>
                   </Link>
