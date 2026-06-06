@@ -1,6 +1,7 @@
 /**
- * Push schedule task dates forward by a CO's impact days.
- * Applies FS dependency chain — if a task moves, its successors move too.
+ * Push every not-yet-complete schedule task forward by a change order's
+ * impact days. All incomplete tasks shift by the same offset (a uniform
+ * baseline slip), so start/end ordering is preserved.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -15,17 +16,21 @@ export async function applyCoScheduleImpact(coId: string): Promise<{ ok: boolean
     orderBy: { startDate: "asc" },
   });
   const shiftMs = co.scheduleImpactDays * 24 * 60 * 60 * 1000;
-  let moved = 0;
-  for (const t of tasks) {
-    await prisma.scheduleTask.update({
+
+  // Apply every shift atomically: a partial failure mid-loop would otherwise
+  // leave some tasks moved and others not, corrupting the baseline schedule
+  // with no clean way to tell which slipped. $transaction rolls back the
+  // whole set on any error.
+  const updates = tasks.map((t) =>
+    prisma.scheduleTask.update({
       where: { id: t.id },
       data: {
         startDate: new Date(new Date(t.startDate).getTime() + shiftMs),
         endDate: new Date(new Date(t.endDate).getTime() + shiftMs),
         notes: `${t.notes ?? ""}${t.notes ? " | " : ""}Shifted by CO ${co.coNumber} (+${co.scheduleImpactDays}d)`,
       },
-    });
-    moved += 1;
-  }
-  return { ok: true, tasksMoved: moved, note: `Shifted ${moved} tasks by ${co.scheduleImpactDays}d` };
+    }),
+  );
+  await prisma.$transaction(updates);
+  return { ok: true, tasksMoved: updates.length, note: `Shifted ${updates.length} tasks by ${co.scheduleImpactDays}d` };
 }
