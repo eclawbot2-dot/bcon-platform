@@ -39,7 +39,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
     return NextResponse.json({ error: `too many files (max ${MAX_PHOTOS_PER_REQUEST} per request)` }, { status: 413 });
   }
 
-  const albumId = (form.get("albumId") as string | null) || null;
+  let albumId = (form.get("albumId") as string | null) || null;
+  // Verify the album (if any) belongs to THIS project. Trusting the raw
+  // form value would let a caller attach photos to another project's — or
+  // another tenant's — album. An invalid id is dropped (photo lands
+  // album-less) rather than 500'ing on a foreign-key violation.
+  if (albumId) {
+    const album = await prisma.projectPhotoAlbum.findFirst({
+      where: { id: albumId, projectId },
+      select: { id: true },
+    });
+    if (!album) albumId = null;
+  }
   const caption = (form.get("caption") as string | null) || null;
   const capturedAtRaw = form.get("capturedAt") as string | null;
   const capturedAt = capturedAtRaw ? new Date(capturedAtRaw) : null;
