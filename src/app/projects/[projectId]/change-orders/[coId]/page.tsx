@@ -44,9 +44,13 @@ export default async function ChangeOrderDetailPage({ params }: { params: Promis
         <div className="flex items-center gap-2">
           <StatusBadge status={co.status} />
           {co.scheduleImpactDays > 0 && (co.status === "APPROVED" || co.status === "EXECUTED") ? (
-            <form action={`/api/change-orders/${co.id}/apply-schedule`} method="post">
-              <button className="btn-primary text-xs">Apply +{co.scheduleImpactDays}d to schedule</button>
-            </form>
+            co.scheduleImpactAppliedAt ? (
+              <span className="text-xs text-emerald-300">Schedule slip applied {formatDate(co.scheduleImpactAppliedAt)}</span>
+            ) : (
+              <form action={`/api/change-orders/${co.id}/apply-schedule`} method="post">
+                <button className="btn-primary text-xs">Apply +{co.scheduleImpactDays}d to schedule</button>
+              </form>
+            )
           ) : null}
         </div>
       )}

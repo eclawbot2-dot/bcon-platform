@@ -16,6 +16,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
   const co = await prisma.changeOrder.findFirst({ where: { id, project: { tenantId: tenant.id } }, include: { project: true } });
   if (!co) return NextResponse.json({ error: "CO not found" }, { status: 404 });
-  await applyCoScheduleImpact(co.id);
+  // Surface a refused application (wrong status, already applied, no impact)
+  // as a 400 rather than silently redirecting as if it succeeded.
+  const result = await applyCoScheduleImpact(co.id);
+  if (!result.ok) return NextResponse.json({ error: result.note }, { status: 400 });
   return publicRedirect(req, `/projects/${co.projectId}/schedule`, 303);
 }

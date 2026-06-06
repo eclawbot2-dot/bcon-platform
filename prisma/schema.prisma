@@ -1782,6 +1782,11 @@ model ChangeOrder {
   amount              Decimal           @default(0)
   markupPct           Float             @default(0)
   scheduleImpactDays  Int               @default(0)
+  // Set the moment a CO's schedule impact is pushed into the project
+  // baseline (see src/lib/schedule-impact.ts). Null = never applied.
+  // Guards against re-applying the same slip twice (double-shift) and is
+  // claimed atomically so concurrent "Apply" clicks can't both shift.
+  scheduleImpactAppliedAt DateTime?
   status              ChangeOrderStatus @default(DRAFT)
   requestedById       String?
   approvedById        String?
