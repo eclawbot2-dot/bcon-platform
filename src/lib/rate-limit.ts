@@ -11,10 +11,16 @@
  * resetRateLimit) the call sites in auth.ts already use.
  *
  * Implementation notes:
- *   - Backed by a dedicated better-sqlite3 handle on the same DATABASE_URL
- *     file as Prisma. We use a raw table (RateLimitHit) created lazily with
- *     CREATE TABLE IF NOT EXISTS, so no Prisma migration / `db push` is
- *     required and the limiter can't be broken by a schema drift.
+ *   - Backed by a dedicated better-sqlite3 handle on a LOCAL sidecar file
+ *     (prisma/rate-limit.db), deliberately separate from the primary
+ *     database. The app's primary store is Postgres (async), but this
+ *     limiter must stay synchronous because NextAuth's authorize() consumes
+ *     it without awaiting; a tiny local SQLite file gives a persistent,
+ *     synchronous counter without dragging a pg round-trip into the auth hot
+ *     path. The window is host-local throttling state — exactly what brute-
+ *     force protection wants — so it does not need to live in Postgres. We
+ *     use a raw table (RateLimitHit) created lazily with CREATE TABLE IF NOT
+ *     EXISTS, so no Prisma migration is required and it can't drift.
  *   - better-sqlite3 is synchronous, which is exactly what the existing
  *     (non-async) API needs — NextAuth's authorize() calls consume()
  *     without awaiting.
@@ -43,10 +49,11 @@ let db: Db | null = null;
 let dbInitFailed = false;
 
 function resolveDbFile(): string {
-  const configured = process.env.DATABASE_URL;
-  if (configured && configured.startsWith("file:")) return configured.slice("file:".length);
-  if (configured && !configured.includes("://")) return configured;
-  return path.join(process.cwd(), "prisma", "dev.db");
+  // Dedicated local sidecar, independent of DATABASE_URL (which is Postgres).
+  // Overridable for tests / multi-instance hosts via RATE_LIMIT_DB_FILE.
+  const override = process.env.RATE_LIMIT_DB_FILE;
+  if (override && override.trim()) return override.trim();
+  return path.join(process.cwd(), "prisma", "rate-limit.db");
 }
 
 function getDb(): Db | null {

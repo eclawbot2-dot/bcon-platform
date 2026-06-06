@@ -10,10 +10,27 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bcon
+          POSTGRES_PASSWORD: bcon_dev
+          POSTGRES_DB: bcon_test
+        ports:
+          - 5432:5432
+        # Wait for Postgres to accept connections before the steps run.
+        options: >-
+          --health-cmd "pg_isready -U bcon -d bcon_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      # Tests need a SQLite db. Prisma generates the client + db push
-      # creates the schema; no real data fixtures required.
-      DATABASE_URL: file:./prisma/dev.db
+      # The app + tests run on Postgres. `prisma migrate deploy` applies the
+      # committed migrations to this disposable service DB; tests create
+      # their own uniquely-slugged rows (no fixtures required).
+      DATABASE_URL: postgresql://bcon:bcon_dev@127.0.0.1:5432/bcon_test?schema=public
+      TEST_DATABASE_URL: postgresql://bcon:bcon_dev@127.0.0.1:5432/bcon_test?schema=public
       # Disable outbound LLM calls in CI (tests should be hermetic).
       ENABLE_LLM_CALLS: "false"
       # NextAuth + vault secrets. `next build` evaluates modules with
@@ -37,8 +54,8 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Push schema (creates the SQLite db)
-        run: npx prisma db push --accept-data-loss
+      - name: Apply migrations (Postgres)
+        run: npx prisma migrate deploy
 
       - name: TypeScript check
         run: npx tsc --noEmit

@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import path from "node:path";
-import fs from "node:fs";
-import os from "node:os";
-import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import type { PrismaClient } from "@prisma/client";
+import { freshPrisma } from "./_db";
 
 /**
  * Race-guard tests for the dedup and autopilot idempotency fixes
- * landed in pass-12. Use a temp SQLite copy of the dev.db so tests
- * can write rows without polluting the working database.
+ * landed in pass-12. Runs against the dedicated Postgres test DB and
+ * creates its own throwaway tenant.
  *
  * These tests exercise REAL Prisma operations against the unique
  * constraint, which is the only way to verify the catch in
@@ -17,39 +14,19 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
  */
 
 let prisma: PrismaClient;
-let tmpDbPath: string;
+let cleanup: () => Promise<void>;
 let tenantId: string;
 
 beforeAll(async () => {
-  // Copy dev.db to a tmp file so the tests can mutate it without
-  // affecting development state. If dev.db doesn't exist, skip.
-  const devDb = path.resolve(__dirname, "..", "prisma", "dev.db");
-  if (!fs.existsSync(devDb)) {
-    throw new Error("dev.db not found — run `npx prisma db push` first");
-  }
-  tmpDbPath = path.join(os.tmpdir(), `bcon-test-dedup-${Date.now()}.db`);
-  fs.copyFileSync(devDb, tmpDbPath);
-
-  const adapter = new PrismaBetterSqlite3({ url: `file:${tmpDbPath}` });
-  prisma = new PrismaClient({ adapter });
-
-  // Use an existing tenant if there is one, otherwise create a fresh
-  // throwaway tenant for this test run. Either way we clean up at the
-  // end by dropping the tmp DB file, not by deleting rows.
-  const existing = await prisma.tenant.findFirst();
-  if (existing) {
-    tenantId = existing.id;
-  } else {
-    const created = await prisma.tenant.create({
-      data: { name: "test-dedup-race", slug: `dedup-race-${Date.now()}`, primaryMode: "SIMPLE" },
-    });
-    tenantId = created.id;
-  }
+  ({ prisma, cleanup } = freshPrisma("dedup-race"));
+  const created = await prisma.tenant.create({
+    data: { name: "test-dedup-race", slug: `dedup-race-${Date.now()}`, primaryMode: "SIMPLE" },
+  });
+  tenantId = created.id;
 });
 
 afterAll(async () => {
-  await prisma?.$disconnect();
-  try { fs.unlinkSync(tmpDbPath); } catch { /* ignore */ }
+  await cleanup?.();
 });
 
 describe("RfpListing unique-constraint dedup", () => {

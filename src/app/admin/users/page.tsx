@@ -19,7 +19,7 @@ async function loadUsers(where: Record<string, unknown>) {
 export default async function AdminUsersListPage({ searchParams }: { searchParams: Promise<{ q?: string; super?: string }> }) {
   const sp = await searchParams;
   const where: Record<string, unknown> = {};
-  if (sp.q) where.OR = [{ name: { contains: sp.q } }, { email: { contains: sp.q } }];
+  if (sp.q) where.OR = [{ name: { contains: sp.q, mode: "insensitive" } }, { email: { contains: sp.q, mode: "insensitive" } }];
   if (sp.super === "1") where.superAdmin = true;
 
   const [users, total, superTotal, active] = await Promise.all([

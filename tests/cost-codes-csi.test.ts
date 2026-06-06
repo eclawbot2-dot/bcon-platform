@@ -1,22 +1,26 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import path from "node:path";
-import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import type { PrismaClient } from "@prisma/client";
+import { useTempDevDb, freshPrisma } from "./_db";
+
+// seedDefaultCostCodes (imported dynamically below) uses the @/lib/prisma
+// singleton; bind DATABASE_URL to the test DB before that module loads so
+// the singleton and this test's own client hit the same database.
+const { cleanupFile } = useTempDevDb("cost-codes-csi");
 
 let prisma: PrismaClient;
+let cleanup: () => Promise<void>;
 let tenantId: string;
 
 beforeAll(async () => {
-  const url = process.env.DATABASE_URL ?? `file:${path.join(process.cwd(), "prisma", "dev.db")}`;
-  const adapter = new PrismaBetterSqlite3({ url: url.startsWith("file:") ? url : `file:${url}` });
-  prisma = new PrismaClient({ adapter });
+  ({ prisma, cleanup } = freshPrisma("cost-codes-csi"));
   const t = await prisma.tenant.create({ data: { name: `CC test ${Date.now()}`, slug: `cc-${Date.now()}`, primaryMode: "VERTICAL" } });
   tenantId = t.id;
 });
 
 afterAll(async () => {
   if (tenantId) await prisma.tenant.delete({ where: { id: tenantId } }).catch(() => { /* cleanup */ });
-  await prisma?.$disconnect();
+  await cleanup?.();
+  cleanupFile();
 });
 
 describe("seedDefaultCostCodes — idempotency", () => {

@@ -26,7 +26,7 @@ export async function autopilotListing(tenantId: string, listingId: string, comp
   let oppId = listing.opportunityId;
   if (!oppId) {
     const existing = await prisma.opportunity.findFirst({
-      where: { tenantId, name: { contains: listing.solicitationNo ?? listing.title.slice(0, 40) } },
+      where: { tenantId, name: { contains: listing.solicitationNo ?? listing.title.slice(0, 40), mode: "insensitive" } },
     });
     const opp = existing ?? await prisma.opportunity.create({
       data: {

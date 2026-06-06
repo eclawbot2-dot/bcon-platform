@@ -24,10 +24,10 @@ export default async function RfpListingsPage({ searchParams }: { searchParams: 
       ...(Array.isArray(where.AND) ? (where.AND as unknown[]) : []),
       {
         OR: [
-          { title: { contains: needle } },
-          { agency: { contains: needle } },
-          { solicitationNo: { contains: needle } },
-          { naicsCode: { contains: needle } },
+          { title: { contains: needle, mode: "insensitive" } },
+          { agency: { contains: needle, mode: "insensitive" } },
+          { solicitationNo: { contains: needle, mode: "insensitive" } },
+          { naicsCode: { contains: needle, mode: "insensitive" } },
         ],
       },
     ];

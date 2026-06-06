@@ -1,99 +1,72 @@
 /**
- * Shared test-DB isolation helper.
+ * Shared test-DB helper (PostgreSQL).
  *
- * The platform's dev SQLite file (prisma/dev.db) is the live developer
- * database. Tests must NEVER write to it: a failed cleanup leaves junk
- * tenants/projects behind, and parallel test files racing on the same
- * file produce flaky failures. The tenant-isolation test established the
- * right pattern — copy dev.db to an OS-temp file and point a throwaway
- * Prisma client (or the lib singleton) at the copy. This module makes
- * that pattern reusable so no test rolls its own (and gets it wrong, the
- * way reports.test.ts originally pointed straight at dev.db).
+ * Tests run against a DEDICATED Postgres test database — never the primary
+ * dev/seeded database. Each DB-touching test creates its own tenants/
+ * projects with unique slugs and cleans them up, so files can run against
+ * the same database without colliding (unlike the old SQLite file-copy
+ * pattern, Postgres handles concurrent connections cleanly; vitest is also
+ * configured non-parallel so connection counts stay small).
+ *
+ * Resolution of the test database URL:
+ *   1. TEST_DATABASE_URL (CI sets this to the disposable service DB), else
+ *   2. a conventional local `bcon_test` database. Create + migrate it once:
+ *        createdb -O bcon bcon_test
+ *        DATABASE_URL=postgresql://bcon:bcon_dev@127.0.0.1:5432/bcon_test \
+ *          npx prisma migrate deploy
  *
  * Two usage modes:
  *
  *  1. Own-client tests (no lib-singleton dependency):
  *       const { prisma, cleanup } = freshPrisma("reports");
  *       // ... use prisma ...
- *       await cleanup();   // disconnect + unlink temp file
+ *       await cleanup();   // disconnect
  *
  *  2. Singleton-backed tests (function under test imports @/lib/prisma):
- *       const { dbPath, cleanupFile } = useTempDevDb("alerts");
- *       // ^ sets process.env.DATABASE_URL to the temp copy. Call this at
+ *       const { cleanupFile } = useTempDevDb("alerts");
+ *       // ^ sets process.env.DATABASE_URL to the test DB. Call this at
  *       //   module top-level BEFORE importing @/lib/prisma.
  *       const { prisma } = await import("@/lib/prisma");
- *       // ... in afterAll: await prisma.$disconnect(); cleanupFile();
+ *       // in afterAll: await prisma.$disconnect(); cleanupFile();
  */
-import path from "node:path";
-import fs from "node:fs";
-import os from "node:os";
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-/** Absolute path to the developer SQLite database. */
-export function devDbPath(): string {
-  return path.resolve(__dirname, "..", "prisma", "dev.db");
+/** Postgres connection string for the throwaway test database. */
+export function testDatabaseUrl(): string {
+  const explicit = process.env.TEST_DATABASE_URL;
+  if (explicit && explicit.trim()) return explicit.trim();
+  return "postgresql://bcon:bcon_dev@127.0.0.1:5432/bcon_test?schema=public";
+}
+
+/** Small connection pool — many test files share one server. */
+function makeAdapter() {
+  return new PrismaPg({ connectionString: testDatabaseUrl(), max: 3 });
 }
 
 /**
- * Copy dev.db to a unique OS-temp file and return its path. The label +
- * timestamp + random suffix avoid collisions when multiple test files
- * run concurrently. Throws if dev.db is missing (CI/local must run
- * `npx prisma db push` first).
+ * Singleton-backed mode. Points process.env.DATABASE_URL at the test DB.
+ * MUST be called at module top-level before any import of @/lib/prisma so
+ * the singleton binds to the test database. Returns the URL + a no-op
+ * cleanup (kept for source-compat with the former SQLite file helper).
  */
-export function copyDevDb(label: string): string {
-  const src = devDbPath();
-  if (!fs.existsSync(src)) {
-    throw new Error("dev.db missing — run `npx prisma db push` first");
-  }
-  const tmp = path.join(
-    os.tmpdir(),
-    `bcon-test-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`,
-  );
-  fs.copyFileSync(src, tmp);
-  return tmp;
+export function useTempDevDb(_label: string): { dbUrl: string; cleanupFile: () => void } {
+  const dbUrl = testDatabaseUrl();
+  process.env.DATABASE_URL = dbUrl;
+  return { dbUrl, cleanupFile: () => {} };
 }
 
 /**
- * Singleton-backed mode. Copies dev.db to a temp file and points
- * process.env.DATABASE_URL at it. MUST be called at module top-level
- * before any import of @/lib/prisma so the singleton binds to the copy.
- * Returns the temp path + a cleanup that unlinks it.
+ * Own-client mode. Returns a fresh PrismaClient bound to the test DB plus a
+ * cleanup that disconnects it. Does NOT touch process.env, so it's safe
+ * alongside the lib singleton.
  */
-export function useTempDevDb(label: string): { dbPath: string; cleanupFile: () => void } {
-  const dbPath = copyDevDb(label);
-  process.env.DATABASE_URL = `file:${dbPath}`;
-  return {
-    dbPath,
-    cleanupFile: () => {
-      try {
-        fs.unlinkSync(dbPath);
-      } catch {
-        /* best-effort */
-      }
-    },
-  };
-}
-
-/**
- * Own-client mode. Returns a fresh PrismaClient bound to a throwaway copy
- * of dev.db plus a cleanup that disconnects and unlinks the file. Does
- * NOT touch process.env, so it's safe alongside the lib singleton.
- */
-export function freshPrisma(label: string): { prisma: PrismaClient; dbPath: string; cleanup: () => Promise<void> } {
-  const dbPath = copyDevDb(label);
-  const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
-  const prisma = new PrismaClient({ adapter });
+export function freshPrisma(_label: string): { prisma: PrismaClient; cleanup: () => Promise<void> } {
+  const prisma = new PrismaClient({ adapter: makeAdapter() });
   return {
     prisma,
-    dbPath,
     cleanup: async () => {
       await prisma.$disconnect().catch(() => {});
-      try {
-        fs.unlinkSync(dbPath);
-      } catch {
-        /* best-effort */
-      }
     },
   };
 }

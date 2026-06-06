@@ -3,11 +3,11 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
 
-// Point the limiter's persistent SQLite store at a throwaway temp file
-// BEFORE importing the module, so the test never touches the dev database
+// Point the limiter's persistent SQLite sidecar at a throwaway temp file
+// BEFORE importing the module, so the test never touches the real sidecar
 // (the limiter lazily CREATE-TABLE-IF-NOT-EXISTS, so an empty file is fine).
 const tmpDb = path.join(os.tmpdir(), `bcon-test-ratelimit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`);
-process.env.DATABASE_URL = `file:${tmpDb}`;
+process.env.RATE_LIMIT_DB_FILE = tmpDb;
 
 const { consumeRateLimit, resetRateLimit, _resetAllRateLimits } = await import("../src/lib/rate-limit");
 

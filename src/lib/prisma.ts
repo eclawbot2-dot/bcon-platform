@@ -1,47 +1,36 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import path from "path";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
 /**
- * Resolve the local SQLite database URL.
+ * The app runs on PostgreSQL (16) via @prisma/adapter-pg. DATABASE_URL must
+ * be a postgresql:// connection string (see .env / .env.example). The driver
+ * adapter owns connection pooling, so a single `pg` pool is shared across the
+ * Prisma client for the lifetime of the process.
  *
- * NOTE: Production should run on Postgres. To switch:
- *   1. Change `provider` in prisma/schema.prisma to "postgresql".
- *   2. `npm install @prisma/adapter-pg pg @types/pg` (currently NOT in
- *      package.json; SQLite is the only adapter wired today).
- *   3. Replace this file's `createPrismaClient` body with the Postgres
- *      adapter:
- *         import { PrismaPg } from "@prisma/adapter-pg";
- *         const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
- *         return new PrismaClient({ adapter });
- *   4. Plan the Float -> Decimal migration for currency-bearing fields
- *      (see docs/pass-audit-07.md §1.2).
- *
- * Until Postgres is wired, DATABASE_URL is treated as a SQLite file path
- * regardless of scheme — pointing it at a postgres:// URL will silently
- * coerce to file: form and corrupt the URL. Postgres is intentionally
- * not auto-detected here so a half-finished migration cannot ship.
+ * In development Next.js hot-reloads modules, which would otherwise spin up a
+ * fresh pool (and exhaust Postgres connections) on every edit — so the client
+ * is cached on globalThis outside production, matching the standard Prisma +
+ * Next.js singleton pattern.
  */
-function resolveSqliteUrl() {
+function resolvePostgresUrl(): string {
   const configured = process.env.DATABASE_URL;
-  if (configured) {
-    if (configured.startsWith("postgres://") || configured.startsWith("postgresql://")) {
-      throw new Error(
-        "DATABASE_URL is a Postgres URL but this build is wired for SQLite only. " +
-        "Wire @prisma/adapter-pg in src/lib/prisma.ts before pointing at Postgres.",
-      );
-    }
-    return configured.startsWith("file:") ? configured : `file:${configured}`;
+  if (!configured) {
+    throw new Error("DATABASE_URL is not set; expected a postgresql:// connection string.");
   }
-  return `file:${path.join(process.cwd(), "prisma", "dev.db")}`;
+  if (!configured.startsWith("postgres://") && !configured.startsWith("postgresql://")) {
+    throw new Error(
+      `DATABASE_URL must be a postgresql:// URL (this app runs on Postgres), got scheme "${configured.split(":")[0]}".`,
+    );
+  }
+  return configured;
 }
 
 function createPrismaClient() {
-  const adapter = new PrismaBetterSqlite3({ url: resolveSqliteUrl() });
+  const adapter = new PrismaPg({ connectionString: resolvePostgresUrl() });
   return new PrismaClient({ adapter });
 }
 

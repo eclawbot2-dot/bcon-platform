@@ -3,19 +3,22 @@ generator client {
   engineType = "library"
 }
 
-// Local dev runs on SQLite via better-sqlite3 for friction-free setup.
-// For production, change `provider` to "postgresql", set DATABASE_URL to a
-// Postgres URL, install `@prisma/adapter-pg` and `pg`, and update
-// src/lib/prisma.ts to instantiate PrismaPg instead of PrismaBetterSqlite3.
+// Runs on PostgreSQL (16) via @prisma/adapter-pg. DATABASE_URL is a
+// postgresql:// URL; the connection string is resolved by prisma.config.ts
+// (for the CLI) and by src/lib/prisma.ts (for the running app, which wires
+// PrismaPg). The legacy SQLite dev.db is retained only as a cold fallback.
 //
-// Currency-bearing fields throughout this schema use `Decimal` (mapped to
-// `@db.Decimal(15, 2)` on Postgres) so summing across line items stays
-// exact — the `Float` columns that remain hold non-money quantities only
-// (hours, percentages, quantities, lat/long, ratios, scores). Money math
-// routes through src/lib/money.ts (integer-cents primitives). See
-// docs/pass-audit-07.md §1.2 for the original Float→Decimal migration plan.
+// Currency-bearing fields throughout this schema use `Decimal` (Postgres
+// `numeric`, exact) so summing across line items stays exact — the `Float`
+// columns that remain hold non-money quantities only (hours, percentages,
+// quantities, lat/long, ratios, scores). Money math routes through
+// src/lib/money.ts (integer-cents primitives). See docs/pass-audit-07.md
+// §1.2 for the original Float→Decimal migration plan.
 datasource db {
-  provider = "sqlite"
+  // Prisma 7 no longer accepts `url` here; the connection string lives in
+  // prisma.config.ts (CLI/Migrate) and is passed to PrismaClient via the
+  // PrismaPg adapter in src/lib/prisma.ts (runtime). Both read DATABASE_URL.
+  provider = "postgresql"
 }
 
 enum ProjectMode {

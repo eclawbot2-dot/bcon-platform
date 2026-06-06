@@ -1,31 +1,29 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { useTempDevDb } from "./_db";
+import type { PrismaClient } from "@prisma/client";
+import { useTempDevDb, freshPrisma } from "./_db";
 
 /**
  * Report-correctness tests. The lib functions in src/lib/reports.ts use
- * the singleton prisma client. Previously this test seeded + read against
- * the LIVE prisma/dev.db, polluting the developer database. Now it copies
- * dev.db to an OS-temp file (via the shared _db helper) and points BOTH
- * the singleton (DATABASE_URL, set before any prisma import) and the
- * test's own seeding client at that throwaway copy.
+ * the singleton prisma client. The test points BOTH the singleton
+ * (DATABASE_URL, set before any prisma import) and the test's own seeding
+ * client at the dedicated Postgres test database, and creates uniquely-
+ * slugged tenants it cleans up afterward so the dev database is untouched.
  */
 
-// Set DATABASE_URL to a temp copy BEFORE @/lib/reports (and its prisma
+// Bind DATABASE_URL to the test DB BEFORE @/lib/reports (and its prisma
 // singleton) is dynamically imported inside the test bodies.
 const { cleanupFile } = useTempDevDb("reports");
 
 let prisma: PrismaClient;
+let cleanupPrisma: () => Promise<void>;
 const createdTenantIds: string[] = [];
 
 beforeAll(() => {
-  const adapter = new PrismaBetterSqlite3({ url: process.env.DATABASE_URL! });
-  prisma = new PrismaClient({ adapter });
+  ({ prisma, cleanup: cleanupPrisma } = freshPrisma("reports"));
 });
 
 afterAll(async () => {
-  await prisma?.$disconnect();
+  await cleanupPrisma?.();
   cleanupFile();
 });
 

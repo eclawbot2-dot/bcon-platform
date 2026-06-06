@@ -1,7 +1,6 @@
 import "dotenv/config";
-import path from "path";
 import bcrypt from "bcryptjs";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 import {
   BidPackageStatus,
   BudgetLineType,
@@ -33,11 +32,11 @@ import {
 } from "@prisma/client";
 import { toNum, multiplyMoney, addMoney, sumMoney } from "../src/lib/money";
 
-const configuredDbUrl = process.env.DATABASE_URL;
-const dbUrl = configuredDbUrl
-  ? (configuredDbUrl.startsWith("file:") ? configuredDbUrl : `file:${configuredDbUrl}`)
-  : `file:${path.join(process.cwd(), "prisma", "dev.db")}`;
-const adapter = new PrismaBetterSqlite3({ url: dbUrl });
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString || !/^postgres(ql)?:\/\//.test(connectionString)) {
+  throw new Error("DATABASE_URL must be a postgresql:// connection string to seed.");
+}
+const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {

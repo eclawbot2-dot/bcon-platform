@@ -31,7 +31,7 @@ export default async function TimesheetsRollupPage({ searchParams }: { searchPar
   const where: Record<string, unknown> = { project: { tenantId: tenant.id } };
   if (sp.status && sp.status !== "ALL") where.status = sp.status;
   if (sp.projectId) where.projectId = sp.projectId;
-  if (sp.employee) where.employeeName = { contains: sp.employee };
+  if (sp.employee) where.employeeName = { contains: sp.employee, mode: "insensitive" };
 
   const [entries, projects, statusCounts] = await Promise.all([
     loadEntries(where),

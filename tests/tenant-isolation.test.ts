@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import path from "node:path";
-import fs from "node:fs";
-import os from "node:os";
-import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import type { PrismaClient } from "@prisma/client";
+import { freshPrisma } from "./_db";
 
 /**
  * Tenant isolation guards. The platform's #1 trust property is that
@@ -23,17 +20,12 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
  */
 
 let prisma: PrismaClient;
-let tmpDbPath: string;
+let cleanup: () => Promise<void>;
 let tenantA: string;
 let tenantB: string;
 
 beforeAll(async () => {
-  const devDb = path.resolve(__dirname, "..", "prisma", "dev.db");
-  if (!fs.existsSync(devDb)) throw new Error("dev.db missing — run npx prisma db push first");
-  tmpDbPath = path.join(os.tmpdir(), `bcon-test-isolation-${Date.now()}.db`);
-  fs.copyFileSync(devDb, tmpDbPath);
-  const adapter = new PrismaBetterSqlite3({ url: `file:${tmpDbPath}` });
-  prisma = new PrismaClient({ adapter });
+  ({ prisma, cleanup } = freshPrisma("isolation"));
   const a = await prisma.tenant.create({ data: { name: "Tenant A", slug: `tA-${Date.now()}`, primaryMode: "VERTICAL" } });
   const b = await prisma.tenant.create({ data: { name: "Tenant B", slug: `tB-${Date.now()}`, primaryMode: "VERTICAL" } });
   tenantA = a.id;
@@ -41,8 +33,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await prisma?.$disconnect();
-  try { fs.unlinkSync(tmpDbPath); } catch { /* ignore */ }
+  await cleanup?.();
 });
 
 describe("tenant isolation", () => {

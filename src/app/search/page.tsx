@@ -17,15 +17,15 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
   const like = q;
   const [projects, vendors, contracts, rfis, subs, opps, listings, permits, people] = await Promise.all([
-    prisma.project.findMany({ where: { tenantId: tenant.id, OR: [{ name: { contains: like } }, { code: { contains: like } }, { ownerName: { contains: like } }] }, take: 20, select: { id: true, name: true, code: true, mode: true, ownerName: true } }),
-    prisma.vendor.findMany({ where: { tenantId: tenant.id, OR: [{ name: { contains: like } }, { legalName: { contains: like } }, { trade: { contains: like } }] }, take: 20, select: { id: true, name: true, trade: true } }),
-    prisma.contract.findMany({ where: { project: { tenantId: tenant.id }, OR: [{ title: { contains: like } }, { contractNumber: { contains: like } }, { counterparty: { contains: like } }] }, include: { project: true }, take: 15 }),
-    prisma.rFI.findMany({ where: { project: { tenantId: tenant.id }, OR: [{ subject: { contains: like } }, { number: { contains: like } }] }, include: { project: true }, take: 15 }),
-    prisma.submittal.findMany({ where: { project: { tenantId: tenant.id }, OR: [{ title: { contains: like } }, { number: { contains: like } }, { specSection: { contains: like } }] }, include: { project: true }, take: 15 }),
-    prisma.opportunity.findMany({ where: { tenantId: tenant.id, OR: [{ name: { contains: like } }, { clientName: { contains: like } }] }, take: 15, select: { id: true, name: true, clientName: true, stage: true } }),
-    prisma.rfpListing.findMany({ where: { tenantId: tenant.id, OR: [{ title: { contains: like } }, { agency: { contains: like } }, { solicitationNo: { contains: like } }] }, take: 15, select: { id: true, title: true, agency: true, solicitationNo: true } }),
-    prisma.permit.findMany({ where: { project: { tenantId: tenant.id }, OR: [{ permitNumber: { contains: like } }, { permitType: { contains: like } }, { jurisdiction: { contains: like } }] }, include: { project: true }, take: 15 }),
-    prisma.user.findMany({ where: { memberships: { some: { tenantId: tenant.id } }, OR: [{ name: { contains: like } }, { email: { contains: like } }] }, take: 15, select: { id: true, name: true, email: true } }),
+    prisma.project.findMany({ where: { tenantId: tenant.id, OR: [{ name: { contains: like, mode: "insensitive" } }, { code: { contains: like, mode: "insensitive" } }, { ownerName: { contains: like, mode: "insensitive" } }] }, take: 20, select: { id: true, name: true, code: true, mode: true, ownerName: true } }),
+    prisma.vendor.findMany({ where: { tenantId: tenant.id, OR: [{ name: { contains: like, mode: "insensitive" } }, { legalName: { contains: like, mode: "insensitive" } }, { trade: { contains: like, mode: "insensitive" } }] }, take: 20, select: { id: true, name: true, trade: true } }),
+    prisma.contract.findMany({ where: { project: { tenantId: tenant.id }, OR: [{ title: { contains: like, mode: "insensitive" } }, { contractNumber: { contains: like, mode: "insensitive" } }, { counterparty: { contains: like, mode: "insensitive" } }] }, include: { project: true }, take: 15 }),
+    prisma.rFI.findMany({ where: { project: { tenantId: tenant.id }, OR: [{ subject: { contains: like, mode: "insensitive" } }, { number: { contains: like, mode: "insensitive" } }] }, include: { project: true }, take: 15 }),
+    prisma.submittal.findMany({ where: { project: { tenantId: tenant.id }, OR: [{ title: { contains: like, mode: "insensitive" } }, { number: { contains: like, mode: "insensitive" } }, { specSection: { contains: like, mode: "insensitive" } }] }, include: { project: true }, take: 15 }),
+    prisma.opportunity.findMany({ where: { tenantId: tenant.id, OR: [{ name: { contains: like, mode: "insensitive" } }, { clientName: { contains: like, mode: "insensitive" } }] }, take: 15, select: { id: true, name: true, clientName: true, stage: true } }),
+    prisma.rfpListing.findMany({ where: { tenantId: tenant.id, OR: [{ title: { contains: like, mode: "insensitive" } }, { agency: { contains: like, mode: "insensitive" } }, { solicitationNo: { contains: like, mode: "insensitive" } }] }, take: 15, select: { id: true, title: true, agency: true, solicitationNo: true } }),
+    prisma.permit.findMany({ where: { project: { tenantId: tenant.id }, OR: [{ permitNumber: { contains: like, mode: "insensitive" } }, { permitType: { contains: like, mode: "insensitive" } }, { jurisdiction: { contains: like, mode: "insensitive" } }] }, include: { project: true }, take: 15 }),
+    prisma.user.findMany({ where: { memberships: { some: { tenantId: tenant.id } }, OR: [{ name: { contains: like, mode: "insensitive" } }, { email: { contains: like, mode: "insensitive" } }] }, take: 15, select: { id: true, name: true, email: true } }),
   ]);
 
   return (
