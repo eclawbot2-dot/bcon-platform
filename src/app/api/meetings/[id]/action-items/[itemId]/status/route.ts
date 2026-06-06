@@ -20,7 +20,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     include: { meeting: { select: { projectId: true } } },
   });
   if (!item) redirect(`/projects?error=Action+item+not+found`);
-  if (!(await currentActor(tenant.id)).canEdit) {
+  const actor = await currentActor(tenant.id);
+  if (!actor.canEdit) {
     redirect(`/projects/${item!.meeting.projectId}/meetings/${id}?error=Editor+role+required`);
   }
 
@@ -30,7 +31,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     redirect(`/projects/${item!.meeting.projectId}/meetings/${id}?error=Invalid+status`);
   }
 
-  const actor = await currentActor(tenant.id);
   const done = status === "DONE";
   await prisma.meetingActionItem.update({
     where: { id: itemId },
