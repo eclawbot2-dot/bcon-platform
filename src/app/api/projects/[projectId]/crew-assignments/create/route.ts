@@ -19,13 +19,19 @@ export async function POST(req: Request, ctx: { params: Promise<{ projectId: str
   if (!crewName || !assignedDateRaw) {
     return NextResponse.json({ error: "crewName and assignedDate required" }, { status: 400 });
   }
+  const assignedDate = new Date(assignedDateRaw);
+  if (Number.isNaN(assignedDate.getTime())) {
+    // Reject an unparseable date before it reaches the upsert where-clause,
+    // where an Invalid Date would otherwise surface as an opaque 500.
+    return NextResponse.json({ error: "assignedDate is not a valid date" }, { status: 400 });
+  }
   const costCode = form.get("costCode") ? String(form.get("costCode")) : "";
 
   const ca = await prisma.crewAssignment.upsert({
     where: {
       projectId_assignedDate_crewName_costCode: {
         projectId,
-        assignedDate: new Date(assignedDateRaw),
+        assignedDate,
         crewName,
         costCode,
       },
@@ -34,7 +40,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ projectId: str
       projectId,
       crewName,
       costCode,
-      assignedDate: new Date(assignedDateRaw),
+      assignedDate,
       foreman: form.get("foreman") ? String(form.get("foreman")) : null,
       activity: form.get("activity") ? String(form.get("activity")) : null,
       plannedHeadcount: form.get("plannedHeadcount") ? Number(form.get("plannedHeadcount")) : 0,
