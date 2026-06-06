@@ -15,8 +15,9 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { sumMoney, subtractMoney, multiplyMoney, toNum, type MoneyLike } from "@/lib/money";
+import { sumMoney, subtractMoney, multiplyMoney, toNum, fromCents, type MoneyLike } from "@/lib/money";
 import { buildBallInCourtAging, type BallInCourtAging } from "@/lib/ball-in-court";
+import { isApprovedCo, isPendingCo } from "@/lib/change-order-totals";
 
 // ─── R1 — Surety-grade WIP report ──────────────────────────────────
 
@@ -431,5 +432,170 @@ export async function ballInCourtAgingReport(
       })),
     },
     now,
+  );
+}
+
+// ─── R10 — RFI → PCO → CO change-exposure pipeline ─────────────────
+//
+// Construction cost leaks at the seam between "an RFI flags a cost
+// impact" and "that impact becomes a change order someone actually
+// bills". This report traces each RFI's estimated cost impact
+// (RFI.costImpactCents) through its linked change orders and buckets it:
+//
+//   CAPTURED   — at least one linked CO is APPROVED/EXECUTED. The dollars
+//                are committed to the contract; capturedDelta shows how
+//                the realized CO compares to the early RFI estimate.
+//   IN_FLIGHT  — linked CO exists but is still DRAFT/PENDING. Money is
+//                being pursued but not yet committed.
+//   UNCAPTURED — a cost impact was flagged on the RFI but no live CO
+//                exists (none, or only REJECTED/VOID). This is the
+//                leakage set: estimated exposure nobody has converted
+//                into a billable change order.
+//
+// The pure reconciler is unit-tested in isolation; the fetch wrapper
+// only does the tenant-scoped query + project-label join. Money is
+// cents-exact end to end (RFI cents → dollars via fromCents; CO Decimal
+// amounts summed via sumMoney).
+
+export type ExposureCoLike = { status: string; amount: MoneyLike };
+
+export type ExposureRfiLike = {
+  id: string;
+  number: string;
+  subject: string;
+  status: string;
+  projectId: string;
+  projectName: string;
+  costImpactCents: number | null;
+  changeOrders: ExposureCoLike[];
+};
+
+export type ExposureBucket = "CAPTURED" | "IN_FLIGHT" | "UNCAPTURED";
+
+export type ChangeExposureRow = {
+  rfiId: string;
+  number: string;
+  subject: string;
+  status: string;
+  projectId: string;
+  projectName: string;
+  /** Estimated cost impact recorded on the RFI, in dollars (may be negative for a deductive change). */
+  estimatedImpact: number;
+  /** Sum of linked APPROVED/EXECUTED change-order amounts, in dollars. */
+  approvedCoValue: number;
+  /** Sum of linked DRAFT/PENDING change-order amounts, in dollars. */
+  pendingCoValue: number;
+  /** approvedCoValue − estimatedImpact. Positive = realized CO grew past the RFI estimate. */
+  capturedDelta: number;
+  bucket: ExposureBucket;
+  linkedCoCount: number;
+};
+
+export type ChangeExposureReport = {
+  rows: ChangeExposureRow[];
+  totals: {
+    estimatedImpact: number;
+    approvedCoValue: number;
+    pendingCoValue: number;
+    /** Sum of estimatedImpact across UNCAPTURED rows — the headline leakage figure. */
+    uncapturedExposure: number;
+    capturedCount: number;
+    inFlightCount: number;
+    uncapturedCount: number;
+  };
+};
+
+const BUCKET_ORDER: Record<ExposureBucket, number> = { UNCAPTURED: 0, IN_FLIGHT: 1, CAPTURED: 2 };
+
+/**
+ * Pure reconciler — no DB. Buckets each RFI's cost impact against its
+ * linked change orders. An RFI is included when it has a non-zero cost
+ * impact OR at least one linked change order; an RFI with neither is
+ * irrelevant to change exposure and dropped.
+ */
+export function reconcileChangeExposure(rfis: ReadonlyArray<ExposureRfiLike>): ChangeExposureReport {
+  const rows: ChangeExposureRow[] = [];
+  for (const rfi of rfis) {
+    const estimatedImpact = fromCents(rfi.costImpactCents ?? 0);
+    const cos = rfi.changeOrders ?? [];
+    if (estimatedImpact === 0 && cos.length === 0) continue;
+
+    const approvedCoValue = sumMoney(cos.filter((c) => isApprovedCo(c.status)).map((c) => c.amount));
+    const pendingCoValue = sumMoney(cos.filter((c) => isPendingCo(c.status)).map((c) => c.amount));
+    const hasApproved = cos.some((c) => isApprovedCo(c.status));
+    const hasPending = cos.some((c) => isPendingCo(c.status));
+    const bucket: ExposureBucket = hasApproved ? "CAPTURED" : hasPending ? "IN_FLIGHT" : "UNCAPTURED";
+
+    rows.push({
+      rfiId: rfi.id,
+      number: rfi.number,
+      subject: rfi.subject,
+      status: rfi.status,
+      projectId: rfi.projectId,
+      projectName: rfi.projectName,
+      estimatedImpact,
+      approvedCoValue,
+      pendingCoValue,
+      capturedDelta: subtractMoney(approvedCoValue, estimatedImpact),
+      bucket,
+      linkedCoCount: cos.length,
+    });
+  }
+
+  // Leakage first (UNCAPTURED), then by absolute estimated impact desc, then RFI number.
+  rows.sort(
+    (a, b) =>
+      BUCKET_ORDER[a.bucket] - BUCKET_ORDER[b.bucket] ||
+      Math.abs(b.estimatedImpact) - Math.abs(a.estimatedImpact) ||
+      a.number.localeCompare(b.number, undefined, { numeric: true }),
+  );
+
+  return {
+    rows,
+    totals: {
+      estimatedImpact: sumMoney(rows.map((r) => r.estimatedImpact)),
+      approvedCoValue: sumMoney(rows.map((r) => r.approvedCoValue)),
+      pendingCoValue: sumMoney(rows.map((r) => r.pendingCoValue)),
+      uncapturedExposure: sumMoney(rows.filter((r) => r.bucket === "UNCAPTURED").map((r) => r.estimatedImpact)),
+      capturedCount: rows.filter((r) => r.bucket === "CAPTURED").length,
+      inFlightCount: rows.filter((r) => r.bucket === "IN_FLIGHT").length,
+      uncapturedCount: rows.filter((r) => r.bucket === "UNCAPTURED").length,
+    },
+  };
+}
+
+/**
+ * Tenant-scoped change-exposure report. Loads only RFIs that carry a cost
+ * impact or a linked change order, then defers to the pure reconciler.
+ */
+export async function changeExposureReport(tenantId: string): Promise<ChangeExposureReport> {
+  const rfis = await prisma.rFI.findMany({
+    where: {
+      project: { tenantId },
+      OR: [{ costImpactCents: { not: null } }, { linkedChangeOrders: { some: {} } }],
+    },
+    select: {
+      id: true,
+      number: true,
+      subject: true,
+      status: true,
+      projectId: true,
+      costImpactCents: true,
+      project: { select: { name: true } },
+      linkedChangeOrders: { select: { status: true, amount: true } },
+    },
+  });
+
+  return reconcileChangeExposure(
+    rfis.map((r) => ({
+      id: r.id,
+      number: r.number,
+      subject: r.subject,
+      status: r.status,
+      projectId: r.projectId,
+      projectName: r.project.name,
+      costImpactCents: r.costImpactCents,
+      changeOrders: r.linkedChangeOrders.map((c) => ({ status: c.status, amount: c.amount })),
+    })),
   );
 }

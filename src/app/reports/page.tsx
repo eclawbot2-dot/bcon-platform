@@ -164,6 +164,19 @@ export default async function ReportsPage() {
         </section>
 
         <section className="card p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Change exposure (RFI → CO)</div>
+              <p className="mt-1 text-xs text-slate-400">RFI-flagged cost impacts traced through change orders. Surfaces uncaptured exposure not yet converted into a billable CO.</p>
+            </div>
+            <div className="flex gap-2">
+              <a href="/reports/change-exposure" className="btn-primary text-xs">Open</a>
+              <a href="/api/reports/change-exposure?format=csv" className="btn-outline text-xs">Export CSV</a>
+            </div>
+          </div>
+        </section>
+
+        <section className="card p-6">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">More reports</div>
           <div className="mt-3 grid gap-2 md:grid-cols-2 text-xs">
             <a href="/api/reports/margin-fade?format=csv" className="panel p-3 hover:border-cyan-500/40">Margin-fade trend (CSV)</a>

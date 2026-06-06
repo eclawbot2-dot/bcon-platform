@@ -10,6 +10,7 @@ import {
   resourceHeatmap,
   bondingCapacityReport,
   ballInCourtAgingReport,
+  changeExposureReport,
 } from "@/lib/reports";
 
 /**
@@ -66,6 +67,7 @@ async function runReport(name: string, tenantId: string, url: URL): Promise<unkn
     case "resource-heatmap": return resourceHeatmap(tenantId, clampedInt(url.searchParams.get("weeks"), 8, 1, 104));
     case "bonding-capacity": return bondingCapacityReport(tenantId);
     case "ball-in-court": return ballInCourtAgingReport(tenantId);
+    case "change-exposure": return changeExposureReport(tenantId);
     default: return null;
   }
 }
@@ -77,7 +79,9 @@ function toCsvFromArray(data: unknown): string {
       ? (data as { byOwner: unknown[] }).byOwner
       : data && typeof data === "object" && "items" in data
         ? (data as { items: unknown[] }).items // ball-in-court aging: export the per-item rows
-        : [data];
+        : data && typeof data === "object" && "rows" in data
+          ? (data as { rows: unknown[] }).rows // change-exposure: export the per-RFI rows
+          : [data];
   if (!Array.isArray(arr) || arr.length === 0) return "";
   const headers = Object.keys(arr[0] as Record<string, unknown>);
   const rows = (arr as Record<string, unknown>[]).map((r) =>
