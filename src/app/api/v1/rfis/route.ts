@@ -62,6 +62,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "missing_fields", message: "project_id, number, subject required" }, { status: 422 });
   }
 
+  // Validate an optional due_date up front — `new Date("garbage")` would
+  // otherwise reach prisma.create as an Invalid Date and surface as a 500
+  // instead of a clean 422 for the automation client.
+  let dueDate: Date | null = null;
+  if (body.due_date) {
+    dueDate = new Date(body.due_date);
+    if (Number.isNaN(dueDate.getTime())) {
+      return NextResponse.json({ error: "invalid_due_date", message: "due_date must be an ISO-8601 date" }, { status: 422 });
+    }
+  }
+
   // Verify project belongs to the token's tenant.
   const project = await prisma.project.findFirst({ where: { id: body.project_id, tenantId: auth.tenantId } });
   if (!project) return NextResponse.json({ error: "project_not_found" }, { status: 404 });
@@ -80,7 +91,7 @@ export async function POST(req: NextRequest) {
         subject: body.subject,
         question: body.question,
         ballInCourt: body.ball_in_court,
-        dueDate: body.due_date ? new Date(body.due_date) : null,
+        dueDate,
       },
     });
   } catch (err) {
