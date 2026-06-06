@@ -10,8 +10,32 @@
  */
 export function safeKeySegments(parts: string[]): string | null {
   if (!parts || parts.length === 0) return null;
-  for (const p of parts) {
-    if (!p || p === "." || p === ".." || p.includes("\\") || p.includes("\0")) return null;
+  const decoded: string[] = [];
+  for (const raw of parts) {
+    if (!raw) return null;
+    // Decode FIRST, then validate. Validating the still-encoded segment and
+    // decoding afterwards (the previous behaviour) let a double-encoded
+    // payload such as `%2e%2e` / `%252e%252e` slip past the `..` check and
+    // then decode back into a traversal sequence. Decode once here so the
+    // checks below see exactly what will hit the filesystem.
+    let p: string;
+    try {
+      p = decodeURIComponent(raw);
+    } catch {
+      // Malformed percent-encoding (e.g. a lone `%`).
+      return null;
+    }
+    if (
+      p === "" ||
+      p === "." ||
+      p === ".." ||
+      p.includes("/") || // an encoded separator (%2f) must not inject a path part
+      p.includes("\\") ||
+      p.includes("\0")
+    ) {
+      return null;
+    }
+    decoded.push(p);
   }
-  return parts.map((p) => decodeURIComponent(p)).join("/");
+  return decoded.join("/");
 }

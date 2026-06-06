@@ -29,6 +29,27 @@ describe("safeKeySegments", () => {
     expect(safeKeySegments(["tenantA", "..", "etc", "passwd"])).toBeNull();
   });
 
+  it("rejects single-encoded '..' traversal (%2e%2e)", () => {
+    expect(safeKeySegments(["tenantA", "%2e%2e", "etc", "passwd"])).toBeNull();
+  });
+
+  it("neutralizes double-encoded '..' to a harmless literal (%252e%252e)", () => {
+    // Decoded ONCE, `%252e%252e` becomes the literal `%2e%2e` — a real
+    // directory name, not a `..` traversal. The key is therefore safe: when
+    // path.join'd under the storage root it can never escape it.
+    const key = safeKeySegments(["tenantA", "%252e%252e", "etc", "passwd"]);
+    expect(key).toBe("tenantA/%2e%2e/etc/passwd");
+    expect(key!.split("/")).not.toContain("..");
+  });
+
+  it("rejects an encoded path separator (%2f) injected into a segment", () => {
+    expect(safeKeySegments(["tenantA", "a%2f..%2fsecret"])).toBeNull();
+  });
+
+  it("rejects malformed percent-encoding", () => {
+    expect(safeKeySegments(["tenantA", "%"])).toBeNull();
+  });
+
   it("rejects '.' segment", () => {
     expect(safeKeySegments(["tenantA", "."])).toBeNull();
   });
