@@ -76,7 +76,9 @@ export function benchmarkUnitCost(costCode: string, entered: number): BenchmarkR
   const typical = assembly?.unitCost ?? entered;
   const low = typical * 0.75;
   const high = typical * 1.3;
-  const delta = ((entered - typical) / typical) * 100;
+  // Guard divide-by-zero: a zero benchmark (no assembly + a zero entry)
+  // would make `delta` NaN/Infinity and poison the display.
+  const delta = typical !== 0 ? ((entered - typical) / typical) * 100 : 0;
   const verdict: BenchmarkResult["verdict"] = entered < low ? "LOW" : entered > high ? "HIGH" : "NORMAL";
   return { typicalLow: Math.round(low), typicalHigh: Math.round(high), entered, delta, verdict };
 }

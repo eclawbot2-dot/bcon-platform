@@ -43,14 +43,26 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ name: strin
   return NextResponse.json({ data });
 }
 
+/**
+ * Parse a positive-integer query param with a default + hard clamp. A
+ * non-numeric value (e.g. `?months=abc`) would otherwise become NaN and
+ * flow into `Date.setMonth(getMonth() - NaN)` → Invalid Date → a malformed
+ * Prisma range query. Clamp also caps an absurd `?weeks=999999` window.
+ */
+function clampedInt(raw: string | null, def: number, min: number, max: number): number {
+  const n = Math.trunc(Number(raw));
+  if (!Number.isFinite(n)) return def;
+  return Math.min(Math.max(n, min), max);
+}
+
 async function runReport(name: string, tenantId: string, url: URL): Promise<unknown> {
   switch (name) {
     case "wip": return wipReport(tenantId);
     case "cost-to-complete": return costToCompleteForecast(tenantId);
-    case "margin-fade": return marginFadeTrend(tenantId, Number(url.searchParams.get("months") ?? "12"));
+    case "margin-fade": return marginFadeTrend(tenantId, clampedInt(url.searchParams.get("months"), 12, 1, 120));
     case "win-rate": return winRateAnalytics(tenantId);
     case "estimate-accuracy": return estimateAccuracyReport(tenantId);
-    case "resource-heatmap": return resourceHeatmap(tenantId, Number(url.searchParams.get("weeks") ?? "8"));
+    case "resource-heatmap": return resourceHeatmap(tenantId, clampedInt(url.searchParams.get("weeks"), 8, 1, 104));
     case "bonding-capacity": return bondingCapacityReport(tenantId);
     default: return null;
   }
