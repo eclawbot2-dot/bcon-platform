@@ -8,11 +8,12 @@ generator client {
 // Postgres URL, install `@prisma/adapter-pg` and `pg`, and update
 // src/lib/prisma.ts to instantiate PrismaPg instead of PrismaBetterSqlite3.
 //
-// Currency-bearing fields throughout this schema currently use `Float`,
-// which on Postgres maps to DOUBLE PRECISION (IEEE-754) and accumulates
-// rounding errors when summed across line items. Production migration
-// must convert these to `Decimal @db.Decimal(15, 2)`. See
-// docs/pass-audit-07.md §1.2 for the full list and migration plan.
+// Currency-bearing fields throughout this schema use `Decimal` (mapped to
+// `@db.Decimal(15, 2)` on Postgres) so summing across line items stays
+// exact — the `Float` columns that remain hold non-money quantities only
+// (hours, percentages, quantities, lat/long, ratios, scores). Money math
+// routes through src/lib/money.ts (integer-cents primitives). See
+// docs/pass-audit-07.md §1.2 for the original Float→Decimal migration plan.
 datasource db {
   provider = "sqlite"
 }

@@ -12,7 +12,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { aiCall, pickStable, rangeStable, stableHash } from "@/lib/ai";
+import { aiCall, stableHash } from "@/lib/ai";
 import { toNum } from "@/lib/money";
 
 export type ScoreResult = {

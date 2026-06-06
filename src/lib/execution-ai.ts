@@ -5,7 +5,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { aiCall, pickStable, stableHash } from "@/lib/ai";
+import { aiCall, stableHash } from "@/lib/ai";
 
 export type WeeklyReport = {
   period: string;

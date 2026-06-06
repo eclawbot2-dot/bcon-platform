@@ -9,8 +9,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { aiCall, pickStable, rangeStable, stableHash } from "@/lib/ai";
-import { sumMoney, multiplyMoney, toNum } from "@/lib/money";
+import { aiCall, stableHash } from "@/lib/ai";
+import { sumMoney, toNum } from "@/lib/money";
 
 export type TakeoffItem = { costCode: string; description: string; category: string; quantity: number; unit: string; unitCost: number; amount: number };
 
