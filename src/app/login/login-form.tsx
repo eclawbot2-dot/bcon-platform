@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { PasswordInput } from "@/components/ui/password-input";
 
@@ -14,24 +14,32 @@ export function LoginForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(initialError);
-  const [isPending, startTransition] = useTransition();
+  const [loading, setLoading] = useState(false);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (loading) return;
     setError(null);
-    startTransition(async () => {
+    setLoading(true);
+    try {
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
         callbackUrl,
       });
+      // Auth.js v5 returns { error } on bad creds; some paths reject (catch).
+      // Always clear loading on failure so the form can't get stuck.
       if (!result || result.error) {
         setError("Email or password is incorrect.");
+        setLoading(false);
         return;
       }
       window.location.href = result.url ?? callbackUrl;
-    });
+    } catch {
+      setError("Email or password is incorrect.");
+      setLoading(false);
+    }
   }
 
   return (
@@ -52,7 +60,7 @@ export function LoginForm({
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         className="form-input"
-        disabled={isPending}
+        disabled={loading}
       />
 
       <label htmlFor="login-password" className="form-label">Password</label>
@@ -63,11 +71,11 @@ export function LoginForm({
         required
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        disabled={isPending}
+        disabled={loading}
       />
 
-      <button type="submit" className="btn-primary" disabled={isPending}>
-        {isPending ? "Signing in…" : "Sign in"}
+      <button type="submit" className="btn-primary" disabled={loading}>
+        {loading ? "Signing in…" : "Sign in"}
       </button>
     </form>
   );
