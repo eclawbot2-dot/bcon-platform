@@ -14,12 +14,16 @@ export default function ResetPasswordPage() {
     <main className="login-shell">
       <div className="login-card">
         <header>
+          <div className="login-brand">
+            <span className="login-brand-mark" aria-hidden="true">C</span>
+            <span className="login-brand-name">Construction OS</span>
+          </div>
           <h1>Reset password</h1>
           <p>Enter your account email and we&apos;ll send you a reset link.</p>
         </header>
         <RequestForm />
-        <p style={{ marginTop: "1.5rem", fontSize: "0.75rem" }}>
-          <a href="/login" style={{ color: "#7dd3fc" }}>
+        <p className="login-link-row">
+          <a href="/login" className="login-link">
             ← Back to sign in
           </a>
         </p>

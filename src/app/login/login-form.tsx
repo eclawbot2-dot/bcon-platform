@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
+import { PasswordInput } from "@/components/ui/password-input";
 
 export function LoginForm({
   callbackUrl,
@@ -33,11 +34,6 @@ export function LoginForm({
     });
   }
 
-  function fillDemo(demoEmail: string, demoPassword: string = "demo1234") {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-  }
-
   return (
     <form onSubmit={onSubmit} className="login-form" aria-describedby={error ? "login-error" : undefined}>
       {error ? (
@@ -60,30 +56,19 @@ export function LoginForm({
       />
 
       <label htmlFor="login-password" className="form-label">Password</label>
-      <input
+      <PasswordInput
         id="login-password"
         name="password"
-        type="password"
         autoComplete="current-password"
         required
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="form-input"
         disabled={isPending}
       />
 
       <button type="submit" className="btn-primary" disabled={isPending}>
         {isPending ? "Signing in…" : "Sign in"}
       </button>
-
-      <div className="login-demo-buttons">
-        <button type="button" className="btn-outline" onClick={() => fillDemo("trey@jahdev.com", "hadleymaris")} disabled={isPending}>
-          Use admin demo
-        </button>
-        <button type="button" className="btn-outline" onClick={() => fillDemo("pm@construction.local")} disabled={isPending}>
-          Use PM demo
-        </button>
-      </div>
     </form>
   );
 }

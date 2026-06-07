@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { confirmResetAction, type ConfirmState } from "../actions";
+import { PasswordInput } from "@/components/ui/password-input";
 
 const initial: ConfirmState = { status: "idle" };
 
@@ -32,26 +33,22 @@ export function ConfirmForm({ token }: { token: string }) {
       <input type="hidden" name="token" value={token} />
 
       <label htmlFor="new-password" className="form-label">New password</label>
-      <input
+      <PasswordInput
         id="new-password"
         name="password"
-        type="password"
         autoComplete="new-password"
         minLength={8}
         required
-        className="form-input"
         disabled={pending}
       />
 
       <label htmlFor="confirm-password" className="form-label">Confirm new password</label>
-      <input
+      <PasswordInput
         id="confirm-password"
         name="confirm"
-        type="password"
         autoComplete="new-password"
         minLength={8}
         required
-        className="form-input"
         disabled={pending}
       />
 

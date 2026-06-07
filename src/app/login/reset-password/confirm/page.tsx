@@ -19,6 +19,10 @@ export default async function ConfirmResetPage({
     <main className="login-shell">
       <div className="login-card">
         <header>
+          <div className="login-brand">
+            <span className="login-brand-mark" aria-hidden="true">C</span>
+            <span className="login-brand-name">Construction OS</span>
+          </div>
           <h1>Set a new password</h1>
           <p>Choose a new password for your account.</p>
         </header>
@@ -27,11 +31,11 @@ export default async function ConfirmResetPage({
         ) : (
           <div role="alert" className="login-error">
             This reset link is missing its token. Request a new link from the{" "}
-            <a href="/login/reset-password" style={{ color: "#7dd3fc" }}>reset page</a>.
+            <a href="/login/reset-password" className="login-link">reset page</a>.
           </div>
         )}
-        <p style={{ marginTop: "1.5rem", fontSize: "0.75rem" }}>
-          <a href="/login" style={{ color: "#7dd3fc" }}>
+        <p className="login-link-row">
+          <a href="/login" className="login-link">
             ← Back to sign in
           </a>
         </p>
