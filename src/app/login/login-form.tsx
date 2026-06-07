@@ -35,7 +35,10 @@ export function LoginForm({
         setLoading(false);
         return;
       }
-      window.location.href = result.url ?? callbackUrl;
+      // Navigate to the relative callbackUrl (same-origin path). Avoid
+      // result.url — behind a proxy/tunnel it can resolve to the internal
+      // origin (e.g. localhost) and break the redirect.
+      window.location.href = callbackUrl;
     } catch {
       setError("Email or password is incorrect.");
       setLoading(false);
