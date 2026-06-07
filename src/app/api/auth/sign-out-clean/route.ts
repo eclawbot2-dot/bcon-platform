@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { signOut } from "@/lib/auth";
+import { publicRedirect } from "@/lib/redirect";
 
 /**
  * Sign-out endpoint that also clears our app-specific cookies (cx.tenant,
@@ -15,7 +15,11 @@ import { signOut } from "@/lib/auth";
 export async function POST(req: Request) {
   await signOut({ redirect: false });
 
-  const res = NextResponse.redirect(new URL("/login", req.url), { status: 303 });
+  // Behind the Cloudflare tunnel `req.url` reports the internal origin
+  // (localhost:3101); a naive new URL("/login", req.url) would 303 the
+  // browser to a host it can't resolve. publicRedirect rebuilds the
+  // target against the forwarded public host.
+  const res = publicRedirect(req, "/login", 303);
   res.cookies.delete("cx.tenant");
   res.cookies.delete("cx.actor");
   res.cookies.delete("cx.superAdmin");

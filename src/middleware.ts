@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { observeRequest, normalizePath } from "@/lib/metrics";
+import { publicRedirect } from "@/lib/redirect";
 
 /**
  * Edge-safe auth gate. Validates the NextAuth JWT cookie (session strategy:
@@ -78,9 +79,16 @@ export async function middleware(req: NextRequest) {
     return finish(withSecurityHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 401 })));
   }
 
-  const loginUrl = new URL("/login", req.url);
-  loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
-  return finish(withSecurityHeaders(NextResponse.redirect(loginUrl)));
+  // Build the login redirect against the PUBLIC host. Behind the Cloudflare
+  // tunnel, deriving the target from `req.url` can resolve to the internal
+  // origin (localhost:3101) which the browser can't reach — the same proxy
+  // hazard the route handlers guard against. publicRedirect rebuilds against
+  // the forwarded host (falling back to req.url origin in local dev). The
+  // callbackUrl is a same-origin relative path; the login page re-validates
+  // it with isSafeRedirect before honoring it.
+  const callbackUrl = req.nextUrl.pathname + req.nextUrl.search;
+  const loginPath = `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+  return finish(withSecurityHeaders(publicRedirect(req, loginPath, 307)));
 }
 
 /**
