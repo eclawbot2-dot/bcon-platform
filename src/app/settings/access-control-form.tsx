@@ -7,15 +7,27 @@ export function AccessControlForm({ initial }: { initial: boolean }) {
   const [allow, setAllow] = useState(initial);
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function onToggle(next: boolean) {
-    setAllow(next);
+    const previous = allow;
+    setAllow(next); // optimistic
     setSaved(false);
+    setError(null);
     const fd = new FormData();
     fd.set("allow", next ? "on" : "false");
     startTransition(async () => {
-      await setAllowExternalEmailLoginsAction(fd);
-      setSaved(true);
+      // The action can reject (DB blip, permission change). Without a
+      // catch the rejection is unhandled, the optimistic toggle is left
+      // showing the un-saved state, and the user gets no feedback. Revert
+      // the checkbox and surface an inline error instead.
+      try {
+        await setAllowExternalEmailLoginsAction(fd);
+        setSaved(true);
+      } catch {
+        setAllow(previous);
+        setError("Couldn't save — please try again.");
+      }
     });
   }
 
@@ -39,7 +51,13 @@ export function AccessControlForm({ initial }: { initial: boolean }) {
         </span>
       </label>
       <div className="mt-1 text-xs" aria-live="polite">
-        {pending ? <span className="text-slate-500">Saving…</span> : saved ? <span className="text-emerald-400">Saved.</span> : null}
+        {pending ? (
+          <span className="text-slate-500">Saving…</span>
+        ) : error ? (
+          <span className="text-rose-400" role="alert">{error}</span>
+        ) : saved ? (
+          <span className="text-emerald-400">Saved.</span>
+        ) : null}
       </div>
     </div>
   );

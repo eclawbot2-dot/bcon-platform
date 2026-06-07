@@ -46,7 +46,14 @@ export async function confirmResetAction(
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
   if (password !== confirm) return { status: "error", error: "Passwords don't match." };
-  const res = await confirmPasswordReset({ token, password });
-  if (res.ok) return { status: "ok" };
-  return { status: "error", error: res.error };
+  try {
+    const res = await confirmPasswordReset({ token, password });
+    if (res.ok) return { status: "ok" };
+    return { status: "error", error: res.error };
+  } catch {
+    // A DB/transaction failure during the reset shouldn't throw the user
+    // into the error boundary mid-flow — surface a retryable inline error
+    // (matches requestResetAction's handling).
+    return { status: "error", error: "Something went wrong. Please try again." };
+  }
 }
