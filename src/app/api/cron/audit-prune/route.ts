@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { observeCronRun } from "@/lib/metrics";
+import { runCronJob } from "@/lib/cron";
 
 /**
  * Audit-event retention cron. Deletes AuditEvent rows older than 365
@@ -33,6 +34,10 @@ function authorize(req: NextRequest): NextResponse | null {
 }
 
 export async function POST(req: NextRequest) {
+  return runCronJob("audit-prune", () => handlePost(req));
+}
+
+async function handlePost(req: NextRequest) {
   const denied = authorize(req);
   if (denied) return denied;
   const start = Date.now();

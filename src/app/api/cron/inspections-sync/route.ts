@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { runInspectionSync } from "@/lib/jurisdictions/sync";
+import { runCronJob } from "@/lib/cron";
 
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -35,6 +36,10 @@ function authorize(req: NextRequest): NextResponse | null {
 }
 
 export async function POST(req: NextRequest) {
+  return runCronJob("inspections-sync", () => handlePost(req));
+}
+
+async function handlePost(req: NextRequest) {
   const denied = authorize(req);
   if (denied) return denied;
   const start = Date.now();

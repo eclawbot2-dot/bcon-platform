@@ -19,6 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAlertScanAllTenants } from "@/lib/alerts";
 import { observeCronRun } from "@/lib/metrics";
+import { runCronJob } from "@/lib/cron";
 
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -41,6 +42,10 @@ function authorize(req: NextRequest): NextResponse | null {
 }
 
 export async function POST(req: NextRequest) {
+  return runCronJob("alert-scan", () => handlePost(req));
+}
+
+async function handlePost(req: NextRequest) {
   const denied = authorize(req);
   if (denied) return denied;
   const start = Date.now();

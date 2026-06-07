@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { captureWeatherAll } from "@/lib/weather";
 import { observeCronRun } from "@/lib/metrics";
 import { reportError } from "@/lib/report-error";
+import { runCronJob } from "@/lib/cron";
 
 /**
  * Weather auto-capture cron. For every non-warranty project with resolvable
@@ -34,6 +35,10 @@ function authorize(req: NextRequest): NextResponse | null {
 }
 
 export async function POST(req: NextRequest) {
+  return runCronJob("weather-capture", () => handlePost(req));
+}
+
+async function handlePost(req: NextRequest) {
   const denied = authorize(req);
   if (denied) return denied;
 

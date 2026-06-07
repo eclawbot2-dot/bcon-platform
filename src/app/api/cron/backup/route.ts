@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { backupAllTenants } from "@/lib/backup";
 import { observeCronRun } from "@/lib/metrics";
 import { reportError } from "@/lib/report-error";
+import { runCronJob } from "@/lib/cron";
 
 /**
  * Nightly backup endpoint — intended to be hit by Windows Task Scheduler
@@ -35,6 +36,10 @@ function authorize(req: NextRequest): NextResponse | null {
 }
 
 export async function POST(req: NextRequest) {
+  return runCronJob("backup", () => handlePost(req));
+}
+
+async function handlePost(req: NextRequest) {
   const denied = authorize(req);
   if (denied) return denied;
   const start = Date.now();
