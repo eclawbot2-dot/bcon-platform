@@ -19,29 +19,29 @@
     "seed": "npx tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@auth/prisma-adapter": "^2.11.1",
-    "@hookform/resolvers": "^5.2.2",
+    "@auth/prisma-adapter": "^2.11.2",
+    "@hookform/resolvers": "^5.4.0",
     "@prisma/adapter-better-sqlite3": "^7.5.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.5.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.8.0",
+    "better-sqlite3": "^12.10.0",
     "clsx": "^2.1.1",
-    "date-fns": "^4.1.0",
-    "dotenv": "^17.3.1",
-    "lucide-react": "^1.0.1",
-    "next": "16.2.6",
+    "date-fns": "^4.4.0",
+    "dotenv": "^17.4.2",
+    "lucide-react": "^1.17.0",
+    "next": "16.2.7",
     "next-auth": "^5.0.0-beta.30",
     "node-html-parser": "^7.1.0",
     "pg": "^8.21.0",
     "prisma": "^7.5.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "react-hook-form": "^7.72.0",
-    "tailwind-merge": "^3.5.0",
-    "zod": "^4.3.6"
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "react-hook-form": "^7.78.0",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -50,10 +50,10 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.2.7",
     "tailwindcss": "^4",
-    "tsx": "^4.21.0",
+    "tsx": "^4.22.4",
     "typescript": "^5",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.8"
   }
 }
