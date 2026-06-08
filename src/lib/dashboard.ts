@@ -1,6 +1,6 @@
 import { ProjectMode, ThreadChannel, WorkflowStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { currentTenantSlug } from "@/lib/tenant";
+import { getCurrentTenant } from "@/lib/tenant";
 import { toNum } from "@/lib/money";
 
 export type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
@@ -12,10 +12,17 @@ export type TenantContext = Awaited<ReturnType<typeof getTenantContext>>;
  * dozens of joins per request when the page itself doesn't need projects.
  */
 export async function getTenantContext() {
-  const slug = (await currentTenantSlug()) ?? process.env.DEFAULT_TENANT_SLUG ?? null;
-  const tenant = await prisma.tenant.findFirst({
-    where: slug ? { slug } : undefined,
-    orderBy: { createdAt: "asc" },
+  // Resolve the active tenant through the canonical, membership-aware
+  // resolver (the same one requireTenant/detail pages use). Resolving here
+  // independently (slug ?? DEFAULT_TENANT_SLUG ?? oldest) diverged from that
+  // resolver: a regular user with no `cx.tenant` cookie got DEFAULT_TENANT_SLUG
+  // (or the oldest tenant) regardless of membership, so the sidebar/header
+  // showed one tenant's branding while detail pages scoped to the user's
+  // actual membership tenant — a cross-tenant inconsistency (and data leak).
+  const active = await getCurrentTenant();
+  if (!active) return null;
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: active.id },
     include: { businessUnits: true },
   });
   if (!tenant) return null;
@@ -52,10 +59,18 @@ function parseJsonObject<T>(value: string | null | undefined, fallback: T): T {
 }
 
 export async function getDashboardData() {
-  const slug = (await currentTenantSlug()) ?? process.env.DEFAULT_TENANT_SLUG ?? null;
-  const tenant = await prisma.tenant.findFirst({
-    where: slug ? { slug } : undefined,
-    orderBy: { createdAt: "asc" },
+  // Resolve the active tenant via the canonical, membership-aware resolver so
+  // the project list/overview load the SAME tenant the per-project detail
+  // pages scope to (they use requireTenant()). Previously this used a separate
+  // slug ?? DEFAULT_TENANT_SLUG ?? oldest-tenant lookup that ignored
+  // membership: a regular user with no `cx.tenant` cookie saw another tenant's
+  // projects in the list and could open a project overview, but every
+  // sub-tab (RFIs, contracts, …) called requireTenant() and 404'd on the
+  // tenantId mismatch. Aligning the resolver fixes both the leak and the 404s.
+  const active = await getCurrentTenant();
+  if (!active) return null;
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: active.id },
     include: {
       businessUnits: true,
       workflowTemplates: true,
