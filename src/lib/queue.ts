@@ -85,18 +85,33 @@ class InProcessQueue implements Queue {
   }
 }
 
-let active: Queue = bootstrap();
-
-function bootstrap(): Queue {
-  const choice = (process.env.QUEUE_TRANSPORT ?? "in-process").toLowerCase();
+/**
+ * Pure transport resolver — exported for tests. The bullmq/inngest
+ * transports are intentionally not implemented yet (no Redis on this
+ * deployment), so requesting one is a misconfiguration:
+ *
+ *   - production → throw an actionable error at boot. Silently running
+ *     in-process when the operator asked for a durable distributed queue
+ *     means jobs vanish on restart while everyone believes they're queued.
+ *   - dev/CI → warn + in-process so local work stays ergonomic.
+ */
+export function resolveQueueFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): Queue {
+  const choice = (env.QUEUE_TRANSPORT ?? "in-process").toLowerCase();
   if (choice === "bullmq" || choice === "inngest") {
-    console.warn(
-      `[queue] QUEUE_TRANSPORT=${choice} is not yet implemented; ` +
-      "falling back to in-process. Install the adapter package and wire it here.",
-    );
+    const hint =
+      `[queue] QUEUE_TRANSPORT=${choice} is not implemented in this build. ` +
+      `Install the adapter (bullmq + ioredis, plus a REDIS_URL) and wire it in src/lib/queue.ts, ` +
+      `or set QUEUE_TRANSPORT=in-process.`;
+    if (nodeEnv === "production") throw new Error(hint);
+    console.warn(`${hint} Falling back to in-process (non-production only).`);
   }
   return new InProcessQueue();
 }
+
+let active: Queue = resolveQueueFromEnv();
 
 export function getQueue(): Queue {
   return active;

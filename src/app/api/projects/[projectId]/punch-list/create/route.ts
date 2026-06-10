@@ -36,6 +36,24 @@ export async function POST(req: Request, ctx: { params: Promise<{ projectId: str
   const dueRaw = text("dueDate");
   const due = dueRaw ? new Date(dueRaw) : null;
 
+  // Double-submit guard: browsers re-POST on refresh/double-click and the
+  // plain HTML form has no client-side disable. If an identical punch item
+  // (same project + title) was created in the last 30 seconds, treat this
+  // as the same submission and redirect to the existing item instead of
+  // creating a duplicate deficiency.
+  const recentDuplicate = await prisma.punchItem.findFirst({
+    where: {
+      projectId: project.id,
+      title,
+      createdAt: { gte: new Date(Date.now() - 30_000) },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (recentDuplicate) {
+    return publicRedirect(req, `/projects/${projectId}/punch-list/${recentDuplicate.id}?ok=${encodeURIComponent("Punch item created")}`, 303);
+  }
+
   const punch = await prisma.punchItem.create({
     data: {
       projectId: project.id,

@@ -4,6 +4,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
 import { SortableTable } from "@/components/SortableTable";
 import { getProjectWorkspace } from "@/lib/dashboard";
+import { mapLinkForAddress, mapEmbedUrl } from "@/lib/maps";
 import { ProjectBurndown } from "@/components/project-burndown";
 import { formatCurrency, formatDate, formatDateTime, modeLabel, workflowStatusLabel } from "@/lib/utils";
 
@@ -22,6 +23,9 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
   const project = await getProjectWorkspace(projectId);
 
   if (!project) notFound();
+
+  const mapLink = mapLinkForAddress(project.address);
+  const mapEmbed = mapEmbedUrl(project.address);
 
   const STAGES = [
     { key: "PRECONSTRUCTION", label: "Preconstruction" },
@@ -67,9 +71,27 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
               <div><span className="text-slate-500">Code:</span> {project.code}</div>
               <div><span className="text-slate-500">Owner:</span> {project.ownerName}</div>
               <div><span className="text-slate-500">Contract:</span> {project.contractType}</div>
-              <div><span className="text-slate-500">Address:</span> {project.address}</div>
+              <div>
+                <span className="text-slate-500">Address:</span> {project.address}
+                {mapLink ? (
+                  <>
+                    {" "}
+                    <a href={mapLink} target="_blank" rel="noopener noreferrer" className="text-cyan-300 hover:text-cyan-200">Map ↗</a>
+                  </>
+                ) : null}
+              </div>
               <div><span className="text-slate-500">Value:</span> {formatCurrency(project.contractValue)}</div>
             </div>
+            {mapEmbed ? (
+              <iframe
+                src={mapEmbed}
+                title={`Map of ${project.address}`}
+                className="mt-4 h-48 w-full rounded-lg border border-white/10"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+              />
+            ) : null}
           </div>
           <div className="card p-5">
             <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Required forms</div>

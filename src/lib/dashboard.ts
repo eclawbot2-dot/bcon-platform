@@ -1,4 +1,4 @@
-import { ProjectMode, ThreadChannel, WorkflowStatus } from "@prisma/client";
+import { ProjectMode, ThreadChannel, WorkflowStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentTenant } from "@/lib/tenant";
 import { toNum } from "@/lib/money";
@@ -58,6 +58,64 @@ function parseJsonObject<T>(value: string | null | undefined, fallback: T): T {
   }
 }
 
+/**
+ * Per-project include shape shared by the tenant-wide dashboard fan-out
+ * AND the single-project workspace loader. Includes are bounded so a
+ * project with thousands of rows in any one collection doesn't tip the
+ * response into multi-MB JSON. Detail pages should use focused
+ * single-entity loaders, not this fan-out.
+ */
+const PROJECT_WORKSPACE_INCLUDE = {
+  threads: {
+    include: {
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: { author: true },
+      },
+    },
+  },
+  tasks: {
+    include: { assignee: true },
+    orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+    take: 50,
+  },
+  documents: { orderBy: { createdAt: "desc" }, take: 20 },
+  rfis: { orderBy: { createdAt: "desc" }, take: 30 },
+  submittals: { orderBy: { createdAt: "desc" }, take: 30 },
+  dailyLogs: { orderBy: { logDate: "desc" }, take: 3 },
+  budgets: { include: { lines: true } },
+  quantities: { take: 30 },
+  productionEntries: { orderBy: { createdAt: "desc" }, take: 30 },
+  tickets: { orderBy: { createdAt: "desc" }, take: 30 },
+  meetings: { orderBy: { scheduledAt: "desc" }, take: 10 },
+  safetyIncidents: { orderBy: { createdAt: "desc" }, take: 20 },
+  punchItems: { orderBy: { createdAt: "desc" }, take: 30 },
+  workflowRuns: { include: { watchers: { include: { user: true } } }, take: 10 },
+  watchers: { include: { user: true }, take: 30 },
+  approvalRoutes: { take: 10 },
+  equipmentRecords: { take: 20 },
+  materialRecords: { take: 20 },
+  _count: {
+    select: {
+      tasks: { where: { status: { not: "COMPLETE" } } },
+      rfis: { where: { status: { not: WorkflowStatus.CLOSED } } },
+      submittals: { where: { status: { not: WorkflowStatus.CLOSED } } },
+      meetings: true,
+      quantities: true,
+      productionEntries: true,
+      tickets: true,
+      documents: true,
+      safetyIncidents: true,
+      punchItems: true,
+      watchers: true,
+      approvalRoutes: true,
+    },
+  },
+} satisfies Prisma.ProjectInclude;
+
+type ProjectWithWorkspace = Prisma.ProjectGetPayload<{ include: typeof PROJECT_WORKSPACE_INCLUDE }>;
+
 export async function getDashboardData() {
   // Resolve the active tenant via the canonical, membership-aware resolver so
   // the project list/overview load the SAME tenant the per-project detail
@@ -79,58 +137,7 @@ export async function getDashboardData() {
       notificationRules: true,
       historicalEstimates: true,
       projects: {
-        include: {
-          threads: {
-            include: {
-              messages: {
-                orderBy: { createdAt: "desc" },
-                take: 5,
-                include: { author: true },
-              },
-            },
-          },
-          // Per-project includes are bounded so a tenant with thousands of
-          // rows in any one collection doesn't tip the dashboard into a
-          // multi-MB JSON response. Detail pages should use focused
-          // single-entity loaders, not the dashboard fan-out.
-          tasks: {
-            include: { assignee: true },
-            orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-            take: 50,
-          },
-          documents: { orderBy: { createdAt: "desc" }, take: 20 },
-          rfis: { orderBy: { createdAt: "desc" }, take: 30 },
-          submittals: { orderBy: { createdAt: "desc" }, take: 30 },
-          dailyLogs: { orderBy: { logDate: "desc" }, take: 3 },
-          budgets: { include: { lines: true } },
-          quantities: { take: 30 },
-          productionEntries: { orderBy: { createdAt: "desc" }, take: 30 },
-          tickets: { orderBy: { createdAt: "desc" }, take: 30 },
-          meetings: { orderBy: { scheduledAt: "desc" }, take: 10 },
-          safetyIncidents: { orderBy: { createdAt: "desc" }, take: 20 },
-          punchItems: { orderBy: { createdAt: "desc" }, take: 30 },
-          workflowRuns: { include: { watchers: { include: { user: true } } }, take: 10 },
-          watchers: { include: { user: true }, take: 30 },
-          approvalRoutes: { take: 10 },
-          equipmentRecords: { take: 20 },
-          materialRecords: { take: 20 },
-          _count: {
-            select: {
-              tasks: { where: { status: { not: "COMPLETE" } } },
-              rfis: { where: { status: { not: WorkflowStatus.CLOSED } } },
-              submittals: { where: { status: { not: WorkflowStatus.CLOSED } } },
-              meetings: true,
-              quantities: true,
-              productionEntries: true,
-              tickets: true,
-              documents: true,
-              safetyIncidents: true,
-              punchItems: true,
-              watchers: true,
-              approvalRoutes: true,
-            },
-          },
-        },
+        include: PROJECT_WORKSPACE_INCLUDE,
         orderBy: { createdAt: "asc" },
       },
       memberships: {
@@ -186,78 +193,7 @@ export async function getDashboardData() {
     },
   );
 
-  const dashboardCards = tenant.projects.map((project) => {
-    const budget = project.budgets[0];
-    const latestThread = project.threads.find((thread) => thread.isDefault) ?? project.threads[0];
-    const config = parseJsonObject<Record<string, unknown>>(project.configurationJson, {});
-
-    return {
-      id: project.id,
-      name: project.name,
-      code: project.code,
-      mode: project.mode,
-      stage: project.stage,
-      ownerName: project.ownerName,
-      address: project.address,
-      contractType: project.contractType,
-      contractValue: project.contractValue,
-      progressPct: project.progressPct,
-      healthScore: project.healthScore,
-      dashboardVariant:
-        project.mode === ProjectMode.SIMPLE ? "simple" : project.mode === ProjectMode.VERTICAL ? "vertical" : "heavy-civil",
-      enabledPacks: parseJsonArray(tenant.featurePacks),
-      config,
-      metrics:
-        project.mode === ProjectMode.SIMPLE
-          ? [
-              { label: "Open tasks", value: project._count.tasks },
-              { label: "Photos/docs", value: project._count.documents },
-              { label: "Budget", value: `$${Math.round(toNum(budget?.currentValue) / 1000)}k` },
-              { label: "Punch", value: project._count.punchItems },
-            ]
-          : project.mode === ProjectMode.VERTICAL
-            ? [
-                { label: "RFIs", value: project._count.rfis },
-                { label: "Submittals", value: project._count.submittals },
-                { label: "Meetings", value: project._count.meetings },
-                { label: "Budget", value: `$${Math.round(toNum(budget?.currentValue) / 1000000)}M` },
-              ]
-            : [
-                { label: "Quantities", value: project._count.quantities },
-                { label: "Production entries", value: project._count.productionEntries },
-                { label: "Tickets", value: project._count.tickets },
-                { label: "Budget", value: `$${Math.round(toNum(budget?.currentValue) / 1000000)}M` },
-              ],
-      latestSummary: project.dailyLogs[0]?.summary ?? "No daily summary yet",
-      recentMessages:
-        latestThread?.messages.map((message) => ({
-          id: message.id,
-          body: message.body,
-          author: message.author.name,
-          createdAt: message.createdAt.toISOString(),
-        })) ?? [],
-      budgetLines: budget?.lines ?? [],
-      quantityHighlights: project.quantities,
-      productionHighlights: project.productionEntries,
-      dailyLogs: project.dailyLogs,
-      rfis: project.rfis,
-      submittals: project.submittals,
-      meetings: project.meetings,
-      documents: project.documents,
-      safetyIncidents: project.safetyIncidents,
-      punchItems: project.punchItems,
-      workflowRuns: project.workflowRuns,
-      watchers: project.watchers,
-      approvalRoutes: project.approvalRoutes,
-      equipmentRecords: project.equipmentRecords,
-      materialRecords: project.materialRecords,
-      upcomingTasks: project.tasks
-        .filter((task) => task.status !== "COMPLETE")
-        .sort((a, b) => (a.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER))
-        .slice(0, 6),
-      channels: project.threads.map((thread) => ({ title: thread.title, channel: thread.channel })),
-    };
-  });
+  const dashboardCards = tenant.projects.map((project) => buildProjectCard(project, parseJsonArray(tenant.featurePacks)));
 
   const modeDefaults = {
     [ProjectMode.SIMPLE]: {
@@ -282,12 +218,7 @@ export async function getDashboardData() {
 
   const projectWorkspaces = dashboardCards.map((project) => ({
     ...project,
-    tabs:
-      project.mode === ProjectMode.SIMPLE
-        ? ["Overview", "Job Thread", "Tasks", "Budget", "Daily Summary", "Punch", "Client Portal"]
-        : project.mode === ProjectMode.VERTICAL
-          ? ["Overview", "Drawings", "RFIs", "Submittals", "Meetings", "Budget", "Quality/Safety", "Closeout"]
-          : ["Overview", "Production", "Quantities", "Tickets", "Equipment", "Materials", "Compliance", "Claims Support"],
+    tabs: tabsForMode(project.mode),
   }));
 
   const sharedServices = {
@@ -343,8 +274,114 @@ export async function getDashboardData() {
   };
 }
 
+/**
+ * Single-project workspace loader. Tenant-scoped via the canonical
+ * membership-aware resolver (same isolation guarantee as requireTenant —
+ * a forged projectId from another tenant matches nothing and returns null).
+ *
+ * Perf: previously this called getDashboardData() — loading EVERY project
+ * in the tenant with the full ~20-relation fan-out — only to pick one
+ * project out of the array. On a tenant with N projects that was N× the
+ * necessary query cost on every /projects/[projectId] render. Now it
+ * fetches exactly one project with the same include shape.
+ */
 export async function getProjectWorkspace(projectId: string) {
-  const data = await getDashboardData();
-  if (!data) return null;
-  return data.projectWorkspaces.find((project) => project.id === projectId) ?? null;
+  const active = await getCurrentTenant();
+  if (!active) return null;
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, tenantId: active.id },
+    include: PROJECT_WORKSPACE_INCLUDE,
+  });
+  if (!project) return null;
+  return {
+    ...buildProjectCard(project, parseJsonArray(active.featurePacks)),
+    tabs: tabsForMode(project.mode),
+  };
+}
+
+/** Mode-specific workspace tab list (shared by dashboard + single-project loaders). */
+function tabsForMode(mode: ProjectMode): string[] {
+  return mode === ProjectMode.SIMPLE
+    ? ["Overview", "Job Thread", "Tasks", "Budget", "Daily Summary", "Punch", "Client Portal"]
+    : mode === ProjectMode.VERTICAL
+      ? ["Overview", "Drawings", "RFIs", "Submittals", "Meetings", "Budget", "Quality/Safety", "Closeout"]
+      : ["Overview", "Production", "Quantities", "Tickets", "Equipment", "Materials", "Compliance", "Claims Support"];
+}
+
+/**
+ * Shape one project (fetched with PROJECT_WORKSPACE_INCLUDE) into the
+ * dashboard-card / workspace view model. Extracted so the tenant-wide
+ * dashboard and the single-project workspace stay rendering-identical.
+ */
+function buildProjectCard(project: ProjectWithWorkspace, enabledPacks: string[]) {
+  const budget = project.budgets[0];
+  const latestThread = project.threads.find((thread) => thread.isDefault) ?? project.threads[0];
+  const config = parseJsonObject<Record<string, unknown>>(project.configurationJson, {});
+
+  return {
+    id: project.id,
+    name: project.name,
+    code: project.code,
+    mode: project.mode,
+    stage: project.stage,
+    ownerName: project.ownerName,
+    address: project.address,
+    contractType: project.contractType,
+    contractValue: project.contractValue,
+    progressPct: project.progressPct,
+    healthScore: project.healthScore,
+    dashboardVariant:
+      project.mode === ProjectMode.SIMPLE ? "simple" : project.mode === ProjectMode.VERTICAL ? "vertical" : "heavy-civil",
+    enabledPacks,
+    config,
+    metrics:
+      project.mode === ProjectMode.SIMPLE
+        ? [
+            { label: "Open tasks", value: project._count.tasks },
+            { label: "Photos/docs", value: project._count.documents },
+            { label: "Budget", value: `$${Math.round(toNum(budget?.currentValue) / 1000)}k` },
+            { label: "Punch", value: project._count.punchItems },
+          ]
+        : project.mode === ProjectMode.VERTICAL
+          ? [
+              { label: "RFIs", value: project._count.rfis },
+              { label: "Submittals", value: project._count.submittals },
+              { label: "Meetings", value: project._count.meetings },
+              { label: "Budget", value: `$${Math.round(toNum(budget?.currentValue) / 1000000)}M` },
+            ]
+          : [
+              { label: "Quantities", value: project._count.quantities },
+              { label: "Production entries", value: project._count.productionEntries },
+              { label: "Tickets", value: project._count.tickets },
+              { label: "Budget", value: `$${Math.round(toNum(budget?.currentValue) / 1000000)}M` },
+            ],
+    latestSummary: project.dailyLogs[0]?.summary ?? "No daily summary yet",
+    recentMessages:
+      latestThread?.messages.map((message) => ({
+        id: message.id,
+        body: message.body,
+        author: message.author.name,
+        createdAt: message.createdAt.toISOString(),
+      })) ?? [],
+    budgetLines: budget?.lines ?? [],
+    quantityHighlights: project.quantities,
+    productionHighlights: project.productionEntries,
+    dailyLogs: project.dailyLogs,
+    rfis: project.rfis,
+    submittals: project.submittals,
+    meetings: project.meetings,
+    documents: project.documents,
+    safetyIncidents: project.safetyIncidents,
+    punchItems: project.punchItems,
+    workflowRuns: project.workflowRuns,
+    watchers: project.watchers,
+    approvalRoutes: project.approvalRoutes,
+    equipmentRecords: project.equipmentRecords,
+    materialRecords: project.materialRecords,
+    upcomingTasks: project.tasks
+      .filter((task) => task.status !== "COMPLETE")
+      .sort((a, b) => (a.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER))
+      .slice(0, 6),
+    channels: project.threads.map((thread) => ({ title: thread.title, channel: thread.channel })),
+  };
 }

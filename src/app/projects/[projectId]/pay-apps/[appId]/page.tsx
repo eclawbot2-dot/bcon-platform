@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { currentActor } from "@/lib/permissions";
 import { listComments } from "@/lib/approvals";
+import { esignStatus } from "@/lib/esign";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/utils";
 import { sumMoney, subtractMoney, toNum } from "@/lib/money";
 
@@ -22,6 +23,7 @@ export default async function PayAppDetailPage({ params }: { params: Promise<{ p
   });
   if (!app) notFound();
   const comments = await listComments(tenant.id, "PayApplication", app.id);
+  const esign = esignStatus();
 
   const totalScheduled = sumMoney(app.lines.map((l) => l.scheduledValue));
   const totalCompleted = sumMoney(app.lines.map((l) => l.totalCompleted));
@@ -101,6 +103,26 @@ export default async function PayAppDetailPage({ params }: { params: Promise<{ p
             <div className="md:col-span-2"><label className="form-label">Notes</label><input name="notes" defaultValue={app.notes ?? ""} className="form-input" /></div>
             <div className="md:col-span-3"><button className="btn-primary">Save changes</button></div>
           </form>
+        </section>
+      ) : null}
+
+      {actor.isManager && (app.status === "SUBMITTED" || app.status === "PENDING_APPROVAL" || app.status === "APPROVED") ? (
+        <section className="card p-6">
+          <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">E-signature</div>
+          {esign.configured ? (
+            <form action={`/api/pay-apps/${app.id}/esign`} method="post" className="mt-4 grid gap-3 md:grid-cols-3">
+              <div><label className="form-label">Signer name</label><input name="signerName" required className="form-input" placeholder="Owner / architect signing this G702" /></div>
+              <div><label className="form-label">Signer email</label><input name="signerEmail" type="email" required className="form-input" placeholder="signer@example.com" /></div>
+              <div className="flex items-end"><button className="btn-primary">Send for signature</button></div>
+              <p className="md:col-span-3 text-xs text-slate-400">Sends the G702 summary via DocuSign. The envelope id is recorded on this pay app&apos;s activity trail.</p>
+            </form>
+          ) : (
+            <p className="mt-3 text-xs text-slate-400">
+              E-signature is <span className="text-slate-300">not configured</span> on this deployment. To enable DocuSign envelopes for pay applications, set{" "}
+              <span className="font-mono">ESIGN_PROVIDER=docusign</span> plus the <span className="font-mono">DOCUSIGN_*</span> credentials (see{" "}
+              <span className="font-mono">docs/integrations.md</span>) and restart. Until then, use the printable G702/G703 document above for wet signatures.
+            </p>
+          )}
         </section>
       ) : null}
 

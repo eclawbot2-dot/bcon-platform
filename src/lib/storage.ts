@@ -13,9 +13,14 @@
  *
  *   STORAGE_TRANSPORT=local       (default — writes to ./uploads/)
  *   STORAGE_TRANSPORT=memory      (test-only; never persists)
- *   STORAGE_TRANSPORT=s3          (NOT IMPLEMENTED — needs `npm install
- *                                  @aws-sdk/client-s3` and an adapter)
- *   STORAGE_TRANSPORT=r2          (NOT IMPLEMENTED — Cloudflare R2 via S3)
+ *   STORAGE_TRANSPORT=s3          (AWS S3 via built-in SigV4 fetch — set
+ *                                  STORAGE_S3_BUCKET/ACCESS_KEY/SECRET_KEY)
+ *   STORAGE_TRANSPORT=r2          (Cloudflare R2 — same vars plus
+ *                                  STORAGE_S3_ENDPOINT and REGION=auto)
+ *
+ * Misconfiguration is FAIL-CLOSED in production: choosing s3/r2 without
+ * the required vars throws at boot with the exact missing names (see
+ * resolveStorageFromEnv) instead of silently writing to local disk.
  *
  * Design choices:
  *   - All methods are async to keep the surface stable across cloud adapters.
@@ -162,13 +167,13 @@ class S3Storage implements Storage {
   private secretKey: string;
   private publicUrl: string;
 
-  constructor() {
-    this.bucket = process.env.STORAGE_S3_BUCKET!;
-    this.region = process.env.STORAGE_S3_REGION ?? "us-east-1";
-    this.endpoint = process.env.STORAGE_S3_ENDPOINT ?? `https://${this.bucket}.s3.${this.region}.amazonaws.com`;
-    this.accessKey = process.env.STORAGE_S3_ACCESS_KEY!;
-    this.secretKey = process.env.STORAGE_S3_SECRET_KEY!;
-    this.publicUrl = process.env.STORAGE_S3_PUBLIC_URL ?? this.endpoint;
+  constructor(env: NodeJS.ProcessEnv = process.env) {
+    this.bucket = env.STORAGE_S3_BUCKET!;
+    this.region = env.STORAGE_S3_REGION ?? "us-east-1";
+    this.endpoint = env.STORAGE_S3_ENDPOINT ?? `https://${this.bucket}.s3.${this.region}.amazonaws.com`;
+    this.accessKey = env.STORAGE_S3_ACCESS_KEY!;
+    this.secretKey = env.STORAGE_S3_SECRET_KEY!;
+    this.publicUrl = env.STORAGE_S3_PUBLIC_URL ?? this.endpoint;
   }
 
   async put(args: { key?: string; tenantId: string; body: Buffer | string; contentType?: string; filename?: string }): Promise<PutResult> {
@@ -215,22 +220,46 @@ class S3Storage implements Storage {
   }
 }
 
-let active: Storage = bootstrap();
+/** Env vars the s3/r2 transports require before they can be activated. */
+const S3_REQUIRED_VARS = ["STORAGE_S3_BUCKET", "STORAGE_S3_ACCESS_KEY", "STORAGE_S3_SECRET_KEY"] as const;
 
-function bootstrap(): Storage {
-  const choice = (process.env.STORAGE_TRANSPORT ?? "local").toLowerCase();
+/**
+ * Pure transport resolver — exported for tests. Decides which adapter the
+ * STORAGE_TRANSPORT env selects and how misconfiguration is handled:
+ *
+ *   - s3/r2 with complete STORAGE_S3_* config → S3 adapter.
+ *   - s3/r2 with INCOMPLETE config in production → throws an actionable
+ *     error naming exactly which vars are missing. Silently falling back
+ *     to local disk (the old behaviour) is a data-integrity hazard: the
+ *     operator believes artifacts are durably stored in a bucket while
+ *     they actually land on the app host's disk and vanish on rebuild.
+ *   - s3/r2 with incomplete config outside production → warn + local disk,
+ *     so dev/CI stay ergonomic.
+ */
+export function resolveStorageFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): Storage {
+  const choice = (env.STORAGE_TRANSPORT ?? "local").toLowerCase();
   if (choice === "memory") return new MemoryStorage();
-  if ((choice === "s3" || choice === "r2") && process.env.STORAGE_S3_BUCKET && process.env.STORAGE_S3_ACCESS_KEY && process.env.STORAGE_S3_SECRET_KEY) {
-    return new S3Storage();
-  }
   if (choice === "s3" || choice === "r2") {
-    console.warn(
-      `[storage] STORAGE_TRANSPORT=${choice} requested but STORAGE_S3_* env vars incomplete; ` +
-      "falling back to local disk.",
-    );
+    const missing = S3_REQUIRED_VARS.filter((name) => !(env[name] ?? "").trim());
+    if (missing.length === 0) return new S3Storage(env);
+    const hint =
+      `[storage] STORAGE_TRANSPORT=${choice} requested but required env vars are missing: ${missing.join(", ")}. ` +
+      `Set them (see .env.example — R2 also needs STORAGE_S3_ENDPOINT and STORAGE_S3_REGION=auto) ` +
+      `or set STORAGE_TRANSPORT=local.`;
+    if (nodeEnv === "production") {
+      // Fail fast: a misconfigured cloud transport must never silently
+      // degrade to local disk in production.
+      throw new Error(hint);
+    }
+    console.warn(`${hint} Falling back to local disk (non-production only).`);
   }
   return new LocalDiskStorage();
 }
+
+let active: Storage = resolveStorageFromEnv();
 
 export function getStorage(): Storage {
   return active;

@@ -19,6 +19,12 @@ export async function POST(req: Request) {
   const kind = VALID_KINDS.includes(kindRaw as HistoricalImportKind) ? (kindRaw as HistoricalImportKind) : "PROJECT_ACTUALS";
 
   if (!(file instanceof File)) return NextResponse.json({ error: "file is required (multipart/form-data)" }, { status: 400 });
+  // Bound the upload before buffering it: file.text() reads the whole body
+  // into memory, so an unbounded multi-GB upload could exhaust the heap.
+  const MAX_CSV_BYTES = 15 * 1024 * 1024; // 15 MB — far beyond any real spreadsheet export
+  if (file.size > MAX_CSV_BYTES) {
+    return NextResponse.json({ error: `file too large (max ${MAX_CSV_BYTES / (1024 * 1024)} MB)` }, { status: 413 });
+  }
   const csv = await file.text();
 
   // Persist the raw upload via the storage adapter so the original artifact

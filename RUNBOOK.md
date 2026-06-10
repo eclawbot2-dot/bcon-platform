@@ -46,6 +46,13 @@ npm run db:generate
 net start bcon-next
 ```
 
+**Stale `.next` type artifacts:** `tsconfig.json` includes `.next/types` and
+`.next/dev/types` (Next.js generated route-type validators). After deleting or
+renaming a route, a leftover dev artifact there can fail `tsc --noEmit` with
+errors about files that no longer exist. `npm run dev` / `npm run build` now
+auto-clean those two dirs via `predev`/`prebuild` hooks; if you hit it from a
+bare `npx tsc`, remove `.next/types` and `.next/dev/types` manually.
+
 ## 3. Environment variables
 
 Values REDACTED. `src/lib/env-guard.ts` runs at `next build` (NODE_ENV=production)

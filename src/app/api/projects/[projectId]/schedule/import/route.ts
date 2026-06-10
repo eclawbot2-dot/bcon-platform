@@ -44,6 +44,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
   const form = await req.formData();
   const file = form.get("file") as File | null;
   if (!file || file.size === 0) return fail("csv file required", 422);
+  // Bound the upload before buffering it: file.text() reads the whole body
+  // into memory, so an unbounded multi-GB CSV could exhaust the heap.
+  const MAX_CSV_BYTES = 15 * 1024 * 1024; // 15 MB — far beyond any real schedule export
+  if (file.size > MAX_CSV_BYTES) return fail(`csv too large (max ${MAX_CSV_BYTES / (1024 * 1024)} MB)`, 413);
   const text = await file.text();
 
   // Parse CSV

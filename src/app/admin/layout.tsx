@@ -9,7 +9,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AppLayout eyebrow="Restricted" title="Super-admin required" description="This area is for platform-wide administrators.">
         <div className="card p-8">
           <div className="text-xs uppercase tracking-[0.2em] text-rose-300">Access denied</div>
-          <p className="mt-3 text-sm text-slate-300">You must be a super admin to view this area. Contact your platform owner to get promoted, or set the <span className="font-mono">cx.superAdmin</span> cookie to a super-admin user&apos;s id.</p>
+          <p className="mt-3 text-sm text-slate-300">You must be a super admin to view this area. Ask a platform super admin to grant your account super-admin access from <span className="font-mono">/admin/users</span>.</p>
           <Link href="/" className="btn-outline text-xs mt-4 inline-flex">← back home</Link>
         </div>
       </AppLayout>

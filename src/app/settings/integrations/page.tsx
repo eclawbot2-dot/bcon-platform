@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { currentActor, isAdminRole } from "@/lib/permissions";
 import { formatDateTime } from "@/lib/utils";
+import { esignStatus } from "@/lib/esign";
+import { ssoProviderStatus } from "@/lib/sso-providers";
 import type { XeroConnection, QboConnection } from "@prisma/client";
 
 /**
@@ -92,8 +94,98 @@ export default async function IntegrationsSettingsPage() {
           lastSyncNote={qbo?.lastSyncNote ?? null}
           conn={qbo}
         />
+
+        <PlatformIntegrations />
       </div>
     </AppLayout>
+  );
+}
+
+/**
+ * Deployment-level integration status — env-gated transports that apply to
+ * every tenant on this host. Reports configured/disabled per integration
+ * and which env vars activate it. Never shows secret values; the platform
+ * operator (not the tenant admin) sets these in .env + restarts.
+ */
+function PlatformIntegrations() {
+  const esign = esignStatus();
+  const sso = ssoProviderStatus();
+  const emailTransport = (process.env.EMAIL_TRANSPORT ?? "log").toLowerCase();
+  const storageTransport = (process.env.STORAGE_TRANSPORT ?? "local").toLowerCase();
+  const queueTransport = (process.env.QUEUE_TRANSPORT ?? "in-process").toLowerCase();
+  const llmEnabled = process.env.ENABLE_LLM_CALLS === "true";
+
+  const rows: Array<{ name: string; state: string; ok: boolean; detail: string }> = [
+    {
+      name: "Transactional email",
+      state: emailTransport === "log" ? "log-only (no real sends)" : emailTransport,
+      ok: emailTransport !== "log",
+      detail: "EMAIL_TRANSPORT=resend|sendgrid + provider API key + EMAIL_FROM",
+    },
+    {
+      name: "Object storage",
+      state: storageTransport,
+      ok: true,
+      detail: storageTransport === "local" ? "Local disk (./uploads). For durable cloud storage: STORAGE_TRANSPORT=s3|r2 + STORAGE_S3_*" : "STORAGE_S3_* configured",
+    },
+    {
+      name: "Background queue",
+      state: queueTransport,
+      ok: true,
+      detail: queueTransport === "in-process" ? "Jobs run inline on this host (fine for single-instance)" : "External queue",
+    },
+    {
+      name: "E-signature (pay apps)",
+      state: esign.configured ? `active (${esign.provider})` : "disabled",
+      ok: esign.configured,
+      detail: esign.configured ? "DocuSign envelopes available on pay applications" : `Set ${esign.missing.slice(0, 3).join(", ")}${esign.missing.length > 3 ? ", …" : ""} (docs/integrations.md)`,
+    },
+    {
+      name: "AI / LLM calls",
+      state: llmEnabled ? "enabled" : "deterministic mocks",
+      ok: llmEnabled,
+      detail: "ENABLE_LLM_CALLS=true + OPENAI_API_KEY or ANTHROPIC_API_KEY (or per-tenant keys in Settings)",
+    },
+    ...sso.map((p) => ({
+      name: `SSO · ${p.label}`,
+      state: p.active ? "active" : "disabled",
+      ok: p.active,
+      detail: p.active ? `/api/auth/signin/${p.id}` : `Set ${p.envVars.join(", ")}`,
+    })),
+  ];
+
+  return (
+    <section className="card p-5">
+      <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Platform integrations (deployment-wide, env-gated)</div>
+      <p className="mt-2 text-xs text-slate-500">
+        These apply to every tenant on this deployment and are configured by the platform operator via environment
+        variables (see <span className="font-mono">docs/integrations.md</span> and <span className="font-mono">.env.example</span>), then a service restart.
+      </p>
+      <div className="mt-4 overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
+              <th className="py-2 pr-4">Integration</th>
+              <th className="py-2 pr-4">Status</th>
+              <th className="py-2">How to enable / notes</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {rows.map((r) => (
+              <tr key={r.name}>
+                <td className="py-2 pr-4 text-slate-200">{r.name}</td>
+                <td className="py-2 pr-4">
+                  <span className={`rounded-full border px-2 py-0.5 text-xs ${r.ok ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-white/10 bg-white/5 text-slate-400"}`}>
+                    {r.state}
+                  </span>
+                </td>
+                <td className="py-2 text-xs text-slate-400">{r.detail}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
