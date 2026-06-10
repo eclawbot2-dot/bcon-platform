@@ -19,7 +19,7 @@ export default async function PunchDraftPage({ params, searchParams }: { params:
     <DetailShell
       eyebrow="AI · Punch from field description"
       title="Describe the defect, AI fills the punch item"
-      subtitle={`Upload-a-photo workflow coming soon; today we accept text descriptions from field.`}
+      subtitle="Type the field observation and AI structures it into a punch item; photos belong on the project photo log."
       crumbs={[{ label: "Projects", href: "/projects" }, { label: project.code, href: `/projects/${projectId}` }, { label: "Punch list", href: `/projects/${projectId}/punch-list` }, { label: "Draft" }]}
     >
       <section className="card p-6">
@@ -41,6 +41,20 @@ export default async function PunchDraftPage({ params, searchParams }: { params:
             <div><div className="text-xs uppercase tracking-[0.18em] text-slate-500">Criticality</div><div className="text-white font-semibold">{draft.criticality}</div></div>
           </div>
           <div className="mt-4"><div className="text-xs uppercase tracking-[0.18em] text-slate-500">Description</div><p className="mt-1 text-sm text-slate-200 leading-6">{draft.description}</p></div>
+          <form action={`/api/projects/${projectId}/punch-list/create`} method="post" className="mt-5 flex flex-wrap items-end gap-3">
+            <input type="hidden" name="title" value={draft.title} />
+            <input type="hidden" name="trade" value={draft.trade} />
+            <input type="hidden" name="description" value={draft.description} />
+            <label className="block">
+              <span className="form-label">Area (optional)</span>
+              <input name="area" placeholder="e.g. South wall, Level 2" className="form-input" />
+            </label>
+            <label className="block">
+              <span className="form-label">Due date (optional)</span>
+              <input name="dueDate" type="date" className="form-input" />
+            </label>
+            <button className="btn-primary text-xs">Save to punch list</button>
+          </form>
         </section>
       ) : null}
     </DetailShell>

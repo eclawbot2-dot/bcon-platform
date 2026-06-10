@@ -16,11 +16,11 @@
  *   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
  *   AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET, AUTH0_ISSUER
  *
- * The auth callback (./auth.ts) needs to handle account-linking — on
- * first SSO login, find or create a User by email and stash
- * ssoProvider + ssoSubject. Existing-email collisions reject (so an
- * attacker can't impersonate a credentials user via SSO with the
- * same email).
+ * Account linking (./auth.ts): an SSO identity is admitted only when
+ * its email resolves to an existing, active, provisioned User that
+ * passes the same access policy as password logins (signIn callback),
+ * and the JWT is keyed to that User's id (jwt callback). Unknown
+ * emails are rejected — we never auto-create accounts from SSO.
  */
 
 import type { Provider } from "next-auth/providers";
@@ -67,4 +67,27 @@ export function activeSsoProviderIds(): string[] {
     const cfg = typeof p === "function" ? p({}) : p;
     return (cfg as { id?: string }).id ?? "unknown";
   });
+}
+
+export type SsoProviderStatus = {
+  id: string;
+  label: string;
+  /** Env vars the operator must set to activate this provider. */
+  envVars: string[];
+  active: boolean;
+};
+
+/**
+ * Per-provider configuration status for the settings UI. Server-only
+ * (reads process.env); never expose the values themselves — only
+ * whether each provider is fully configured.
+ */
+export function ssoProviderStatus(): SsoProviderStatus[] {
+  const activeIds = new Set(activeSsoProviderIds());
+  return [
+    { id: "okta", label: "Okta", envVars: ["OKTA_CLIENT_ID", "OKTA_CLIENT_SECRET", "OKTA_ISSUER"] },
+    { id: "azure-ad", label: "Azure AD / Entra ID", envVars: ["AZURE_AD_CLIENT_ID", "AZURE_AD_CLIENT_SECRET", "AZURE_AD_TENANT_ID"] },
+    { id: "google", label: "Google Workspace", envVars: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] },
+    { id: "auth0", label: "Auth0", envVars: ["AUTH0_CLIENT_ID", "AUTH0_CLIENT_SECRET", "AUTH0_ISSUER"] },
+  ].map((p) => ({ ...p, active: activeIds.has(p.id) }));
 }

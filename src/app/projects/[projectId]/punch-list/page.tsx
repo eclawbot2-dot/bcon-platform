@@ -31,6 +31,40 @@ export default async function PunchListPage({ params }: { params: Promise<{ proj
           <Stat label="Open" value={open} tone="warn" />
           <Stat label="Closed" value={project.punchItems.length - open} tone="good" />
         </section>
+        <section className="card p-5">
+          <details>
+            <summary className="cursor-pointer select-none text-xs uppercase tracking-[0.2em] text-cyan-300">+ Add punch item</summary>
+            <form action={`/api/projects/${project.id}/punch-list/create`} method="post" className="mt-3 grid gap-3 md:grid-cols-3">
+              <label className="block md:col-span-2">
+                <span className="form-label">Title</span>
+                <input name="title" required placeholder="e.g. Drywall touch-up, south wall L2" className="form-input" />
+              </label>
+              <label className="block">
+                <span className="form-label">Area</span>
+                <input name="area" placeholder="e.g. Level 2 corridor" className="form-input" />
+              </label>
+              <label className="block">
+                <span className="form-label">Trade</span>
+                <input name="trade" placeholder="e.g. DRYWALL" className="form-input" />
+              </label>
+              <label className="block">
+                <span className="form-label">Assigned to</span>
+                <input name="assignedTo" placeholder="Sub / crew responsible" className="form-input" />
+              </label>
+              <label className="block">
+                <span className="form-label">Due date</span>
+                <input name="dueDate" type="date" className="form-input" />
+              </label>
+              <label className="block md:col-span-3">
+                <span className="form-label">Description</span>
+                <textarea name="description" rows={2} className="form-textarea" />
+              </label>
+              <div className="md:col-span-3">
+                <button className="btn-primary text-xs">Create punch item</button>
+              </div>
+            </form>
+          </details>
+        </section>
         <section className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <SortableTable

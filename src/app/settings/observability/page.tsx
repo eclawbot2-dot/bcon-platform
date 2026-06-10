@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
-import { StatTile } from "@/components/ui/stat-tile";
 import { SortableTable } from "@/components/SortableTable";
 import { auth } from "@/lib/auth";
 import { snapshot } from "@/lib/metrics";
 import { formatDateTime } from "@/lib/utils";
+import { ObservabilityLiveTiles } from "@/components/settings/observability-live-tiles";
 
 /**
  * Observability page — surfaces in-process metrics for super-admins.
@@ -22,9 +22,6 @@ export default async function ObservabilityPage({ searchParams }: { searchParams
   const windowMinutes = Math.max(1, Math.min(1440, Number(sp.window ?? "60")));
   const data = snapshot(windowMinutes * 60 * 1000);
 
-  const errorRate = (data.errorRate * 100).toFixed(2);
-  const errorTone: "warn" | "default" | "good" = data.errorRate > 0.05 ? "warn" : data.errorRate > 0 ? "default" : "good";
-
   return (
     <AppLayout
       eyebrow="Platform · super admin"
@@ -32,12 +29,18 @@ export default async function ObservabilityPage({ searchParams }: { searchParams
       description="In-process request and error metrics. State resets on deploy. For permanent forensics use the audit log + structured log stream."
     >
       <div className="grid gap-6">
-        <section className="grid gap-4 md:grid-cols-4">
-          <StatTile label={`Requests (last ${windowMinutes}m)`} value={data.totalRequests} sub={data.totalRequests === 0 ? "no traffic captured" : undefined} />
-          <StatTile label="Error rate" value={`${errorRate}%`} tone={errorTone} sub={`${data.errorCount} errors`} />
-          <StatTile label="p50 / p95 latency" value={`${data.p50Ms} / ${data.p95Ms}ms`} tone={data.p95Ms > 1000 ? "warn" : "good"} />
-          <StatTile label="Slow requests" value={data.slowCount} sub="≥1s response" tone={data.slowCount > 0 ? "warn" : "good"} />
-        </section>
+        <ObservabilityLiveTiles
+          windowMinutes={windowMinutes}
+          initial={{
+            totalRequests: data.totalRequests,
+            errorCount: data.errorCount,
+            errorRate: data.errorRate,
+            slowCount: data.slowCount,
+            p50Ms: data.p50Ms,
+            p95Ms: data.p95Ms,
+            generatedAt: data.generatedAt,
+          }}
+        />
 
         <section className="card p-5">
           <form method="get" className="flex flex-wrap items-end gap-3">

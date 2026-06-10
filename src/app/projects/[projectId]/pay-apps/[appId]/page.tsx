@@ -44,6 +44,15 @@ export default async function PayAppDetailPage({ params }: { params: Promise<{ p
       actions={(
         <div className="flex items-center gap-2">
           <StatusBadge status={app.status} />
+          <a
+            href={`/api/pay-applications/${app.id}/g702`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-outline text-xs"
+            title="Print-ready AIA G702/G703 document — use the browser print dialog to save as PDF"
+          >
+            G702/G703 document
+          </a>
           <PrintButton label="Print G702/G703" />
         </div>
       )}

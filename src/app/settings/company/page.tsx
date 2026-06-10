@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
@@ -80,13 +79,93 @@ export default async function CompanyCompliancePage() {
                   {profile.yearFounded ? <div>Founded: {profile.yearFounded}</div> : null}
                 </div>
               </div>
-              <Link href="/api/tenant/company/profile/edit" className="btn-outline text-xs">Edit</Link>
             </div>
             {profile.samStatus ? (
               <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
                 SAM: {profile.samStatus}{profile.samExpiresAt ? ` · expires ${formatDate(profile.samExpiresAt)}` : ""}
               </div>
             ) : null}
+            <details className="mt-4 rounded-2xl border border-white/10">
+              <summary className="cursor-pointer select-none px-4 py-3 text-xs uppercase tracking-[0.18em] text-cyan-300 hover:bg-white/5">Edit profile</summary>
+              <form action="/api/tenant/company/profile" method="post" className="grid gap-3 p-4 md:grid-cols-3">
+                <label className="block md:col-span-2">
+                  <span className="form-label">Legal name</span>
+                  <input name="legalName" required defaultValue={profile.legalName} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">DBA</span>
+                  <input name="dbaName" defaultValue={profile.dbaName ?? ""} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">EIN</span>
+                  <input name="ein" defaultValue={profile.ein ?? ""} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">DUNS</span>
+                  <input name="duns" defaultValue={profile.duns ?? ""} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">CAGE code</span>
+                  <input name="cageCode" defaultValue={profile.cageCode ?? ""} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">SAM UEI</span>
+                  <input name="uei" defaultValue={profile.uei ?? ""} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">Entity type</span>
+                  <input name="entityType" defaultValue={profile.entityType ?? ""} placeholder="LLC / S-Corp / …" className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">Year founded</span>
+                  <input name="yearFounded" type="number" min={1800} max={2100} defaultValue={profile.yearFounded ?? ""} className="form-input" />
+                </label>
+                <label className="block md:col-span-3">
+                  <span className="form-label">Primary address</span>
+                  <input name="primaryAddress" defaultValue={profile.primaryAddress ?? ""} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">City</span>
+                  <input name="city" defaultValue={profile.city ?? ""} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">State</span>
+                  <input name="state" defaultValue={profile.state ?? ""} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">Postal code</span>
+                  <input name="postalCode" defaultValue={profile.postalCode ?? ""} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">SAM status</span>
+                  <input name="samStatus" defaultValue={profile.samStatus ?? ""} placeholder="ACTIVE / EXPIRED" className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">SAM expires</span>
+                  <input name="samExpiresAt" type="date" defaultValue={profile.samExpiresAt ? profile.samExpiresAt.toISOString().slice(0, 10) : ""} className="form-input" />
+                </label>
+                <div />
+                <label className="block">
+                  <span className="form-label">Primary contact name</span>
+                  <input name="primaryContactName" defaultValue={profile.primaryContactName ?? ""} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">Primary contact email</span>
+                  <input name="primaryContactEmail" type="email" defaultValue={profile.primaryContactEmail ?? ""} className="form-input" />
+                </label>
+                <label className="block">
+                  <span className="form-label">Primary contact phone</span>
+                  <input name="primaryContactPhone" defaultValue={profile.primaryContactPhone ?? ""} className="form-input" />
+                </label>
+                <label className="block md:col-span-3">
+                  <span className="form-label">Notes</span>
+                  <textarea name="notes" rows={2} defaultValue={profile.notes ?? ""} className="form-textarea" />
+                </label>
+                <div className="md:col-span-3">
+                  <button className="btn-primary text-xs">Save profile</button>
+                </div>
+              </form>
+            </details>
           </section>
         )}
 

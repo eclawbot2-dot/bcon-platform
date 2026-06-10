@@ -4,6 +4,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectTabs } from "@/components/layout/project-tabs";
 import { SortableTable } from "@/components/SortableTable";
 import { getProjectWorkspace } from "@/lib/dashboard";
+import { ProjectBurndown } from "@/components/project-burndown";
 import { formatCurrency, formatDate, formatDateTime, modeLabel, workflowStatusLabel } from "@/lib/utils";
 
 function CardTitle({ title, href }: { title: string; href?: string }) {
@@ -73,12 +74,12 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
           <div className="card p-5">
             <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Required forms</div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {project.mode === "SIMPLE"
+              {(project.mode === "SIMPLE"
                 ? ["Daily Summary", "Change Order Log", "Punch List"]
                 : project.mode === "VERTICAL"
                   ? ["RFI", "Submittal", "Meeting Minutes", "Drawing Register"]
                   : ["Daily Production Report", "Ticket Reconciliation", "Pay Item Tracking"]
-              .map((item) => <span key={item} className="badge-blue">{item}</span>)}
+              ).map((item) => <span key={item} className="badge-blue">{item}</span>)}
             </div>
           </div>
           <div className="card p-5">
@@ -200,6 +201,8 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
           </div>
 
           <aside className="grid gap-6">
+            <ProjectBurndown projectId={project.id} />
+
             <div className="card p-5">
               <CardTitle title="Latest daily logs" href={`/projects/${project.id}/daily-logs`} />
               <div className="mt-4 space-y-3">

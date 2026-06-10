@@ -4,6 +4,7 @@ import { DetailShell } from "@/components/layout/detail-shell";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SortableTable } from "@/components/SortableTable";
+import { RestoreTenantForm } from "@/components/restore-tenant-form";
 import { prisma } from "@/lib/prisma";
 import { ProjectMode } from "@prisma/client";
 import { formatDate, modeLabel } from "@/lib/utils";
@@ -240,6 +241,15 @@ export default async function AdminTenantDetailPage({
           <input type="hidden" name="action" value="run" />
           <button className="btn-primary text-xs">Run backup now</button>
         </form>
+      </section>
+
+      <section className="card p-6">
+        <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Restore from backup</div>
+        <p className="mt-2 text-sm text-slate-400">
+          Re-insert this tenant&apos;s data graph from a backup JSON file. Idempotent — rows that already exist are skipped, so a
+          restore after partial data loss only fills the gaps. Always dry-run first; the write step stays locked until a dry run passes.
+        </p>
+        <RestoreTenantForm expectedSlug={tenant.slug} />
       </section>
 
       <section className="card p-6 border-rose-500/30">

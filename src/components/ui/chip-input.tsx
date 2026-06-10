@@ -21,20 +21,46 @@ export function ChipInput({
   defaultValue = "",
   placeholder = "Add and press Enter…",
   className = "",
+  suggestKind,
 }: {
   name: string;
   defaultValue?: string;
   placeholder?: string;
   className?: string;
+  /**
+   * When set, the draft text is debounced against /api/ai/suggest
+   * (kind=naics|costCode) and matches render as clickable suggestions
+   * under the input. Click to commit the suggested code as a chip.
+   */
+  suggestKind?: "naics" | "costCode";
 }) {
   const [chips, setChips] = useState<string[]>(() => parseSeed(defaultValue));
   const [draft, setDraft] = useState("");
+  const [suggestions, setSuggestions] = useState<Array<{ code: string; label: string }>>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const hiddenRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (hiddenRef.current) hiddenRef.current.value = chips.join("\n");
   }, [chips]);
+
+  useEffect(() => {
+    if (!suggestKind) return;
+    const q = draft.trim();
+    if (q.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/ai/suggest?kind=${suggestKind}&input=${encodeURIComponent(q)}`)
+        .then((r) => (r.ok ? r.json() : { suggestions: [] }))
+        .then((json: { suggestions?: Array<{ code: string; label: string }> }) => {
+          setSuggestions((json.suggestions ?? []).slice(0, 5));
+        })
+        .catch(() => setSuggestions([]));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [draft, suggestKind]);
 
   function commit(raw: string) {
     const items = raw
@@ -100,6 +126,29 @@ export function ChipInput({
         className="min-w-[8rem] flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
       />
       <input ref={hiddenRef} type="hidden" name={name} defaultValue={chips.join("\n")} />
+      {suggestKind && suggestions.length > 0 ? (
+        <div className="w-full pt-1.5" role="listbox" aria-label="Suggestions">
+          {suggestions.map((s) => (
+            <button
+              key={s.code}
+              type="button"
+              role="option"
+              aria-selected={false}
+              onClick={(e) => {
+                e.stopPropagation();
+                setChips((prev) => Array.from(new Set([...prev, s.code])));
+                setDraft("");
+                setSuggestions([]);
+                inputRef.current?.focus();
+              }}
+              className="mb-1 mr-1 inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-slate-800 px-2 py-0.5 text-xs text-slate-300 hover:border-cyan-400 hover:text-white"
+            >
+              <span className="font-mono text-cyan-300">{s.code}</span>
+              <span>{s.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

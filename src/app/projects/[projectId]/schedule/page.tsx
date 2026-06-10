@@ -20,7 +20,10 @@ export default async function SchedulePage({ params }: { params: Promise<{ proje
     return (
       <AppLayout eyebrow={`${project.code} · Schedule`} title={project.name}>
         <ProjectTabs projectId={project.id} active="schedule" mode={project.mode} />
-        <div className="card mt-6 p-8 text-center text-slate-400">No schedule tasks yet.</div>
+        <div className="card mt-6 p-8 text-center text-slate-400">No schedule tasks yet — import one below.</div>
+        <div className="mt-6">
+          <ImportForm projectId={project.id} hasExisting={false} />
+        </div>
       </AppLayout>
     );
   }
@@ -81,6 +84,8 @@ export default async function SchedulePage({ params }: { params: Promise<{ proje
           </div>
         </section>
 
+        <ImportForm projectId={project.id} hasExisting />
+
         <section className="card p-5">
           <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Milestones</div>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -95,6 +100,26 @@ export default async function SchedulePage({ params }: { params: Promise<{ proje
         </section>
       </div>
     </AppLayout>
+  );
+}
+
+function ImportForm({ projectId, hasExisting }: { projectId: string; hasExisting: boolean }) {
+  return (
+    <section className="card p-5">
+      <details open={!hasExisting}>
+        <summary className="cursor-pointer select-none text-xs uppercase tracking-[0.2em] text-cyan-300">Import schedule (CSV)</summary>
+        <p className="mt-2 text-xs text-slate-400">
+          CSV columns (header row, case-insensitive): <code className="text-cyan-300">name, start, finish</code> required;
+          <code className="text-cyan-300"> wbs / activity_id, duration_days, percent_complete</code> optional. This is the
+          CSV-shaped subset of a P6 / MS Project export.
+          {hasExisting ? " Importing replaces the current schedule — the existing one is snapshotted as a baseline first." : ""}
+        </p>
+        <form action={`/api/projects/${projectId}/schedule/import`} method="post" encType="multipart/form-data" className="mt-3 flex flex-wrap items-center gap-3">
+          <input type="file" name="file" accept=".csv,text/csv" required className="form-input max-w-sm text-xs" aria-label="Schedule CSV file" />
+          <button className="btn-primary text-xs">{hasExisting ? "Re-import schedule" : "Import schedule"}</button>
+        </form>
+      </details>
+    </section>
   );
 }
 

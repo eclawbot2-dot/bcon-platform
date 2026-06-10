@@ -99,10 +99,30 @@ const config: NextAuthConfig = {
       if (!dbUser || !dbUser.active) return false;
       return canUserLogin(dbUser.id, dbUser.superAdmin);
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
-        token.userId = (user as { id: string }).id;
-        token.superAdmin = (user as { superAdmin?: boolean }).superAdmin ?? false;
+        if (account && account.provider !== "credentials") {
+          // SSO/OAuth sign-in: `user.id` here is the PROVIDER's subject id,
+          // not our Prisma User id. Sessions key everything (memberships,
+          // tenant scoping, audit) off token.userId, so resolve the
+          // provisioned User row by email and link to it. signIn() above
+          // already verified the email maps to an active, policy-admitted
+          // User, so a miss here only happens on a race — fail closed.
+          const email = user.email?.trim().toLowerCase();
+          const dbUser = email
+            ? await prisma.user.findUnique({
+                where: { email },
+                select: { id: true, superAdmin: true, active: true },
+              })
+            : null;
+          if (!dbUser || !dbUser.active) return null;
+          token.userId = dbUser.id;
+          token.superAdmin = dbUser.superAdmin;
+          prisma.user.update({ where: { id: dbUser.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
+        } else {
+          token.userId = (user as { id: string }).id;
+          token.superAdmin = (user as { superAdmin?: boolean }).superAdmin ?? false;
+        }
         // Stamp issued-at so we can compare against the user's
         // sessionsRevokedAt on every subsequent request.
         token.iat = Math.floor(Date.now() / 1000);

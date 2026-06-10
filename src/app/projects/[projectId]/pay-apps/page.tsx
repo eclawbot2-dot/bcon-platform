@@ -54,7 +54,10 @@ export default async function PayAppsPage({ params }: { params: Promise<{ projec
               <div className="flex flex-col items-end gap-2">
                 <StatusBadge status={app.status} />
                 <div className="text-xs text-slate-400">Submitted: {formatDate(app.submittedAt)} · Paid: {formatDate(app.paidAt)}</div>
-                <Link href={`/projects/${project.id}/pay-apps/${app.id}`} className="text-xs text-cyan-300 hover:text-cyan-200 hover:underline">View full schedule →</Link>
+                <div className="flex items-center gap-3">
+                  <a href={`/api/pay-applications/${app.id}/g702`} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-300 hover:text-white hover:underline" title="Print-ready AIA G702/G703 document">G702/G703 ↗</a>
+                  <Link href={`/projects/${project.id}/pay-apps/${app.id}`} className="text-xs text-cyan-300 hover:text-cyan-200 hover:underline">View full schedule →</Link>
+                </div>
               </div>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-4">

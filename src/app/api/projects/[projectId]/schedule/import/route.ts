@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { requireEditor } from "@/lib/permissions";
+import { publicRedirect } from "@/lib/redirect";
 
 /**
  * Import a project schedule from CSV. Expected columns (case-
@@ -19,6 +20,15 @@ import { requireEditor } from "@/lib/permissions";
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId: string }> }) {
   const tenant = await requireTenant();
+  const { projectId } = await ctx.params;
+  // Browser form posts (Accept: text/html) get redirected back to the
+  // schedule page with a flash message; programmatic callers keep JSON.
+  const wantsHtml = (req.headers.get("accept") ?? "").includes("text/html");
+  const fail = (message: string, status: number) =>
+    wantsHtml
+      ? publicRedirect(req, `/projects/${projectId}/schedule?error=${encodeURIComponent(message)}`, 303)
+      : NextResponse.json({ error: message }, { status });
+
   // Re-importing wipes and replaces the entire baseline schedule — a
   // destructive edit. requireTenant alone proves only that the caller can
   // see the tenant, so previously a read-only viewer could erase a project's
@@ -26,20 +36,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
   try {
     await requireEditor(tenant.id);
   } catch {
-    return NextResponse.json({ error: "Editor-level role required to import a schedule." }, { status: 403 });
+    return fail("Editor-level role required to import a schedule.", 403);
   }
-  const { projectId } = await ctx.params;
   const project = await prisma.project.findFirst({ where: { id: projectId, tenantId: tenant.id } });
-  if (!project) return NextResponse.json({ error: "project not found" }, { status: 404 });
+  if (!project) return fail("project not found", 404);
 
   const form = await req.formData();
   const file = form.get("file") as File | null;
-  if (!file) return NextResponse.json({ error: "csv file required" }, { status: 422 });
+  if (!file || file.size === 0) return fail("csv file required", 422);
   const text = await file.text();
 
   // Parse CSV
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length < 2) return NextResponse.json({ error: "csv must have a header + at least one row" }, { status: 422 });
+  if (lines.length < 2) return fail("csv must have a header + at least one row", 422);
   const header = lines[0]!.split(",").map((h) => h.trim().toLowerCase());
   const idx = (name: string) => header.indexOf(name);
   const iName = idx("name") >= 0 ? idx("name") : idx("activity_name");
@@ -50,7 +59,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
   const iWbs = idx("wbs") >= 0 ? idx("wbs") : idx("activity_id");
 
   if (iName < 0 || iStart < 0 || iFinish < 0) {
-    return NextResponse.json({ error: "missing required columns: name, start, finish" }, { status: 422 });
+    return fail("missing required columns: name, start, finish", 422);
   }
 
   // Parse + validate every row BEFORE touching the database, so a malformed
@@ -68,7 +77,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
     tasks.push({ name, start, end, duration: duration || 1, pct: pct || 0, wbs });
   }
   if (tasks.length === 0) {
-    return NextResponse.json({ error: "no valid task rows found (need name + parseable start/finish)" }, { status: 422 });
+    return fail("no valid task rows found (need name + parseable start/finish)", 422);
   }
 
   // Snapshot baseline, wipe, and re-create as ONE atomic unit. The previous
@@ -102,6 +111,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
     return existing.length > 0;
   });
 
+  if (wantsHtml) {
+    const msg = `Imported ${tasks.length} tasks${baselineTaken ? " (prior schedule snapshotted as baseline)" : ""}`;
+    return publicRedirect(req, `/projects/${projectId}/schedule?ok=${encodeURIComponent(msg)}`, 303);
+  }
   return NextResponse.json({ imported: tasks.length, baseline: baselineTaken });
 }
 

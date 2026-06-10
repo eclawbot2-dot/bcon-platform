@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { AddSheetForm } from "@/components/add-sheet-form";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { requireProjectForTenant } from "@/lib/project-guard";
@@ -47,6 +48,7 @@ export default async function ProjectDrawingsPage({ params }: { params: Promise<
   ]);
 
   const totalSheets = drawings.reduce((sum, d) => sum + d._count.sheets, 0);
+  const activeSets = drawings.filter((d) => !d.archived);
 
   const drawingColumns: DataTableColumn<DrawingRow>[] = [
     { key: "setName", header: "Set", render: (d) => d.setName },
@@ -121,6 +123,16 @@ export default async function ProjectDrawingsPage({ params }: { params: Promise<
             <button className="btn-primary justify-self-start">Ingest sheets</button>
           </form>
         </section>
+
+        {activeSets.length > 0 ? (
+          <section className="card p-5">
+            <h2 className="mb-1 text-sm font-semibold" style={{ color: "var(--heading)" }}>+ Add a sheet to a set</h2>
+            <p className="mb-3 text-xs" style={{ color: "var(--faint)" }}>
+              Registers a single sheet under an existing drawing set. Re-adding an existing sheet number updates its title and marks it current.
+            </p>
+            <AddSheetForm drawings={activeSets.map((d) => ({ id: d.id, setName: d.setName, revisionNumber: d.revisionNumber }))} />
+          </section>
+        ) : null}
 
         <div>
           <h2 className="mb-3 text-sm font-semibold" style={{ color: "var(--heading)" }}>Drawing sets</h2>

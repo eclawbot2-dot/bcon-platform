@@ -64,7 +64,7 @@ export default async function BidProfilePage() {
           <form action="/api/bid-profile/save" method="post" className="mt-4 grid gap-4">
             <div>
               <label htmlFor="bp-naics" className="form-label">Target NAICS codes (prefix-matched)</label>
-              <ChipInput name="targetNaics" defaultValue={targetNaics.join("\n")} placeholder="Add NAICS code (e.g. 236220)…" />
+              <ChipInput name="targetNaics" defaultValue={targetNaics.join("\n")} placeholder="Add NAICS code or describe the work (e.g. 236220 or paving)…" suggestKind="naics" />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

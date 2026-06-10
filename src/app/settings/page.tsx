@@ -3,8 +3,9 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
-import { requireTenant } from "@/lib/tenant";
+import { requireTenant, listTenants } from "@/lib/tenant";
 import { actorIsAdmin } from "@/lib/permissions";
+import { ssoProviderStatus } from "@/lib/sso-providers";
 import { formatDate, modeLabel, roleLabel } from "@/lib/utils";
 import { ProjectMode } from "@prisma/client";
 import { TestAiKeyButton } from "@/components/settings/test-ai-key-button";
@@ -20,7 +21,10 @@ const MODE_DESCRIPTIONS: Record<string, string> = {
 
 export default async function SettingsPage() {
   const tenant = await requireTenant();
-  const allTenants = await prisma.tenant.findMany({ orderBy: { name: "asc" } });
+  // Membership-aware: regular users only see tenants they belong to;
+  // super-admins see every tenant. Listing the whole Tenant table here
+  // leaked other companies' names/slugs to any signed-in member.
+  const allTenants = await listTenants();
   const projectsByMode = await prisma.project.groupBy({
     by: ["mode"],
     where: { tenantId: tenant.id },
@@ -118,7 +122,7 @@ export default async function SettingsPage() {
         </section>
 
         <section id="tenants" className="card p-6 scroll-mt-20">
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-400">All tenants on this platform</div>
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Tenants you can access</div>
           <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
             <SortableTable
               emptyMessage="No tenants."
@@ -211,17 +215,27 @@ export default async function SettingsPage() {
 
         <section id="sso" className="card p-6 scroll-mt-20">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Identity provider (SSO)</div>
-          <p className="mt-1 text-sm text-slate-400">bcon ships with local password auth. For production tenants, hook an external OIDC provider here.</p>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {["Auth0", "Okta", "Azure AD / Entra ID"].map((provider) => (
-              <div key={provider} className="panel p-4">
-                <div className="text-sm font-semibold text-white">{provider}</div>
-                <p className="mt-2 text-xs text-slate-400">OIDC connector. Paste issuer URL + client ID + client secret to enable SAML/OIDC sign-in for this tenant.</p>
-                <button className="btn-outline text-xs mt-3" disabled>Coming soon</button>
+          <p className="mt-1 text-sm text-slate-400">bcon ships with local password auth. SSO providers activate platform-wide when their OAuth credentials are present in the server environment; active providers appear as &quot;Continue with…&quot; buttons on the login page. Only provisioned members can sign in via SSO — the same access policy as passwords.</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {ssoProviderStatus().map((p) => (
+              <div key={p.id} className="panel p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-white">{p.label}</div>
+                  {p.active ? (
+                    <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-200">Active</span>
+                  ) : (
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-400">Not configured</span>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  {p.active
+                    ? <>Sign-in URL: <code className="text-cyan-300">/api/auth/signin/{p.id}</code></>
+                    : <>Set <code className="text-cyan-300">{p.envVars.join(", ")}</code> in the server environment and restart to activate.</>}
+                </p>
               </div>
             ))}
           </div>
-          <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-slate-500">SSO wiring is scaffolded but not live — contact support to enable for production.</p>
+          <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-slate-500">Configuration is environment-level (applies to the whole deployment), not per-tenant.</p>
         </section>
 
         {showMailLink ? (

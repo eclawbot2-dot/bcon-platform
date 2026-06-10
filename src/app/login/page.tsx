@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { activeSsoProviderIds } from "@/lib/sso-providers";
 import { LoginForm } from "./login-form";
+import { SsoButtons } from "./sso-buttons";
 
 export const metadata = { title: "Sign in · Construction OS" };
 
@@ -38,6 +40,7 @@ export default async function LoginPage({
           <p>Sign in to your tenant workspace.</p>
         </header>
         <LoginForm callbackUrl={callbackUrl} initialError={errorMessage} />
+        <SsoButtons providerIds={activeSsoProviderIds()} callbackUrl={callbackUrl} />
         <p className="login-link-row">
           <a href="/login/reset-password" className="login-link">
             Forgot your password?
