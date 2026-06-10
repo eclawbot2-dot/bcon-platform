@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { prisma } from "@/lib/prisma";
+import { currentSuperAdmin } from "@/lib/permissions";
 import { formatDate, modeLabel } from "@/lib/utils";
 
 type TenantRow = Awaited<ReturnType<typeof loadTenants>>[number];
@@ -15,6 +16,9 @@ async function loadTenants() {
 }
 
 export default async function AdminTenantsListPage() {
+  // In-page gate — layout-only checks leak page data via the parallel-rendered
+  // RSC payload. See admin/audit/page.tsx.
+  if (!(await currentSuperAdmin())) return null;
   const tenants = await loadTenants();
 
   const columns: DataTableColumn<TenantRow>[] = [

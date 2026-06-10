@@ -4,9 +4,13 @@ import { DetailShell, DetailGrid, DetailField } from "@/components/layout/detail
 import { StatTile } from "@/components/ui/stat-tile";
 import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
+import { currentSuperAdmin } from "@/lib/permissions";
 import { formatDate } from "@/lib/utils";
 
 export default async function AdminUserDetailPage({ params }: { params: Promise<{ userId: string }> }) {
+  // In-page gate — layout-only checks leak page data via the parallel-rendered
+  // RSC payload. See admin/audit/page.tsx.
+  if (!(await currentSuperAdmin())) return null;
   const { userId } = await params;
   const user = await prisma.user.findUnique({
     where: { id: userId },

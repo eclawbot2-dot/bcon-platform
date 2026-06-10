@@ -2,9 +2,14 @@ import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { prisma } from "@/lib/prisma";
+import { currentSuperAdmin } from "@/lib/permissions";
 import { formatDateTime } from "@/lib/utils";
 
 export default async function AdminHomePage() {
+  // In-page gate — layouts and pages render in parallel, so the layout's
+  // access-denied shell does NOT stop this page's platform-wide queries from
+  // running and shipping in the RSC payload. See admin/audit/page.tsx.
+  if (!(await currentSuperAdmin())) return null;
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [
     tenants,

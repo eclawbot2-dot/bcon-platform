@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ProjectMode } from "@prisma/client";
+import { currentSuperAdmin } from "@/lib/permissions";
 import { modeLabel } from "@/lib/utils";
 
-export default function NewTenantPage() {
+export default async function NewTenantPage() {
+  // No data fetched here, but gate for consistency with every other /admin
+  // page (layouts and pages render in parallel — see admin/audit/page.tsx).
+  if (!(await currentSuperAdmin())) return null;
   return (
     <AppLayout eyebrow="Super admin" title="Create new tenant" description="Spin up a new company on the platform. This creates the tenant, a default business unit, and a first ADMIN user.">
       <div className="grid gap-6">

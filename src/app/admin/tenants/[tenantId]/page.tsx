@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { SortableTable } from "@/components/SortableTable";
 import { RestoreTenantForm } from "@/components/restore-tenant-form";
 import { prisma } from "@/lib/prisma";
+import { currentSuperAdmin } from "@/lib/permissions";
 import { ProjectMode } from "@prisma/client";
 import { formatDate, modeLabel } from "@/lib/utils";
 
@@ -18,6 +19,9 @@ export default async function AdminTenantDetailPage({
   params: Promise<{ tenantId: string }>;
   searchParams: Promise<{ adminEmail?: string; adminTemp?: string }>;
 }) {
+  // In-page gate — layout-only checks leak page data via the parallel-rendered
+  // RSC payload. See admin/audit/page.tsx.
+  if (!(await currentSuperAdmin())) return null;
   const { tenantId } = await params;
   const sp = await searchParams;
   const tenant = await prisma.tenant.findUnique({

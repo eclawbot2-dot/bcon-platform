@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { prisma } from "@/lib/prisma";
+import { currentSuperAdmin } from "@/lib/permissions";
 
 export default async function NewUserPage() {
+  // In-page gate — layout-only checks leak page data via the parallel-rendered
+  // RSC payload. See admin/audit/page.tsx.
+  if (!(await currentSuperAdmin())) return null;
   const tenants = await prisma.tenant.findMany({ orderBy: { name: "asc" } });
   return (
     <AppLayout eyebrow="Super admin" title="Create new user" description="Create a platform user. Optionally promote to super admin immediately, or grant membership into a tenant.">

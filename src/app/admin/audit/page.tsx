@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { prisma } from "@/lib/prisma";
+import { currentSuperAdmin } from "@/lib/permissions";
 import { formatDateTime } from "@/lib/utils";
 
 type EventRow = Awaited<ReturnType<typeof loadEvents>>[number];
@@ -17,6 +18,11 @@ async function loadEvents(where: Record<string, unknown>) {
 }
 
 export default async function AdminAuditPage({ searchParams }: { searchParams: Promise<{ entityType?: string; action?: string; tenantId?: string }> }) {
+  // In-page super-admin gate. The admin layout renders an access-denied shell
+  // for non-admins, but App Router renders layouts and pages IN PARALLEL — a
+  // layout-only check still executes the page and embeds its cross-tenant data
+  // in the RSC flight payload. Every /admin page must gate itself.
+  if (!(await currentSuperAdmin())) return null;
   const sp = await searchParams;
   const where: Record<string, unknown> = {};
   if (sp.entityType) where.entityType = sp.entityType;

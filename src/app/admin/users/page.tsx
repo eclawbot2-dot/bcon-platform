@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { StatTile } from "@/components/ui/stat-tile";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { prisma } from "@/lib/prisma";
+import { currentSuperAdmin } from "@/lib/permissions";
 import { formatDate } from "@/lib/utils";
 
 type UserRow = Awaited<ReturnType<typeof loadUsers>>[number];
@@ -17,6 +18,9 @@ async function loadUsers(where: Record<string, unknown>) {
 }
 
 export default async function AdminUsersListPage({ searchParams }: { searchParams: Promise<{ q?: string; super?: string }> }) {
+  // In-page gate — layout-only checks leak page data via the parallel-rendered
+  // RSC payload. See admin/audit/page.tsx.
+  if (!(await currentSuperAdmin())) return null;
   const sp = await searchParams;
   const where: Record<string, unknown> = {};
   if (sp.q) where.OR = [{ name: { contains: sp.q, mode: "insensitive" } }, { email: { contains: sp.q, mode: "insensitive" } }];

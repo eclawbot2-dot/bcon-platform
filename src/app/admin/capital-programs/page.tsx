@@ -2,9 +2,13 @@ import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
+import { currentSuperAdmin } from "@/lib/permissions";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export default async function CapitalProgramsPage() {
+  // In-page gate — layout-only checks leak page data via the parallel-rendered
+  // RSC payload. See admin/audit/page.tsx.
+  if (!(await currentSuperAdmin())) return null;
   const tenant = await requireTenant();
   const programs = await prisma.capitalProgram.findMany({
     where: { tenantId: tenant.id },
