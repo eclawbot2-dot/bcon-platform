@@ -116,6 +116,32 @@ auto-drafts bids on listings that match each tenant's bid profile.
 Register on Windows via the PowerShell scripts in `scripts/`:
 `register-backup-task.ps1`, `register-portal-verify-task.ps1`.
 
+## Microsoft 365 + QuickBooks Online integrations (2026-06)
+
+Both live on **Settings → Integrations** (admin-only) with full setup
+instructions, graceful degrade when unconfigured, and audit events on every
+mutation. Details: `docs/integrations.md`.
+
+- **Microsoft 365 (Graph, app-only)** — `MS_TENANT_ID` / `MS_CLIENT_ID` /
+  `MS_CLIENT_SECRET` / `MS_SENDER_UPN`. Adds `EMAIL_TRANSPORT=m365` (Graph
+  `sendMail`) as a selectable transactional-email transport (existing
+  transports unchanged) and an idempotent "Add due date to M365 calendar"
+  action on pay applications (`M365CalendarEventLink` mapping). The Azure
+  app registration needs application permissions `Mail.Send` +
+  `Calendars.ReadWrite` with admin consent. Admin test-send button on the
+  settings page.
+- **QuickBooks Online (real OAuth2)** — `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET`
+  / `QBO_ENVIRONMENT`; redirect URI
+  `https://bcon.jahdev.com/api/integrations/qbo/callback` (from `APP_URL`).
+  Tokens encrypted at rest via the per-tenant vault. Sync: customers ↔ QBO
+  Customers, APPROVED pay apps → QBO Invoices (idempotent by stored
+  `qboInvoiceId`), payment status + AR aging pulled back with downgrade
+  guards (VOIDED never flips workflow status; PAID is never downgraded).
+  QBO-hosted online-payment links surface on synced pay apps — payments
+  always run through the accounting system, never a direct in-app charge.
+  Sync history (`IntegrationSyncJob`) renders on the settings page. The old
+  demo connector remains only while env keys are unset (clearly labeled).
+
 ## Customer onboarding
 
 `docs/onboarding-checklist.md` is the playbook. Section 7 covers the

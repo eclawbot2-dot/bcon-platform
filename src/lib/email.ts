@@ -4,6 +4,9 @@
  *
  *   EMAIL_TRANSPORT=resend  (RESEND_API_KEY, EMAIL_FROM)
  *   EMAIL_TRANSPORT=sendgrid (SENDGRID_API_KEY, EMAIL_FROM)
+ *   EMAIL_TRANSPORT=m365    (MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET,
+ *                            MS_SENDER_UPN — Microsoft Graph sendMail,
+ *                            app-only; see src/lib/m365.ts)
  *   EMAIL_TRANSPORT=smtp    (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM)
  *   (default — log only, no actual send)
  *
@@ -31,6 +34,7 @@ export async function sendEmail(msg: EmailMessage): Promise<{ ok: boolean; trans
   try {
     if (transport === "resend") return await sendViaResend(msg, from);
     if (transport === "sendgrid") return await sendViaSendgrid(msg, from);
+    if (transport === "m365") return await sendViaM365(msg);
     if (transport === "smtp") return await sendViaSmtp(msg, from);
     log.info("email (log-only transport)", { module: "email", to: msg.to, subject: msg.subject });
     return { ok: true, transport: "log" };
@@ -81,6 +85,25 @@ async function sendViaSendgrid(msg: EmailMessage, from: string) {
   });
   if (!res.ok) throw new Error(`sendgrid ${res.status} ${await res.text()}`);
   return { ok: true, transport: "sendgrid", id: res.headers.get("x-message-id") ?? undefined };
+}
+
+async function sendViaM365(msg: EmailMessage): Promise<{ ok: boolean; transport: string; id?: string }> {
+  // Microsoft Graph sendMail (app-only). The "from" address is the
+  // configured MS_SENDER_UPN mailbox — EMAIL_FROM is not used here because
+  // Graph app-only sends always originate from a real tenant mailbox.
+  // Lazy import keeps the Graph client out of the bundle for deployments
+  // that never enable this transport.
+  const { m365SendMail } = await import("@/lib/m365");
+  const result = await m365SendMail({
+    to: arr(msg.to),
+    subject: msg.subject,
+    text: msg.text,
+    html: msg.html,
+    cc: msg.cc ? arr(msg.cc) : undefined,
+    bcc: msg.bcc ? arr(msg.bcc) : undefined,
+    replyTo: msg.replyTo,
+  });
+  return { ok: true, transport: "m365", id: result.id };
 }
 
 async function sendViaSmtp(_msg: EmailMessage, _from: string): Promise<{ ok: boolean; transport: string; error?: string }> {

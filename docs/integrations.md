@@ -152,19 +152,96 @@ private key, account + user GUIDs.
 
 ---
 
-## Accounting (Xero / QuickBooks Online) — DEMO ONLY
+## Microsoft 365 (Graph) — outbound mail + calendar
 
-The connectors at Settings → Integrations are an honest **simulation**:
+App-only (client-credentials) Microsoft Graph integration. Two uses:
+
+1. **Mail transport** — `EMAIL_TRANSPORT=m365` routes every `sendEmail()`
+   call through `POST /users/{MS_SENDER_UPN}/sendMail`. All existing email
+   call-sites work unchanged; the default (`log`) and the resend/sendgrid
+   transports are untouched.
+2. **Calendar** — pay applications get an "Add due date to M365 calendar"
+   action (manager-gated) that creates/updates an event on the
+   `MS_SENDER_UPN` mailbox calendar. Idempotent via `M365CalendarEventLink`
+   rows keyed `(tenantId, kind, recordId)` — re-running updates the same
+   event; events deleted in Outlook are re-created.
+
+**Env**: `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_SENDER_UPN`
+(a real licensed mailbox). Unset = gracefully disabled; Settings →
+Integrations shows status (masked ids) + setup instructions + an admin-only
+test-send button.
+
+**Azure AD app registration** (one-time, M365 admin): Entra admin center →
+App registrations → New registration (single-tenant) → API permissions →
+Microsoft Graph → **Application** permissions `Mail.Send` +
+`Calendars.ReadWrite` → **Grant admin consent** → Certificates & secrets →
+new client secret (copy the *value*).
+
+Code: `src/lib/m365.ts` (Graph client + payload builders),
+`src/lib/m365-calendar.ts` (pay-app due-date wiring),
+`src/app/api/integrations/m365/*` (test-send, calendar). Note this is
+separate from `src/lib/mail/m365.ts`, the read-only workspace-transparency
+mail provider.
+
+---
+
+## QuickBooks Online — REAL integration
+
+Real Intuit OAuth2 (authorization-code) + API sync, per tenant:
+
+- **Connect**: Settings → Integrations → "Connect QuickBooks Online"
+  (admin-only). CSRF `state` cookie round-trips through Intuit; the
+  redirect URI is built from `APP_URL`
+  (`https://bcon.jahdev.com/api/integrations/qbo/callback`) — never from
+  `req.url` (tunnel rule). Tokens are stored **vault-encrypted**
+  (`encryptSecret`, per-tenant AES-256-GCM key from `BCON_VAULT_KEY`) on
+  `QboConnection`; access tokens auto-refresh (Intuit rotates refresh
+  tokens — the new one is persisted every refresh); a failed refresh marks
+  the connection EXPIRED (reconnect from settings).
+- **Sync** (each run is an `IntegrationSyncJob` history row, rendered on
+  the settings page):
+  - `qbo.customers` — QBO Customers ↔ bcon `Company` rows (matched by
+    name; mapping stored as `Company.qboCustomerId`, unique per
+    `(tenantId, qboCustomerId)`; unmatched QBO customers import as
+    `companyType "Owner"`; unmapped local Owner companies are created in
+    QBO).
+  - `qbo.invoices.push` — APPROVED pay applications (positive
+    `currentPaymentDue`, project has `ownerName`) become QBO Invoices.
+    Idempotent: the QBO invoice id is stored on
+    `PayApplication.qboInvoiceId`; synced apps are never pushed twice.
+  - `qbo.invoices.pull` — payment status back-sync with guards
+    (`src/lib/integrations/qbo-core.ts`): QBO-paid promotes only a local
+    APPROVED app to PAID; **VOIDED never changes workflow status** (no
+    VOIDED→REJECTED phantom-AR); a local PAID app is **never downgraded**.
+    Partial payments only record `qboBalance` + `qboPaymentStatus=PARTIAL`.
+  - `qbo.ar-aging` — AgedReceivables report snapshot rendered as bucket
+    tiles on the settings page.
+- **Payment links**: pushed invoices request QBO online payments
+  (ACH + card); the **QBO-hosted invoice link** (`InvoiceLink`) is stored
+  on the pay app and surfaced as "Pay online (QuickBooks)". House rule:
+  payment links come from the accounting system only — never a direct
+  in-app processor charge (no Stripe charging from bcon).
+
+**Env**: `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`, `QBO_ENVIRONMENT`
+(`sandbox` | `production`), optional `QBO_ITEM_ID` (invoice line Item,
+default `1`). Register the redirect URI above on the Intuit app
+(developer.intuit.com). Unset = the real integration is disabled and the
+legacy demo connector (below) remains.
+
+Code: `src/lib/integrations/qbo.ts` (OAuth + API + sync),
+`src/lib/integrations/qbo-core.ts` (pure mapping/guards),
+`src/lib/integrations/sync-job.ts` (run history),
+`src/app/api/integrations/qbo/*` (authorize/callback/disconnect/sync).
+
+---
+
+## Accounting (Xero) — DEMO ONLY
+
+The Xero connector at Settings → Integrations is an honest **simulation**:
 "Connect" writes placeholder tokens and "Sync" generates deterministic seed
 journals/P&L locally. No real OAuth, no real API calls. The settings page
-says this prominently.
-
-**Future direction for invoicing/payments:** Xero is the accounting system of
-record across this portfolio. When bcon grows owner-facing invoicing, the
-path is a real Xero OAuth2 connection that surfaces **Xero invoice "Pay now"
-links** — never a direct in-app charge (no Stripe charging from bcon). Pay
-applications remain the construction-side billing artifact; cash collection
-belongs to Xero.
+says this prominently. The QuickBooks demo connector remains available only
+while the real QBO env keys are unset.
 
 ---
 

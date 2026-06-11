@@ -85,8 +85,28 @@ and **refuses to boot** if required secrets are missing/placeholder/too-short.
 - Auth0: `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_ISSUER`
 
 **Email** (optional; unset = log-only)
-- `EMAIL_TRANSPORT`, `EMAIL_FROM`, `RESEND_API_KEY`, `SENDGRID_API_KEY`,
-  `NOTIFY_TRANSPORT`.
+- `EMAIL_TRANSPORT` (`resend` | `sendgrid` | `m365` | `smtp`; default `log`),
+  `EMAIL_FROM`, `RESEND_API_KEY`, `SENDGRID_API_KEY`, `NOTIFY_TRANSPORT`.
+
+**Microsoft 365 (Graph — mail transport + pay-app calendar)** (optional)
+- `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_SENDER_UPN` —
+  app-only client credentials. The Azure app registration needs APPLICATION
+  permissions `Mail.Send` + `Calendars.ReadWrite` with admin consent
+  (docs/integrations.md). Unset = gracefully disabled; status, setup steps
+  and an admin test-send live on Settings → Integrations.
+  `EMAIL_TRANSPORT=m365` switches transactional sends to Graph.
+
+**QuickBooks Online (real OAuth2 sync)** (optional)
+- `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET` — Intuit app keys
+  (developer.intuit.com). The registered redirect URI must be exactly
+  `https://bcon.jahdev.com/api/integrations/qbo/callback` (built from
+  `APP_URL`, never from the request URL).
+- `QBO_ENVIRONMENT` (`sandbox` default | `production`), `QBO_ITEM_ID`
+  (invoice line Item id, default `1`).
+- Tokens are stored vault-encrypted (depends on `BCON_VAULT_KEY`).
+  Per-tenant connect/disconnect/sync on Settings → Integrations; run
+  history in the `IntegrationSyncJob` table. Unset = the real integration
+  is disabled and the legacy demo connector remains.
 
 **Integrations / AI / portals** (optional)
 - `SAM_GOV_API_KEY` — SAM.gov scraper.

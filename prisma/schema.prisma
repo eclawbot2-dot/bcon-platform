@@ -492,6 +492,11 @@ model Tenant {
   // admin must opt each workflow in. See src/lib/automations/*.
   automationConfigs         AutomationConfig[]
   automationRuns            AutomationRun[]
+  // Real accounting/workspace integrations — per-tenant sync-run history
+  // (QBO push/pull jobs) and Microsoft 365 calendar-event links created
+  // for dated obligations (pay-app due dates).
+  integrationSyncJobs       IntegrationSyncJob[]
+  m365CalendarEventLinks    M365CalendarEventLink[]
 }
 
 /**
@@ -703,11 +708,16 @@ model Company {
   companyType String
   market      String?
   region      String?
+  // QuickBooks Online Customer id this company maps to. Lookups are ALWAYS
+  // keyed by (tenantId, qboCustomerId) — QBO ids are only unique per realm,
+  // so an unscoped lookup could cross tenants.
+  qboCustomerId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   contacts Contact[]
 
+  @@unique([tenantId, qboCustomerId])
   @@index([tenantId])
 }
 
@@ -2268,6 +2278,15 @@ model PayApplication {
   paidAt                DateTime?
   paidBy                String?
   notes                 String?
+  // QuickBooks Online sync (push: APPROVED pay apps → QBO Invoice; pull:
+  // payment status back). qboInvoiceId is only unique per QBO realm —
+  // all lookups go through (project.tenantId, qboInvoiceId).
+  qboInvoiceId          String?
+  qboDocNumber          String?
+  qboSyncedAt           DateTime?
+  qboBalance            Decimal?
+  qboPaymentStatus      String? // UNPAID | PARTIAL | PAID | VOIDED
+  qboInvoiceLink        String? // QBO-hosted online invoice / payment link
   lines                 PayApplicationLine[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
@@ -2275,6 +2294,7 @@ model PayApplication {
   @@unique([projectId, periodNumber])
   @@index([projectId, status])
   @@index([contractId])
+  @@index([qboInvoiceId])
 }
 
 model PayApplicationLine {
@@ -3591,6 +3611,10 @@ model QboConnection {
   organizationName String?
   environment      String              @default("sandbox")
   status           QboConnectionStatus @default(DISCONNECTED)
+  // Real OAuth tokens are stored vault-ENCRYPTED (encryptSecret, per-tenant
+  // AES-256-GCM key derived from BCON_VAULT_KEY). The legacy demo connector
+  // wrote plaintext placeholders; decryptSecret() returns null for those so
+  // the real client treats a demo row as "reconnect required".
   accessToken      String?
   refreshToken     String?
   expiresAt        DateTime?
@@ -3598,6 +3622,57 @@ model QboConnection {
   connectedAt      DateTime?
   lastSyncedAt     DateTime?
   lastSyncNote     String?
+  // AR aging snapshot pulled from the QBO AgedReceivables report —
+  // compact JSON ({asOf, buckets:[{label,total}]}), refreshed by the
+  // "aging" sync action.
+  arAgingJson      String?
+  arAgingAt        DateTime?
+}
+
+/**
+ * One integration sync run (QuickBooks Online push/pull etc.) — RUNNING →
+ * OK | PARTIAL | FAILED, with read/write counts. Powers the sync-history
+ * table on Settings → Integrations. Append-only, tenant-scoped.
+ */
+model IntegrationSyncJob {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider       String // "qbo"
+  kind           String // e.g. "qbo.customers", "qbo.invoices.push"
+  status         String    @default("RUNNING") // RUNNING | OK | PARTIAL | FAILED
+  recordsRead    Int       @default(0)
+  recordsWritten Int       @default(0)
+  error          String?
+  cursor         String?
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@index([tenantId, startedAt])
+  @@index([tenantId, provider, kind, status, startedAt])
+}
+
+/**
+ * Microsoft 365 calendar-event link — maps one bcon record (e.g. a pay
+ * application's payment-due date) to the Graph event we created on the
+ * MS_SENDER_UPN mailbox calendar, so "Add to calendar" is idempotent:
+ * re-running updates the same event instead of duplicating it.
+ */
+model M365CalendarEventLink {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  kind        String // "payapp-due"
+  recordId    String // local row id (PayApplication.id)
+  eventId     String // Graph event id on the configured mailbox calendar
+  calendarUpn String // mailbox the event lives on (MS_SENDER_UPN at create time)
+  subject     String
+  startsAt    DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, kind, recordId])
+  @@index([tenantId])
 }
 
 model ChartOfAccount {

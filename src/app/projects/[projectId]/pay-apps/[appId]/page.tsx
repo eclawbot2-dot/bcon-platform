@@ -10,7 +10,9 @@ import { requireTenant } from "@/lib/tenant";
 import { currentActor } from "@/lib/permissions";
 import { listComments } from "@/lib/approvals";
 import { esignStatus } from "@/lib/esign";
-import { formatCurrency, formatDate, formatPercent } from "@/lib/utils";
+import { m365Configured } from "@/lib/m365";
+import { payAppCalendarLink } from "@/lib/m365-calendar";
+import { formatCurrency, formatDate, formatDateTime, formatPercent } from "@/lib/utils";
 import { sumMoney, subtractMoney, toNum } from "@/lib/money";
 
 export default async function PayAppDetailPage({ params }: { params: Promise<{ projectId: string; appId: string }> }) {
@@ -24,6 +26,8 @@ export default async function PayAppDetailPage({ params }: { params: Promise<{ p
   if (!app) notFound();
   const comments = await listComments(tenant.id, "PayApplication", app.id);
   const esign = esignStatus();
+  const m365Ready = m365Configured();
+  const calendarLink = m365Ready ? await payAppCalendarLink(tenant.id, app.id) : null;
 
   const totalScheduled = sumMoney(app.lines.map((l) => l.scheduledValue));
   const totalCompleted = sumMoney(app.lines.map((l) => l.totalCompleted));
@@ -46,6 +50,17 @@ export default async function PayAppDetailPage({ params }: { params: Promise<{ p
       actions={(
         <div className="flex items-center gap-2">
           <StatusBadge status={app.status} />
+          {app.qboInvoiceLink ? (
+            <a
+              href={app.qboInvoiceLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary text-xs"
+              title="QuickBooks-hosted online invoice — the owner can view and pay this invoice through QuickBooks"
+            >
+              Pay online (QuickBooks)
+            </a>
+          ) : null}
           <a
             href={`/api/pay-applications/${app.id}/g702`}
             target="_blank"
@@ -90,6 +105,70 @@ export default async function PayAppDetailPage({ params }: { params: Promise<{ p
       </section>
 
       <ApprovalSection title="Actions" status={app.status} actions={actions} actorName={actor.userName} actorRole={actor.role} isManager={actor.isManager} />
+
+      {(app.qboInvoiceId || m365Ready) ? (
+        <section className="card p-6">
+          <div className="text-xs uppercase tracking-[0.2em] text-emerald-300">Integrations</div>
+          <DetailGrid>
+            {app.qboInvoiceId ? (
+              <>
+                <DetailField label="QuickBooks invoice">
+                  {app.qboDocNumber ?? app.qboInvoiceId}
+                  {app.qboSyncedAt ? <span className="text-xs text-slate-500"> · synced {formatDateTime(app.qboSyncedAt)}</span> : null}
+                </DetailField>
+                <DetailField label="QBO payment status">
+                  <span className={
+                    app.qboPaymentStatus === "PAID" ? "text-emerald-300"
+                    : app.qboPaymentStatus === "PARTIAL" ? "text-amber-300"
+                    : app.qboPaymentStatus === "VOIDED" ? "text-rose-300"
+                    : "text-slate-300"
+                  }>
+                    {app.qboPaymentStatus ?? "—"}
+                  </span>
+                  {app.qboBalance !== null && app.qboPaymentStatus !== "VOIDED" ? (
+                    <span className="text-xs text-slate-500"> · balance {formatCurrency(app.qboBalance)}</span>
+                  ) : null}
+                </DetailField>
+                <DetailField label="Online payment">
+                  {app.qboInvoiceLink ? (
+                    <a href={app.qboInvoiceLink} target="_blank" rel="noopener noreferrer" className="text-sky-300 underline">
+                      QuickBooks-hosted invoice / pay link
+                    </a>
+                  ) : (
+                    <span className="text-slate-400">no online link (enable online payments on the QBO invoice)</span>
+                  )}
+                </DetailField>
+              </>
+            ) : (
+              <DetailField label="QuickBooks invoice">
+                <span className="text-slate-400">
+                  not synced — APPROVED pay apps are pushed from Settings → Integrations (&quot;Push approved pay apps&quot;)
+                </span>
+              </DetailField>
+            )}
+            {m365Ready ? (
+              <DetailField label="M365 calendar">
+                {calendarLink ? (
+                  <span className="text-emerald-300">
+                    due-date event on {calendarLink.calendarUpn}
+                    <span className="text-xs text-slate-500"> · updated {formatDateTime(calendarLink.updatedAt)}</span>
+                  </span>
+                ) : (
+                  <span className="text-slate-400">no calendar event yet</span>
+                )}
+              </DetailField>
+            ) : null}
+          </DetailGrid>
+          {m365Ready && actor.isManager ? (
+            <form action="/api/integrations/m365/calendar" method="post" className="mt-4">
+              <input type="hidden" name="payAppId" value={app.id} />
+              <button className="btn-outline text-xs">
+                {calendarLink ? "Update due date on M365 calendar" : "Add due date to M365 calendar"}
+              </button>
+            </form>
+          ) : null}
+        </section>
+      ) : null}
 
       {actor.canEdit && (app.status === "DRAFT" || app.status === "REJECTED" || actor.isManager) ? (
         <section className="card p-6">
