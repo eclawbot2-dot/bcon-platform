@@ -1,11 +1,9 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
-import { EmptyState } from "@/components/ui/empty-state";
+import { PhotosView, type PhotoListItem } from "@/components/photos-view";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
-import { formatDateTime } from "@/lib/utils";
-import { ImageOff } from "lucide-react";
 
 export default async function ProjectPhotosPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -22,6 +20,18 @@ export default async function ProjectPhotosPage({ params }: { params: Promise<{ 
     }),
     prisma.projectPhotoAlbum.findMany({ where: { projectId }, orderBy: { name: "asc" } }),
   ]);
+
+  // Slim serializable payload for the client grid/list view.
+  const photoItems: PhotoListItem[] = photos.map((p) => ({
+    id: p.id,
+    fileUrl: p.fileUrl,
+    thumbnailUrl: p.thumbnailUrl,
+    caption: p.caption,
+    capturedAt: p.capturedAt ? p.capturedAt.toISOString() : null,
+    geoLat: p.geoLat,
+    geoLng: p.geoLng,
+    albumName: p.album?.name ?? null,
+  }));
 
   return (
     <AppLayout
@@ -68,35 +78,7 @@ export default async function ProjectPhotosPage({ params }: { params: Promise<{ 
           </div>
         </section>
 
-        <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-          {photos.map((p) => (
-            <article key={p.id} className="card p-3">
-              {/* Tap opens the full-resolution original — field users zoom into
-                  detail shots; the grid thumb alone is too small on a phone. */}
-              <a
-                href={p.fileUrl}
-                target="_blank"
-                rel="noopener"
-                className="block aspect-square overflow-hidden rounded-lg bg-slate-900"
-                aria-label={`Open full-size photo${p.caption ? `: ${p.caption}` : ""}`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.thumbnailUrl ?? p.fileUrl} alt={p.caption || `Project photo${p.capturedAt ? ` from ${formatDateTime(p.capturedAt)}` : ""}`} loading="lazy" className="h-full w-full object-cover" />
-              </a>
-              <div className="mt-2 text-xs">
-                <div className="text-white truncate">{p.caption ?? "(no caption)"}</div>
-                <div className="text-slate-500">{p.capturedAt ? formatDateTime(p.capturedAt) : "—"}</div>
-                {p.geoLat && p.geoLng ? <div className="text-slate-500 text-[10px]">{p.geoLat.toFixed(4)}, {p.geoLng.toFixed(4)}</div> : null}
-                {p.album ? <div className="text-cyan-300 text-[10px]">{p.album.name}</div> : null}
-              </div>
-            </article>
-          ))}
-          {photos.length === 0 ? (
-            <div className="col-span-full card p-6">
-              <EmptyState icon={ImageOff} title="No photos yet" description="Upload field photos above — capture is enabled for mobile cameras and EXIF geo/timestamp is preserved." />
-            </div>
-          ) : null}
-        </section>
+        <PhotosView photos={photoItems} />
       </div>
     </AppLayout>
   );

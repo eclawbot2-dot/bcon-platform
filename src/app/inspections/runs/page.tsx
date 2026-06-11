@@ -21,14 +21,14 @@ export default async function InspectionRunsPage() {
   const rows = await loadRows(tenant.id);
 
   const columns: DataTableColumn<Row>[] = [
-    { key: "started", header: "Started", render: (r) => formatDate(r.startedAt) },
-    { key: "portal", header: "Portal", render: (r) => r.portal.name },
+    { key: "started", header: "Started", sortValue: (r) => r.startedAt, render: (r) => formatDate(r.startedAt) },
+    { key: "portal", header: "Portal", sortValue: (r) => r.portal.name, render: (r) => r.portal.name },
     { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
-    { key: "fetched", header: "Fetched", render: (r) => r.inspectionsFetched },
-    { key: "created", header: "Created", render: (r) => r.inspectionsCreated },
-    { key: "updated", header: "Updated", render: (r) => r.inspectionsUpdated },
-    { key: "alerts", header: "Alerts", render: (r) => r.alertsCreated },
-    { key: "duration", header: "ms", cellClassName: "text-slate-500 text-xs", render: (r) => r.durationMs ?? "—" },
+    { key: "fetched", header: "Fetched", sortValue: (r) => r.inspectionsFetched, render: (r) => r.inspectionsFetched },
+    { key: "created", header: "Created", sortValue: (r) => r.inspectionsCreated, render: (r) => r.inspectionsCreated },
+    { key: "updated", header: "Updated", sortValue: (r) => r.inspectionsUpdated, render: (r) => r.inspectionsUpdated },
+    { key: "alerts", header: "Alerts", sortValue: (r) => r.alertsCreated, render: (r) => r.alertsCreated },
+    { key: "duration", header: "ms", cellClassName: "text-slate-500 text-xs", sortValue: (r) => r.durationMs ?? null, render: (r) => r.durationMs ?? "—" },
     { key: "error", header: "Note", cellClassName: "text-slate-400 text-xs", render: (r) => r.errorMessage ?? (JSON.parse(r.warningsJson || "[]") as string[]).slice(0, 1)[0] ?? "" },
   ];
 

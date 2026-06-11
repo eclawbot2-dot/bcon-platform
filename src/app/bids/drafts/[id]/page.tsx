@@ -98,55 +98,77 @@ export default async function BidDraftDetailPage({ params }: { params: Promise<{
               </div>
             ))}
           </div>
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="table-header">Cost code</th>
-                  <th className="table-header">Description</th>
-                  <th className="table-header">Category</th>
-                  <th className="table-header">Qty</th>
-                  <th className="table-header">Unit</th>
-                  <th className="table-header">Labor</th>
-                  <th className="table-header">Material</th>
-                  <th className="table-header">Equipment</th>
-                  <th className="table-header">Sub</th>
-                  <th className="table-header">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 bg-slate-950/40">
-                {draft.lineItems.map((l) => (
-                  <tr key={l.id}>
-                    <td className="table-cell font-mono text-xs">{l.costCode ?? "—"}</td>
-                    <td className="table-cell">{l.description}</td>
-                    <td className="table-cell">{l.category}</td>
-                    <td className="table-cell">{l.quantity}</td>
-                    <td className="table-cell">{l.unit ?? "—"}</td>
-                    <td className="table-cell">{formatCurrency(l.laborCost)}</td>
-                    <td className="table-cell">{formatCurrency(l.materialCost)}</td>
-                    <td className="table-cell">{formatCurrency(l.equipmentCost)}</td>
-                    <td className="table-cell">{formatCurrency(l.subCost)}</td>
-                    <td className="table-cell font-medium text-white">{formatCurrency(l.amount)}</td>
-                  </tr>
-                ))}
-                <tr className="bg-white/5">
-                  <td className="table-cell" colSpan={9}><span className="text-slate-400">Subtotal</span></td>
-                  <td className="table-cell font-semibold text-white">{formatCurrency(rawTotal)}</td>
-                </tr>
-                <tr className="bg-white/5">
-                  <td className="table-cell" colSpan={9}><span className="text-slate-400">+ Overhead ({draft.overheadPct}%)</span></td>
-                  <td className="table-cell font-semibold text-white">{formatCurrency(withOh - rawTotal)}</td>
-                </tr>
-                <tr className="bg-white/5">
-                  <td className="table-cell" colSpan={9}><span className="text-slate-400">+ Profit ({draft.profitPct}%)</span></td>
-                  <td className="table-cell font-semibold text-white">{formatCurrency(withProfit - withOh)}</td>
-                </tr>
-                <tr className="bg-cyan-500/10">
-                  <td className="table-cell" colSpan={9}><span className="text-cyan-200 font-semibold">Proposed total</span></td>
-                  <td className="table-cell font-semibold text-cyan-100">{formatCurrency(withProfit)}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
+            <SortableTable
+              emptyMessage="No line items."
+              theadClassName="bg-white/5"
+              columns={[
+                { header: "Cost code" },
+                { header: "Description" },
+                { header: "Category" },
+                { header: "Qty", align: "right" },
+                { header: "Unit" },
+                { header: "Labor", align: "right" },
+                { header: "Material", align: "right" },
+                { header: "Equipment", align: "right" },
+                { header: "Sub", align: "right" },
+                { header: "Amount", align: "right" },
+              ]}
+              rows={draft.lineItems.map((l) => ({
+                key: l.id,
+                className: "bg-slate-950/40",
+                cells: [
+                  { sort: l.costCode ?? "", node: l.costCode ?? "—", tdClassName: "font-mono text-xs" },
+                  { sort: l.description, node: l.description },
+                  { sort: l.category, node: l.category },
+                  { sort: toNum(l.quantity), node: l.quantity },
+                  { sort: l.unit ?? "", node: l.unit ?? "—" },
+                  { sort: toNum(l.laborCost), node: formatCurrency(l.laborCost) },
+                  { sort: toNum(l.materialCost), node: formatCurrency(l.materialCost) },
+                  { sort: toNum(l.equipmentCost), node: formatCurrency(l.equipmentCost) },
+                  { sort: toNum(l.subCost), node: formatCurrency(l.subCost) },
+                  { sort: toNum(l.amount), node: formatCurrency(l.amount), tdClassName: "font-medium text-white" },
+                ],
+              }))}
+              footerRows={[
+                {
+                  key: "subtotal",
+                  className: "bg-white/5",
+                  cells: [
+                    { node: <span className="text-slate-400">Subtotal</span>, tdClassName: "whitespace-nowrap" },
+                    ...Array.from({ length: 8 }, () => ({ node: null })),
+                    { node: formatCurrency(rawTotal), tdClassName: "text-right font-semibold text-white" },
+                  ],
+                },
+                {
+                  key: "overhead",
+                  className: "bg-white/5",
+                  cells: [
+                    { node: <span className="text-slate-400">+ Overhead ({draft.overheadPct}%)</span>, tdClassName: "whitespace-nowrap" },
+                    ...Array.from({ length: 8 }, () => ({ node: null })),
+                    { node: formatCurrency(withOh - rawTotal), tdClassName: "text-right font-semibold text-white" },
+                  ],
+                },
+                {
+                  key: "profit",
+                  className: "bg-white/5",
+                  cells: [
+                    { node: <span className="text-slate-400">+ Profit ({draft.profitPct}%)</span>, tdClassName: "whitespace-nowrap" },
+                    ...Array.from({ length: 8 }, () => ({ node: null })),
+                    { node: formatCurrency(withProfit - withOh), tdClassName: "text-right font-semibold text-white" },
+                  ],
+                },
+                {
+                  key: "total",
+                  className: "bg-cyan-500/10",
+                  cells: [
+                    { node: <span className="font-semibold text-cyan-200">Proposed total</span>, tdClassName: "whitespace-nowrap" },
+                    ...Array.from({ length: 8 }, () => ({ node: null })),
+                    { node: formatCurrency(withProfit), tdClassName: "text-right font-semibold text-cyan-100" },
+                  ],
+                },
+              ]}
+            />
           </div>
         </section>
       ) : null}

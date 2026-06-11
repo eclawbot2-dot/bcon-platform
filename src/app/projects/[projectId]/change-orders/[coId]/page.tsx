@@ -138,25 +138,36 @@ export default async function ChangeOrderDetailPage({ params }: { params: Promis
                 { sort: toNum(l.amount), node: formatCurrency(l.amount), tdClassName: "font-medium text-white" },
               ],
             }))}
+            footerRows={[
+              {
+                key: "subtotal",
+                className: "bg-white/5",
+                cells: [
+                  { node: <span className="text-slate-400">Subtotal</span>, tdClassName: "whitespace-nowrap" },
+                  ...Array.from({ length: 5 }, () => ({ node: null })),
+                  { node: formatCurrency(subtotal), tdClassName: "font-semibold text-white" },
+                ],
+              },
+              {
+                key: "markup",
+                className: "bg-white/5",
+                cells: [
+                  { node: <span className="text-slate-400">Markup ({co.markupPct}%)</span>, tdClassName: "whitespace-nowrap" },
+                  ...Array.from({ length: 5 }, () => ({ node: null })),
+                  { node: formatCurrency(markup), tdClassName: "font-semibold text-white" },
+                ],
+              },
+              {
+                key: "total",
+                className: "bg-cyan-500/10",
+                cells: [
+                  { node: <span className="text-cyan-200">Calculated total</span>, tdClassName: "whitespace-nowrap" },
+                  ...Array.from({ length: 5 }, () => ({ node: null })),
+                  { node: formatCurrency(calculated), tdClassName: "font-semibold text-cyan-100" },
+                ],
+              },
+            ]}
           />
-          <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10">
-            <tbody className="divide-y divide-white/10 bg-slate-950/40">
-              <tr className="bg-white/5">
-                <td className="table-cell" colSpan={6}><span className="text-slate-400">Subtotal</span></td>
-                <td className="table-cell font-semibold text-white">{formatCurrency(subtotal)}</td>
-              </tr>
-              <tr className="bg-white/5">
-                <td className="table-cell" colSpan={6}><span className="text-slate-400">Markup ({co.markupPct}%)</span></td>
-                <td className="table-cell font-semibold text-white">{formatCurrency(markup)}</td>
-              </tr>
-              <tr className="bg-cyan-500/10">
-                <td className="table-cell" colSpan={6}><span className="text-cyan-200">Calculated total</span></td>
-                <td className="table-cell font-semibold text-cyan-100">{formatCurrency(calculated)}</td>
-              </tr>
-            </tbody>
-          </table>
-          </div>
         </div>
       </section>
 

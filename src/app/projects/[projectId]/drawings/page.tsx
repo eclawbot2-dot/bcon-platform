@@ -54,7 +54,7 @@ export default async function ProjectDrawingsPage({ params }: { params: Promise<
     { key: "setName", header: "Set", render: (d) => d.setName },
     { key: "discipline", header: "Discipline", render: (d) => d.discipline.replace("_", " ") },
     { key: "revisionNumber", header: "Rev", cellClassName: "text-xs text-slate-400", render: (d) => `#${d.revisionNumber}` },
-    { key: "sheets", header: "Sheets", cellClassName: "text-xs", render: (d) => d._count.sheets },
+    { key: "sheets", header: "Sheets", cellClassName: "text-xs", sortValue: (d) => d._count.sheets, render: (d) => d._count.sheets },
     {
       key: "issuedDate",
       header: "Issued",

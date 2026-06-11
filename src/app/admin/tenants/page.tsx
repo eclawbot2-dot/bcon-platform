@@ -25,13 +25,14 @@ export default async function AdminTenantsListPage() {
     { key: "name", header: "Name", render: (t) => t.name },
     { key: "slug", header: "Slug", cellClassName: "font-mono text-xs text-slate-400", render: (t) => t.slug },
     { key: "primaryMode", header: "Primary mode", render: (t) => modeLabel(t.primaryMode) },
-    { key: "projects", header: "Projects", cellClassName: "text-right", render: (t) => t._count.projects },
-    { key: "members", header: "Members", cellClassName: "text-right", render: (t) => t._count.memberships },
-    { key: "bus", header: "BUs", cellClassName: "text-right", render: (t) => t._count.businessUnits },
+    { key: "projects", header: "Projects", cellClassName: "text-right", sortValue: (t) => t._count.projects, render: (t) => t._count.projects },
+    { key: "members", header: "Members", cellClassName: "text-right", sortValue: (t) => t._count.memberships, render: (t) => t._count.memberships },
+    { key: "bus", header: "BUs", cellClassName: "text-right", sortValue: (t) => t._count.businessUnits, render: (t) => t._count.businessUnits },
     {
       key: "lastBackup",
       header: "Last backup",
       cellClassName: "text-xs",
+      sortValue: (t) => t.lastBackupAt ?? null,
       render: (t) => {
         if (t.lastBackupError) {
           return <span className="text-rose-300" title={t.lastBackupError}>error</span>;

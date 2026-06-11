@@ -44,18 +44,21 @@ export default async function ProjectCrewPage({ params }: { params: Promise<{ pr
       key: "headcount",
       header: "Headcount (P/A)",
       cellClassName: "text-xs text-right",
+      sortValue: (a) => a.actualHeadcount ?? a.plannedHeadcount,
       render: (a) => `${a.plannedHeadcount} / ${a.actualHeadcount}`,
     },
     {
       key: "hours",
       header: "Hours (P/A)",
       cellClassName: "text-xs text-right",
+      sortValue: (a) => a.actualHours ?? a.plannedHours,
       render: (a) => `${a.plannedHours} / ${a.actualHours}`,
     },
     {
       key: "geo",
       header: "Station / Seg",
       cellClassName: "text-xs",
+      sortValue: (a) => [a.station, a.segment].filter(Boolean).join(" · "),
       render: (a) => [a.station, a.segment].filter(Boolean).join(" · ") || "—",
     },
   ];

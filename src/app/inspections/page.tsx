@@ -67,6 +67,7 @@ export default async function InspectionsPage({
     {
       key: "scheduled",
       header: "When",
+      sortValue: (r) => r.scheduledAt ?? null,
       render: (r) => {
         if (!r.scheduledAt) return <span className="text-slate-500">unscheduled</span>;
         const d = new Date(r.scheduledAt);
@@ -80,23 +81,25 @@ export default async function InspectionsPage({
         );
       },
     },
-    { key: "type", header: "Type", render: (r) => r.title.replace(/ — .*$/, "") },
+    { key: "type", header: "Type", sortValue: (r) => r.title.replace(/ — .*$/, ""), render: (r) => r.title.replace(/ — .*$/, "") },
     {
       key: "portal",
       header: "Jurisdiction",
       cellClassName: "text-slate-400 text-xs uppercase tracking-wide",
+      sortValue: (r) => (r.sourceSystem ?? "").replace(/^municipal:/, ""),
       render: (r) => (r.sourceSystem ?? "").replace(/^municipal:/, ""),
     },
     {
       key: "project",
       header: "Project",
+      sortValue: (r) => r.project.code,
       render: (r) => (
         <Link href={`/projects/${r.project.id}`} className="text-cyan-300 hover:underline">
           {r.project.code} · {r.project.name}
         </Link>
       ),
     },
-    { key: "address", header: "Address", cellClassName: "text-slate-400 text-xs", render: (r) => r.location ?? "—" },
+    { key: "address", header: "Address", cellClassName: "text-slate-400 text-xs", sortValue: (r) => r.location ?? "", render: (r) => r.location ?? "—" },
     { key: "inspector", header: "Inspector", cellClassName: "text-slate-400 text-xs", render: (r) => r.inspector ?? "—" },
     { key: "result", header: "Result", render: (r) => <StatusBadge status={r.result} /> },
     {

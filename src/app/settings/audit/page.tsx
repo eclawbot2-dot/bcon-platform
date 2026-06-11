@@ -68,11 +68,11 @@ export default async function TenantAuditPage({ searchParams }: { searchParams: 
   ]);
 
   const columns: DataTableColumn<EventRow>[] = [
-    { key: "when", header: "When", cellClassName: "text-xs text-slate-400", render: (e) => formatDateTime(e.createdAt) },
-    { key: "actor", header: "Actor", cellClassName: "text-xs", render: (e) => e.actor?.name ?? e.actor?.email ?? "system" },
+    { key: "when", header: "When", cellClassName: "text-xs text-slate-400", sortValue: (e) => e.createdAt, render: (e) => formatDateTime(e.createdAt) },
+    { key: "actor", header: "Actor", cellClassName: "text-xs", sortValue: (e) => e.actor?.name ?? e.actor?.email ?? "system", render: (e) => e.actor?.name ?? e.actor?.email ?? "system" },
     { key: "action", header: "Action", cellClassName: "font-mono text-xs", render: (e) => e.action },
-    { key: "entity", header: "Entity", cellClassName: "text-xs", render: (e) => `${e.entityType}:${e.entityId.slice(0, 12)}${e.entityId.length > 12 ? "…" : ""}` },
-    { key: "source", header: "Source", cellClassName: "text-xs text-slate-400", render: (e) => e.source ?? "—" },
+    { key: "entity", header: "Entity", cellClassName: "text-xs", sortValue: (e) => `${e.entityType}:${e.entityId}`, render: (e) => `${e.entityType}:${e.entityId.slice(0, 12)}${e.entityId.length > 12 ? "…" : ""}` },
+    { key: "source", header: "Source", cellClassName: "text-xs text-slate-400", sortValue: (e) => e.source ?? "", render: (e) => e.source ?? "—" },
   ];
 
   return (

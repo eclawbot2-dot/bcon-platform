@@ -120,18 +120,19 @@ export default async function TimesheetsRollupPage({ searchParams }: { searchPar
         <DataTable
           columns={
             [
-              { key: "project", header: "Project", cellClassName: "text-cyan-300", render: (t) => t.project.code },
+              { key: "project", header: "Project", cellClassName: "text-cyan-300", sortValue: (t) => t.project.code, render: (t) => t.project.code },
               { key: "employeeName", header: "Employee", render: (t) => t.employeeName },
               { key: "weekEnding", header: "Week ending", cellClassName: "text-xs text-slate-400", render: (t) => formatDate(t.weekEnding) },
               {
                 key: "hours",
                 header: "Hours",
+                sortValue: (t) => t.regularHours + t.overtimeHours + t.doubleTimeHours,
                 render: (t) => {
                   const hours = t.regularHours + t.overtimeHours + t.doubleTimeHours;
                   return <>{hours} <span className="text-xs text-slate-500">({t.regularHours}/{t.overtimeHours}/{t.doubleTimeHours})</span></>;
                 },
               },
-              { key: "loaded", header: "Loaded", cellClassName: "text-xs text-right", render: (t) => formatCurrency(loadedLabor(t)) },
+              { key: "loaded", header: "Loaded", cellClassName: "text-xs text-right", sortValue: (t) => loadedLabor(t), render: (t) => formatCurrency(loadedLabor(t)) },
               { key: "costCode", header: "Cost code", cellClassName: "font-mono text-xs", render: (t) => t.costCode ?? "—" },
               { key: "status", header: "Status", render: (t) => <StatusBadge status={t.status} /> },
             ] as DataTableColumn<TimeEntryRow>[]

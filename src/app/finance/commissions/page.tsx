@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate } from "@/lib/utils";
+import { toNum } from "@/lib/money";
 import { Coins } from "lucide-react";
 
 type RuleRow = Awaited<ReturnType<typeof loadRules>>[number];
@@ -45,26 +46,27 @@ export default async function CommissionsPage() {
   const ruleColumns: DataTableColumn<RuleRow>[] = [
     { key: "name", header: "Name", render: (r) => r.name },
     { key: "appliesTo", header: "Applies to", render: (r) => r.appliesTo.replace("_", " ") },
-    { key: "role", header: "Role", cellClassName: "text-xs", render: (r) => r.recipientRole ?? "—" },
-    { key: "rate", header: "Rate", cellClassName: "text-xs text-right", render: (r) => `${r.ratePct}%` },
-    { key: "flat", header: "Flat", cellClassName: "text-xs text-right", render: (r) => (r.flatAmount ? `$${r.flatAmount}` : "—") },
-    { key: "cap", header: "Cap", cellClassName: "text-xs text-right", render: (r) => (r.cap ? `$${r.cap}` : "—") },
+    { key: "role", header: "Role", cellClassName: "text-xs", sortValue: (r) => r.recipientRole ?? "", render: (r) => r.recipientRole ?? "—" },
+    { key: "rate", header: "Rate", cellClassName: "text-xs text-right", sortValue: (r) => r.ratePct, render: (r) => `${r.ratePct}%` },
+    { key: "flat", header: "Flat", cellClassName: "text-xs text-right", sortValue: (r) => (r.flatAmount != null ? toNum(r.flatAmount) : null), render: (r) => (r.flatAmount ? `$${r.flatAmount}` : "—") },
+    { key: "cap", header: "Cap", cellClassName: "text-xs text-right", sortValue: (r) => (r.cap != null ? toNum(r.cap) : null), render: (r) => (r.cap ? `$${r.cap}` : "—") },
     { key: "active", header: "Active", render: (r) => (r.active ? <span className="text-emerald-300">yes</span> : <span className="text-slate-500">no</span>) },
-    { key: "accruals", header: "Accruals", cellClassName: "text-xs text-right", render: (r) => r._count.accruals },
+    { key: "accruals", header: "Accruals", cellClassName: "text-xs text-right", sortValue: (r) => r._count.accruals, render: (r) => r._count.accruals },
   ];
 
   const accrualColumns: DataTableColumn<AccrualRow>[] = [
-    { key: "recipient", header: "Recipient", render: (a) => a.recipientName },
-    { key: "source", header: "Source", cellClassName: "text-xs", render: (a) => `${a.sourceType.replace("_", " ")}${a.sourceLabel ? ` · ${a.sourceLabel}` : ""}` },
-    { key: "rule", header: "Rule", cellClassName: "text-xs", render: (a) => a.rule?.name ?? "—" },
+    { key: "recipient", header: "Recipient", sortValue: (a) => a.recipientName, render: (a) => a.recipientName },
+    { key: "source", header: "Source", cellClassName: "text-xs", sortValue: (a) => a.sourceType, render: (a) => `${a.sourceType.replace("_", " ")}${a.sourceLabel ? ` · ${a.sourceLabel}` : ""}` },
+    { key: "rule", header: "Rule", cellClassName: "text-xs", sortValue: (a) => a.rule?.name ?? "", render: (a) => a.rule?.name ?? "—" },
     { key: "basis", header: "Basis", cellClassName: "text-xs text-right", render: (a) => `$${a.basis.toLocaleString()}` },
-    { key: "rate", header: "Rate", cellClassName: "text-xs text-right", render: (a) => `${a.ratePct}%` },
+    { key: "rate", header: "Rate", cellClassName: "text-xs text-right", sortValue: (a) => a.ratePct, render: (a) => `${a.ratePct}%` },
     { key: "amount", header: "Amount", cellClassName: "text-xs text-right font-semibold", render: (a) => `$${a.amount.toLocaleString()}` },
     { key: "status", header: "Status", render: (a) => a.status.replace("_", " ") },
-    { key: "earned", header: "Earned", cellClassName: "text-xs text-slate-400", render: (a) => formatDate(a.earnedAt) },
+    { key: "earned", header: "Earned", cellClassName: "text-xs text-slate-400", sortValue: (a) => a.earnedAt ?? null, render: (a) => formatDate(a.earnedAt) },
     {
       key: "advance",
       header: "Move to",
+      sortable: false,
       render: (a) => (
         <form action={`/api/commissions/accruals/${a.id}/status`} method="post" className="flex items-center gap-1">
           <label htmlFor={`s-${a.id}`} className="sr-only">Status</label>

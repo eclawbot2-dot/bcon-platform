@@ -36,12 +36,12 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
   ]);
 
   const columns: DataTableColumn<EventRow>[] = [
-    { key: "when", header: "When", cellClassName: "text-xs text-slate-400", render: (e) => formatDateTime(e.createdAt) },
-    { key: "tenant", header: "Tenant", cellClassName: "text-xs", render: (e) => e.tenant?.slug ?? e.tenantId },
-    { key: "actor", header: "Actor", cellClassName: "text-xs", render: (e) => e.actor?.name ?? "—" },
+    { key: "when", header: "When", cellClassName: "text-xs text-slate-400", sortValue: (e) => e.createdAt, render: (e) => formatDateTime(e.createdAt) },
+    { key: "tenant", header: "Tenant", cellClassName: "text-xs", sortValue: (e) => e.tenant?.slug ?? e.tenantId, render: (e) => e.tenant?.slug ?? e.tenantId },
+    { key: "actor", header: "Actor", cellClassName: "text-xs", sortValue: (e) => e.actor?.name ?? "", render: (e) => e.actor?.name ?? "—" },
     { key: "action", header: "Action", cellClassName: "font-mono text-xs", render: (e) => e.action },
-    { key: "entity", header: "Entity", cellClassName: "text-xs", render: (e) => `${e.entityType}:${e.entityId.slice(0, 10)}` },
-    { key: "source", header: "Source", cellClassName: "text-xs text-slate-400", render: (e) => e.source ?? "—" },
+    { key: "entity", header: "Entity", cellClassName: "text-xs", sortValue: (e) => `${e.entityType}:${e.entityId}`, render: (e) => `${e.entityType}:${e.entityId.slice(0, 10)}` },
+    { key: "source", header: "Source", cellClassName: "text-xs text-slate-400", sortValue: (e) => e.source ?? "", render: (e) => e.source ?? "—" },
   ];
 
   return (

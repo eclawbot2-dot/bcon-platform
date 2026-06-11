@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { StatTile } from "@/components/ui/stat-tile";
 import { EmptyState } from "@/components/ui/empty-state";
 import { prisma } from "@/lib/prisma";
@@ -128,68 +129,83 @@ export default async function BidLevelingPage({ params }: { params: Promise<{ pr
           </ul>
         </section>
 
-        {/* Scope-item matrix */}
+        {/* Scope-item matrix — sortable per spec drive-view-sortable-tables §6:
+            sort by scope key, by any bidder's price, or by awardee. */}
         {hasLines ? (
-          <section className="card p-0 overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <caption className="sr-only">Bid leveling matrix: scope items by bidder, with the lowest included amount highlighted per row.</caption>
-              <thead className="bg-white/5">
-                <tr>
-                  <th scope="col" className="table-header sticky left-0 bg-slate-950/80">Scope item</th>
-                  {pkg.subBids.map((sb) => (
-                    <th scope="col" key={sb.id} className="table-header text-right">
-                      <div className="text-white">{sb.vendor.name}</div>
-                      <div className="text-[10px] text-slate-500">{formatCurrency(summaryByVendor.get(sb.vendorId)?.leveledTotal ?? 0)} leveled</div>
-                    </th>
-                  ))}
-                  <th scope="col" className="table-header">Awarded</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {scopeRows.map((row) => {
-                  const award = awardMap.get(row.scopeItemKey);
-                  return (
-                    <tr key={row.scopeItemKey} className="hover:bg-white/5">
-                      <th scope="row" className="table-cell sticky left-0 bg-slate-950/80 text-left font-normal">
-                        <div className="font-mono text-xs text-cyan-200">{row.scopeItemKey}</div>
-                        <div className="text-xs text-slate-400">{row.description}</div>
-                      </th>
-                      {pkg.subBids.map((sb) => {
-                        const cell = row.cells.get(sb.vendorId);
-                        if (!cell) return <td key={sb.id} className="table-cell text-right text-slate-600">—</td>;
-                        const cls = cell.isLow ? "bg-emerald-500/10 text-emerald-200" : cell.isOutlier ? "bg-rose-500/10 text-rose-200" : "";
-                        return (
-                          <td key={sb.id} className={`table-cell text-right ${cls}`}>
+          <section className="card p-0 overflow-hidden">
+            <SortableTable
+              theadClassName="bg-white/5"
+              emptyMessage="No scope items."
+              columns={[
+                { header: "Scope item", thClassName: "sticky left-0 bg-slate-950/80 z-10" },
+                ...pkg.subBids.map((sb) => ({
+                  header: (
+                    <span className="inline-block text-right">
+                      <span className="block text-white">{sb.vendor.name}</span>
+                      <span className="block text-[10px] normal-case tracking-normal text-slate-500">
+                        {formatCurrency(summaryByVendor.get(sb.vendorId)?.leveledTotal ?? 0)} leveled
+                      </span>
+                    </span>
+                  ),
+                  align: "right" as const,
+                })),
+                { header: "Awarded" },
+              ]}
+              rows={scopeRows.map((row) => {
+                const award = awardMap.get(row.scopeItemKey);
+                const awardee = award ? pkg.subBids.find((sb) => sb.id === award.awardedToSubBidId)?.vendor.name ?? "—" : null;
+                return {
+                  key: row.scopeItemKey,
+                  className: "hover:bg-white/5",
+                  cells: [
+                    {
+                      sort: row.scopeItemKey,
+                      tdClassName: "sticky left-0 bg-slate-950/80",
+                      node: (
+                        <>
+                          <div className="font-mono text-xs text-cyan-200">{row.scopeItemKey}</div>
+                          <div className="text-xs text-slate-400">{row.description}</div>
+                        </>
+                      ),
+                    },
+                    ...pkg.subBids.map((sb) => {
+                      const cell = row.cells.get(sb.vendorId);
+                      if (!cell) return { sort: null, node: "—", tdClassName: "text-slate-600" };
+                      const cls = cell.isLow ? "bg-emerald-500/10 text-emerald-200" : cell.isOutlier ? "bg-rose-500/10 text-rose-200" : "";
+                      return {
+                        sort: cell.amount,
+                        tdClassName: cls,
+                        node: (
+                          <>
                             {!cell.inclusion ? <span className="text-rose-300 text-xs">EXCL</span> : null}
                             <div>{formatCurrency(cell.amount)}</div>
                             {cell.isOutlier ? <div className="text-[10px] uppercase tracking-wide text-rose-300">outlier</div> : null}
                             {cell.notes ? <div className="text-[10px] text-slate-500">{cell.notes}</div> : null}
-                          </td>
-                        );
-                      })}
-                      <td className="table-cell">
-                        {award ? (
-                          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
-                            {pkg.subBids.find((sb) => sb.id === award.awardedToSubBidId)?.vendor.name ?? "—"}
-                          </span>
-                        ) : canAward ? (
-                          <form action={`/api/bid-packages/${pkg.id}/award`} method="post" className="flex gap-1">
-                            <input type="hidden" name="scopeItemKey" value={row.scopeItemKey} />
-                            <label className="sr-only" htmlFor={`award-${row.scopeItemKey}`}>Awardee for {row.scopeItemKey}</label>
-                            <select id={`award-${row.scopeItemKey}`} name="subBidId" className="form-select text-xs">
-                              {pkg.subBids.map((sb) => <option key={sb.id} value={sb.id}>{sb.vendor.name}</option>)}
-                            </select>
-                            <button className="btn-outline text-xs">Award</button>
-                          </form>
-                        ) : (
-                          <span className="text-[10px] text-slate-600">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          </>
+                        ),
+                      };
+                    }),
+                    {
+                      sort: awardee ?? "",
+                      node: awardee ? (
+                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">{awardee}</span>
+                      ) : canAward ? (
+                        <form action={`/api/bid-packages/${pkg.id}/award`} method="post" className="flex gap-1">
+                          <input type="hidden" name="scopeItemKey" value={row.scopeItemKey} />
+                          <label className="sr-only" htmlFor={`award-${row.scopeItemKey}`}>Awardee for {row.scopeItemKey}</label>
+                          <select id={`award-${row.scopeItemKey}`} name="subBidId" className="form-select text-xs">
+                            {pkg.subBids.map((sb) => <option key={sb.id} value={sb.id}>{sb.vendor.name}</option>)}
+                          </select>
+                          <button className="btn-outline text-xs">Award</button>
+                        </form>
+                      ) : (
+                        <span className="text-[10px] text-slate-600">—</span>
+                      ),
+                    },
+                  ],
+                };
+              })}
+            />
           </section>
         ) : (
           <section className="card p-6">

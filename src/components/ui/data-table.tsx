@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { SortableTable, type SortColumn, type SortRow } from "@/components/SortableTable";
+import type { SortValue } from "@/lib/sort";
 
 export type DataTableColumn<T> = {
   /** Stable key for React reconciliation. */
@@ -10,6 +12,13 @@ export type DataTableColumn<T> = {
    *  `String(row[key])` from the source object — convenient for plain
    *  string/number fields without writing a render function. */
   render?: (row: T) => ReactNode;
+  /** Primitive used for click-to-sort on this column. When omitted, the raw
+   *  `row[key]` value is used if it is a string/number/boolean/Date. Columns
+   *  where neither yields a sortable value render as plain (non-sortable)
+   *  headers automatically. */
+  sortValue?: (row: T) => SortValue;
+  /** Set false to disable sorting (action columns etc.). Default true. */
+  sortable?: boolean;
   /** Tailwind classes to apply to every cell in this column. Use for
    *  alignment, color, or width hints. */
   cellClassName?: string;
@@ -32,7 +41,16 @@ export type DataTableProps<T> = {
   emptyMessage?: ReactNode;
   /** Class for the outer wrapper. Default applies the .card style. */
   wrapperClassName?: string;
+  /** localStorage key to persist the active sort across visits (spec §9). */
+  sortStorageKey?: string;
 };
+
+function defaultSortValue(raw: unknown): SortValue {
+  if (raw instanceof Date) return raw;
+  const t = typeof raw;
+  if (t === "string" || t === "number" || t === "boolean") return raw as SortValue;
+  return undefined;
+}
 
 /**
  * Shared list-page table.
@@ -43,14 +61,21 @@ export type DataTableProps<T> = {
  * a new module's list page is `<DataTable columns={...} rows={...} />`
  * instead of 30 lines of JSX every time.
  *
+ * Sorting (spec drive-view-sortable-tables §6): this stays a server
+ * component — render functions execute here, producing serializable
+ * ReactNodes — and delegates the interactive table to the client-side
+ * SortableTable, so every DataTable page gets click-to-sort headers for
+ * free. Columns whose `key` maps to a primitive field sort on the raw
+ * value automatically; computed columns pass `sortValue`. Columns with
+ * no sortable value in any row degrade to plain headers.
+ *
  * Theming: relies on the existing .card / .table-header / .table-cell
  * utility classes already in globals.css. No hardcoded grays — light
  * and dark themes both render correctly via CSS variables.
  *
- * Accessibility: the table is naturally semantic; we set scope="col" on
- * headers and use a real <th> element rather than a styled <div>. Rows
- * with hrefs become <Link> wrappers around the entire row's contents
- * so keyboard nav lands on a single target per row.
+ * Accessibility: real <th>/<button> sort headers with aria-sort from
+ * SortableTable. Rows with hrefs wrap the first cell in a <Link> (single
+ * keyboard target) and the whole row is clickable.
  */
 export function DataTable<T>({
   columns,
@@ -59,65 +84,57 @@ export function DataTable<T>({
   getRowHref,
   emptyMessage = "No records yet.",
   wrapperClassName = "card p-0 overflow-hidden",
+  sortStorageKey,
 }: DataTableProps<T>) {
   const keyOf = rowKey ?? ((row: T) => String((row as { id?: unknown }).id ?? Math.random()));
 
+  // Track per-column whether any row produced a sortable value, so columns
+  // without data (or pure action columns) don't render dead sort buttons.
+  const columnHasSort = columns.map((col) => col.sortable !== false && Boolean(col.sortValue));
+
+  const sortRows: SortRow[] = rows.map((row) => {
+    const href = getRowHref?.(row) ?? null;
+    return {
+      key: keyOf(row),
+      className: "transition hover:bg-white/5",
+      href: href ?? undefined,
+      cells: columns.map((col, ci) => {
+        const raw = (row as Record<string, unknown>)[col.key];
+        const content: ReactNode = col.render ? col.render(row) : (raw as ReactNode);
+        const sort = col.sortValue ? col.sortValue(row) : defaultSortValue(raw);
+        if (!col.sortValue && sort !== undefined) columnHasSort[ci] = col.sortable !== false;
+        const node =
+          href && ci === 0 ? (
+            // First column wraps the row link to give keyboard focus a single target.
+            <Link
+              href={href}
+              className="font-medium text-white hover:text-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+            >
+              {content}
+            </Link>
+          ) : (
+            content
+          );
+        return { sort, node, tdClassName: col.cellClassName };
+      }),
+    };
+  });
+
+  const sortColumns: SortColumn[] = columns.map((col, ci) => ({
+    header: col.header,
+    sortable: columnHasSort[ci],
+    thClassName: col.headerClassName,
+  }));
+
   return (
     <section className={wrapperClassName}>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-white/10 text-sm">
-          <thead className="bg-white/5">
-            <tr>
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  scope="col"
-                  className={`table-header ${col.headerClassName ?? ""}`.trim()}
-                >
-                  {col.header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/10" style={{ background: "var(--panel-bg, transparent)" }}>
-            {rows.map((row) => {
-              const href = getRowHref?.(row) ?? null;
-              return (
-                <tr key={keyOf(row)} className="transition hover:bg-white/5">
-                  {columns.map((col, ci) => {
-                    const content = col.render
-                      ? col.render(row)
-                      : ((row as Record<string, unknown>)[col.key] as ReactNode);
-                    const cellClass = `table-cell ${col.cellClassName ?? ""}`.trim();
-                    if (href && ci === 0) {
-                      // First column wraps the row link to give keyboard focus a single target.
-                      return (
-                        <td key={col.key} className={cellClass}>
-                          <Link href={href} className="font-medium text-white hover:text-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400">
-                            {content}
-                          </Link>
-                        </td>
-                      );
-                    }
-                    return (
-                      <td key={col.key} className={cellClass}>
-                        {content}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="table-cell text-center text-slate-500">
-                  {emptyMessage}
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+      <SortableTable
+        columns={sortColumns}
+        rows={sortRows}
+        emptyMessage={emptyMessage}
+        storageKey={sortStorageKey}
+        theadClassName="bg-white/5"
+      />
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 
@@ -8,16 +9,6 @@ export default async function CostCodesPage() {
     where: { tenantId: tenant.id },
     orderBy: [{ code: "asc" }],
   });
-
-  // Group by csiDivision for the tree view.
-  const byDivision = new Map<string, typeof codes>();
-  for (const c of codes) {
-    const key = c.csiDivision ?? c.code.split(" ")[0] ?? "00";
-    const list = byDivision.get(key) ?? [];
-    list.push(c);
-    byDivision.set(key, list);
-  }
-  const divisionsSorted = Array.from(byDivision.entries()).sort(([a], [b]) => a.localeCompare(b));
 
   return (
     <AppLayout eyebrow="Settings · Chart of accounts" title="Cost codes" description="Hierarchical CSI MasterFormat cost codes used by budgets, invoices, and journal entries.">
@@ -44,36 +35,34 @@ export default async function CostCodesPage() {
         </section>
 
         <section className="card p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10 text-sm">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="table-header">Code</th>
-                <th className="table-header">Name</th>
-                <th className="table-header">CSI division</th>
-                <th className="table-header">Active</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {divisionsSorted.map(([div, list]) => (
-                <>
-                  <tr key={`hdr-${div}`} className="bg-white/[0.02]">
-                    <td colSpan={4} className="px-3 py-2 text-xs uppercase tracking-[0.16em] text-cyan-300">Division {div}</td>
-                  </tr>
-                  {list.map((c) => (
-                    <tr key={c.id} className="hover:bg-white/5">
-                      <td className="table-cell font-mono text-xs">{c.code}</td>
-                      <td className="table-cell">{c.name}</td>
-                      <td className="table-cell text-xs text-slate-400">{c.csiDivision ?? "—"}</td>
-                      <td className="table-cell text-xs">{c.active ? "✓" : "—"}</td>
-                    </tr>
-                  ))}
-                </>
-              ))}
-              {codes.length === 0 ? <tr><td colSpan={4} className="table-cell text-center text-slate-500 py-4">No cost codes yet — seed the CSI defaults above.</td></tr> : null}
-            </tbody>
-          </table>
-          </div>
+          {/* Flat sortable register (spec drive-view-sortable-tables §6): the
+              division is its own sortable column; the default code-ascending
+              order preserves the old division grouping since CSI codes start
+              with the division number. */}
+          <SortableTable
+            theadClassName="bg-white/5"
+            initialSort={{ index: 0, dir: "asc" }}
+            emptyMessage="No cost codes yet — seed the CSI defaults above."
+            columns={[
+              { header: "Code" },
+              { header: "Name" },
+              { header: "CSI division" },
+              { header: "Active" },
+            ]}
+            rows={codes.map((c) => {
+              const division = c.csiDivision ?? c.code.split(" ")[0] ?? "00";
+              return {
+                key: c.id,
+                className: "hover:bg-white/5",
+                cells: [
+                  { sort: c.code, node: c.code, tdClassName: "font-mono text-xs" },
+                  { sort: c.name, node: c.name },
+                  { sort: division, node: <span className="text-xs text-cyan-300">Division {division}</span> },
+                  { sort: c.active, node: c.active ? "✓" : "—", tdClassName: "text-xs" },
+                ],
+              };
+            })}
+          />
         </section>
       </div>
     </AppLayout>

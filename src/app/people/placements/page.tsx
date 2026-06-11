@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate } from "@/lib/utils";
+import { toNum } from "@/lib/money";
 import { Briefcase } from "lucide-react";
 
 type PlacementRow = Awaited<ReturnType<typeof loadPlacements>>[number];
@@ -46,22 +47,25 @@ export default async function PlacementsPage() {
     {
       key: "candidate",
       header: "Candidate",
+      sortValue: (p) => `${p.candidate.lastName} ${p.candidate.firstName}`,
       render: (p) => `${p.candidate.firstName} ${p.candidate.lastName}`,
     },
-    { key: "category", header: "Category", cellClassName: "text-xs", render: (p) => p.laborCategory ?? p.candidate.laborCategory ?? "—" },
-    { key: "department", header: "Department", cellClassName: "text-xs", render: (p) => p.department ?? "—" },
-    { key: "contract", header: "Contract", cellClassName: "text-xs", render: (p) => p.contractRef ?? "—" },
-    { key: "start", header: "Start", cellClassName: "text-xs", render: (p) => formatDate(p.startDate) },
+    { key: "category", header: "Category", cellClassName: "text-xs", sortValue: (p) => p.laborCategory ?? p.candidate.laborCategory ?? "", render: (p) => p.laborCategory ?? p.candidate.laborCategory ?? "—" },
+    { key: "department", header: "Department", cellClassName: "text-xs", sortValue: (p) => p.department ?? "", render: (p) => p.department ?? "—" },
+    { key: "contract", header: "Contract", cellClassName: "text-xs", sortValue: (p) => p.contractRef ?? "", render: (p) => p.contractRef ?? "—" },
+    { key: "start", header: "Start", cellClassName: "text-xs", sortValue: (p) => p.startDate ?? null, render: (p) => formatDate(p.startDate) },
     {
       key: "end",
       header: "End",
       cellClassName: "text-xs",
+      sortValue: (p) => p.endDate ?? null,
       render: (p) => (p.endDate ? formatDate(p.endDate) : "open-ended"),
     },
     {
       key: "rates",
       header: "Bill / Pay",
       cellClassName: "text-xs text-right",
+      sortValue: (p) => (p.billRate != null ? toNum(p.billRate) : null),
       render: (p) => `$${p.billRate ?? "?"} / $${p.payRate ?? "?"}`,
     },
     { key: "status", header: "Status", render: (p) => p.status.replace(/_/g, " ") },

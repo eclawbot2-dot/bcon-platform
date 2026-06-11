@@ -31,15 +31,16 @@ export default async function PermitsPortfolioPage() {
   const openFailures = permits.filter((p) => p.inspections.length > 0);
 
   const columns: DataTableColumn<PermitRow>[] = [
-    { key: "project", header: "Project", render: (p) => <Link href={`/projects/${p.project.id}/permits`} className="text-cyan-300 hover:underline">{p.project.code}</Link> },
+    { key: "project", header: "Project", sortValue: (p) => p.project.code, render: (p) => <Link href={`/projects/${p.project.id}/permits`} className="text-cyan-300 hover:underline">{p.project.code}</Link> },
     { key: "permitNumber", header: "Permit #", cellClassName: "font-mono text-xs", render: (p) => p.permitNumber },
-    { key: "type", header: "Type", render: (p) => p.permitType },
+    { key: "type", header: "Type", sortValue: (p) => p.permitType, render: (p) => p.permitType },
     { key: "jurisdiction", header: "Jurisdiction", cellClassName: "text-slate-400", render: (p) => p.jurisdiction },
-    { key: "issued", header: "Issued", cellClassName: "text-slate-400", render: (p) => formatDate(p.issuedAt) },
-    { key: "expires", header: "Expires", cellClassName: "text-slate-400", render: (p) => formatDate(p.expiresAt) },
+    { key: "issued", header: "Issued", cellClassName: "text-slate-400", sortValue: (p) => p.issuedAt ?? null, render: (p) => formatDate(p.issuedAt) },
+    { key: "expires", header: "Expires", cellClassName: "text-slate-400", sortValue: (p) => p.expiresAt ?? null, render: (p) => formatDate(p.expiresAt) },
     {
       key: "daysLeft",
       header: "Days left",
+      sortValue: (p) => (p.expiresAt ? Math.round((new Date(p.expiresAt).getTime() - now) / (1000 * 60 * 60 * 24)) : null),
       render: (p) => {
         const daysLeft = p.expiresAt ? Math.round((new Date(p.expiresAt).getTime() - now) / (1000 * 60 * 60 * 24)) : null;
         const tone = daysLeft === null ? "text-slate-400" : daysLeft < 0 ? "text-rose-300" : daysLeft < 14 ? "text-amber-300" : daysLeft < 60 ? "text-slate-300" : "text-emerald-300";
@@ -51,6 +52,7 @@ export default async function PermitsPortfolioPage() {
     {
       key: "failed",
       header: "Failed insp.",
+      sortValue: (p) => p.inspections.length,
       render: (p) => (p.inspections.length > 0 ? <StatusBadge tone="bad" label={`${p.inspections.length} failed`} /> : <span className="text-slate-500">—</span>),
     },
     {

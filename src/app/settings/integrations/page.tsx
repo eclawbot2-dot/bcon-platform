@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SortableTable } from "@/components/SortableTable";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
@@ -161,29 +162,32 @@ function PlatformIntegrations() {
         These apply to every tenant on this deployment and are configured by the platform operator via environment
         variables (see <span className="font-mono">docs/integrations.md</span> and <span className="font-mono">.env.example</span>), then a service restart.
       </p>
-      <div className="mt-4 overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
-              <th className="py-2 pr-4">Integration</th>
-              <th className="py-2 pr-4">Status</th>
-              <th className="py-2">How to enable / notes</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {rows.map((r) => (
-              <tr key={r.name}>
-                <td className="py-2 pr-4 text-slate-200">{r.name}</td>
-                <td className="py-2 pr-4">
+      <div className="mt-4">
+        <SortableTable
+          className="min-w-full text-sm"
+          emptyMessage="No integrations detected."
+          columns={[
+            { header: "Integration" },
+            { header: "Status" },
+            { header: "How to enable / notes" },
+          ]}
+          rows={rows.map((r) => ({
+            key: r.name,
+            cells: [
+              { sort: r.name, node: r.name, tdClassName: "text-slate-200" },
+              {
+                // Configured integrations sort ahead of disabled ones, then by state label.
+                sort: `${r.ok ? "0" : "1"} ${r.state}`,
+                node: (
                   <span className={`rounded-full border px-2 py-0.5 text-xs ${r.ok ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-white/10 bg-white/5 text-slate-400"}`}>
                     {r.state}
                   </span>
-                </td>
-                <td className="py-2 text-xs text-slate-400">{r.detail}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                ),
+              },
+              { sort: r.detail, node: r.detail, tdClassName: "text-xs text-slate-400" },
+            ],
+          }))}
+        />
       </div>
     </section>
   );

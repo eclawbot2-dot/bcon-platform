@@ -63,19 +63,19 @@ export default async function CandidateDetailPage({ params }: { params: Promise<
   }));
 
   const submissionColumns: DataTableColumn<SubmissionRow>[] = [
-    { key: "req", header: "Requisition", render: (s) => `${s.reqNumber} · ${s.reqTitle}` },
+    { key: "req", header: "Requisition", sortValue: (s) => `${s.reqNumber} · ${s.reqTitle}`, render: (s) => `${s.reqNumber} · ${s.reqTitle}` },
     { key: "stage", header: "Stage", render: (s) => s.stage.replace(/_/g, " ") },
-    { key: "recruiter", header: "Recruiter", cellClassName: "text-xs", render: (s) => s.recruiterName ?? "—" },
-    { key: "rate", header: "Rate offered", cellClassName: "text-xs text-right", render: (s) => (s.rateOffered ? `$${s.rateOffered}` : "—") },
-    { key: "submitted", header: "Submitted", cellClassName: "text-xs text-slate-400", render: (s) => formatDate(s.submittedAt) },
+    { key: "recruiter", header: "Recruiter", cellClassName: "text-xs", sortValue: (s) => s.recruiterName ?? "", render: (s) => s.recruiterName ?? "—" },
+    { key: "rate", header: "Rate offered", cellClassName: "text-xs text-right", sortValue: (s) => s.rateOffered ?? null, render: (s) => (s.rateOffered ? `$${s.rateOffered}` : "—") },
+    { key: "submitted", header: "Submitted", cellClassName: "text-xs text-slate-400", sortValue: (s) => s.submittedAt ?? null, render: (s) => formatDate(s.submittedAt) },
   ];
 
   const placementColumns: DataTableColumn<PlacementRow>[] = [
-    { key: "project", header: "Project", render: (p) => p.projectCode ?? "—" },
-    { key: "contract", header: "Contract", cellClassName: "text-xs", render: (p) => p.contractRef ?? "—" },
-    { key: "start", header: "Start", cellClassName: "text-xs", render: (p) => formatDate(p.startDate) },
-    { key: "end", header: "End", cellClassName: "text-xs", render: (p) => (p.endDate ? formatDate(p.endDate) : "open") },
-    { key: "rates", header: "Bill / Pay", cellClassName: "text-xs text-right", render: (p) => `$${p.billRate ?? "?"} / $${p.payRate ?? "?"}` },
+    { key: "project", header: "Project", sortValue: (p) => p.projectCode ?? "", render: (p) => p.projectCode ?? "—" },
+    { key: "contract", header: "Contract", cellClassName: "text-xs", sortValue: (p) => p.contractRef ?? "", render: (p) => p.contractRef ?? "—" },
+    { key: "start", header: "Start", cellClassName: "text-xs", sortValue: (p) => p.startDate ?? null, render: (p) => formatDate(p.startDate) },
+    { key: "end", header: "End", cellClassName: "text-xs", sortValue: (p) => p.endDate ?? null, render: (p) => (p.endDate ? formatDate(p.endDate) : "open") },
+    { key: "rates", header: "Bill / Pay", cellClassName: "text-xs text-right", sortValue: (p) => p.billRate ?? null, render: (p) => `$${p.billRate ?? "?"} / $${p.payRate ?? "?"}` },
     { key: "status", header: "Status", render: (p) => p.status.replace(/_/g, " ") },
   ];
 

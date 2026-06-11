@@ -47,29 +47,29 @@ export default async function CaptureDetailPage({ params }: { params: Promise<{ 
       cellClassName: "text-xs",
       render: (m) => (m.completedAt ? <span className="text-emerald-300">{formatDate(m.completedAt)}</span> : <span className="text-slate-500">pending</span>),
     },
-    { key: "owner", header: "Owner", cellClassName: "text-xs", render: (m) => m.ownerName ?? "—" },
+    { key: "owner", header: "Owner", cellClassName: "text-xs", sortValue: (m) => m.ownerName ?? "", render: (m) => m.ownerName ?? "—" },
   ];
 
   const reviewColumns: DataTableColumn<ReviewRow>[] = [
     { key: "phase", header: "Phase", render: (r) => r.phase },
-    { key: "scheduled", header: "Scheduled", cellClassName: "text-xs", render: (r) => formatDate(r.scheduledAt) },
-    { key: "facilitator", header: "Facilitator", cellClassName: "text-xs", render: (r) => r.facilitator ?? "—" },
-    { key: "score", header: "Score", cellClassName: "text-xs text-right", render: (r) => (r.scoreOverall != null ? `${r.scoreOverall}/100` : "—") },
+    { key: "scheduled", header: "Scheduled", cellClassName: "text-xs", sortValue: (r) => r.scheduledAt ?? null, render: (r) => formatDate(r.scheduledAt) },
+    { key: "facilitator", header: "Facilitator", cellClassName: "text-xs", sortValue: (r) => r.facilitator ?? "", render: (r) => r.facilitator ?? "—" },
+    { key: "score", header: "Score", cellClassName: "text-xs text-right", sortValue: (r) => r.scoreOverall ?? null, render: (r) => (r.scoreOverall != null ? `${r.scoreOverall}/100` : "—") },
   ];
 
   const decisionColumns: DataTableColumn<DecisionRow>[] = [
-    { key: "when", header: "When", cellClassName: "text-xs", render: (d) => formatDateTime(d.decisionAt) },
+    { key: "when", header: "When", cellClassName: "text-xs", sortValue: (d) => d.decisionAt, render: (d) => formatDateTime(d.decisionAt) },
     { key: "decision", header: "Decision", render: (d) => d.decision.replace(/_/g, " ") },
-    { key: "by", header: "By", cellClassName: "text-xs", render: (d) => d.decidedBy },
-    { key: "pwin", header: "pWin", cellClassName: "text-xs text-right", render: (d) => (d.pwinAtDecision != null ? `${d.pwinAtDecision}%` : "—") },
+    { key: "by", header: "By", cellClassName: "text-xs", sortValue: (d) => d.decidedBy, render: (d) => d.decidedBy },
+    { key: "pwin", header: "pWin", cellClassName: "text-xs text-right", sortValue: (d) => d.pwinAtDecision ?? null, render: (d) => (d.pwinAtDecision != null ? `${d.pwinAtDecision}%` : "—") },
     { key: "rationale", header: "Rationale", cellClassName: "text-xs", render: (d) => d.rationale },
   ];
 
   const partnerColumns: DataTableColumn<PartnerRow>[] = [
-    { key: "name", header: "Partner", render: (p) => p.partnerName },
+    { key: "name", header: "Partner", sortValue: (p) => p.partnerName, render: (p) => p.partnerName },
     { key: "role", header: "Role", render: (p) => p.role },
-    { key: "share", header: "Workshare", cellClassName: "text-xs text-right", render: (p) => (p.workSharePct != null ? `${p.workSharePct}%` : "—") },
-    { key: "ta", header: "TA signed", cellClassName: "text-xs", render: (p) => (p.taSignedAt ? formatDate(p.taSignedAt) : "—") },
+    { key: "share", header: "Workshare", cellClassName: "text-xs text-right", sortValue: (p) => p.workSharePct ?? null, render: (p) => (p.workSharePct != null ? `${p.workSharePct}%` : "—") },
+    { key: "ta", header: "TA signed", cellClassName: "text-xs", sortValue: (p) => p.taSignedAt ?? null, render: (p) => (p.taSignedAt ? formatDate(p.taSignedAt) : "—") },
   ];
 
   return (

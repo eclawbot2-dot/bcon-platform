@@ -1,8 +1,10 @@
 "use client";
 
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { sortRows, type SortDirection, type SortValue } from "@/lib/sort";
 
-export type SortValue = string | number | boolean | Date | null | undefined;
+export type { SortValue } from "@/lib/sort";
 
 export type SortColumn = {
   /** Header content. */
@@ -26,25 +28,23 @@ export type SortCell = {
 export type SortRow = {
   key: string;
   className?: string;
+  /** When set, clicking anywhere on the row (outside links/buttons/inputs)
+   *  navigates here — gives Drive-style list rows the same click target as
+   *  the card they replace. */
+  href?: string;
+  /** "_blank" opens href in a new tab (e.g. full-size photos). */
+  hrefTarget?: "_blank";
   cells: SortCell[];
 };
 
-type SortState = { index: number; dir: "asc" | "desc" } | null;
-
-function isEmpty(v: SortValue): boolean {
-  return v === null || v === undefined || v === "";
-}
-
-function compare(a: SortValue, b: SortValue): number {
-  if (a instanceof Date) a = a.getTime();
-  if (b instanceof Date) b = b.getTime();
-  if (typeof a === "number" && typeof b === "number") return a - b;
-  if (typeof a === "boolean" && typeof b === "boolean") return a === b ? 0 : a ? 1 : -1;
-  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
-}
+type SortState = { index: number; dir: SortDirection } | null;
 
 const alignClass = (a?: "left" | "right" | "center") =>
   a === "right" ? "text-right" : a === "center" ? "text-center" : "";
+
+function isInteractive(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest("a,button,input,select,textarea,label,form"));
+}
 
 /**
  * Drop-in replacement for the project's standard data table. Clicking a column
@@ -56,36 +56,79 @@ const alignClass = (a?: "left" | "right" | "center") =>
  * `.table-header` / `.table-cell` styling — matching the existing convention.
  * Override the root class via `className` if a specific table needs different
  * widths (e.g. `mt-4 min-w-full divide-y divide-white/10 text-sm`).
+ *
+ * `storageKey` persists the active sort to localStorage (spec §9) — loaded in
+ * an effect (not the initial render) so SSR markup matches the first client
+ * render and hydration stays clean.
+ *
+ * `footerRows` render in a <tfoot> below the data and are excluded from
+ * sorting — totals/subtotal rows stay pinned at the bottom (estimate totals,
+ * CO markup, G703 totals).
  */
 export function SortableTable({
   columns,
   rows,
+  footerRows,
   initialSort,
+  storageKey,
   emptyMessage = "No records yet.",
   className = "min-w-full divide-y divide-white/10 text-sm",
+  theadClassName = "",
 }: {
   columns: SortColumn[];
   rows: SortRow[];
-  initialSort?: { index: number; dir: "asc" | "desc" };
+  /** Pinned, unsorted rows rendered in <tfoot> (totals/summary rows). */
+  footerRows?: SortRow[];
+  initialSort?: { index: number; dir: SortDirection };
+  /** localStorage key to persist sort state across visits (spec §9). */
+  storageKey?: string;
   emptyMessage?: ReactNode;
   className?: string;
+  theadClassName?: string;
 }) {
+  const router = useRouter();
   const [sort, setSort] = useState<SortState>(initialSort ?? null);
+  // Only persist after we've attempted to load — otherwise the very first
+  // render would clobber the saved preference with the default.
+  const [storageLoaded, setStorageLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { index?: unknown; dir?: unknown } | null;
+        if (
+          parsed &&
+          typeof parsed.index === "number" &&
+          parsed.index >= 0 &&
+          parsed.index < columns.length &&
+          (parsed.dir === "asc" || parsed.dir === "desc") &&
+          columns[parsed.index]?.sortable !== false
+        ) {
+          setSort({ index: parsed.index, dir: parsed.dir });
+        }
+      }
+    } catch {
+      /* private mode / corrupt value — keep default */
+    }
+    setStorageLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!storageKey || !storageLoaded) return;
+    try {
+      if (sort) window.localStorage.setItem(storageKey, JSON.stringify(sort));
+      else window.localStorage.removeItem(storageKey);
+    } catch {
+      /* ignore quota/private-mode failures */
+    }
+  }, [sort, storageKey, storageLoaded]);
 
   const sorted = useMemo(() => {
     if (!sort) return rows;
-    const { index, dir } = sort;
-    const factor = dir === "asc" ? 1 : -1;
-    return [...rows].sort((a, b) => {
-      const av = a.cells[index]?.sort;
-      const bv = b.cells[index]?.sort;
-      const ae = isEmpty(av);
-      const be = isEmpty(bv);
-      if (ae && be) return 0;
-      if (ae) return 1;
-      if (be) return -1;
-      return factor * compare(av, bv);
-    });
+    return sortRows(rows, (row) => row.cells[sort.index]?.sort, sort.dir);
   }, [rows, sort]);
 
   function toggle(index: number) {
@@ -96,6 +139,31 @@ export function SortableTable({
     });
   }
 
+  function renderRow(row: SortRow) {
+    const clickable = Boolean(row.href);
+    return (
+      <tr
+        key={row.key}
+        className={`${row.className ?? ""} ${clickable ? "cursor-pointer" : ""}`.trim() || undefined}
+        onClick={
+          clickable
+            ? (e) => {
+                if (isInteractive(e.target)) return; // let inline links/forms win
+                if (row.hrefTarget === "_blank") window.open(row.href!, "_blank", "noopener");
+                else router.push(row.href!);
+              }
+            : undefined
+        }
+      >
+        {row.cells.map((cell, i) => (
+          <td key={i} className={`table-cell ${alignClass(columns[i]?.align)} ${cell.tdClassName ?? ""}`}>
+            {cell.node}
+          </td>
+        ))}
+      </tr>
+    );
+  }
+
   return (
     // Self-contained horizontal scroll: wide tables (pay apps, COs,
     // estimates) pan sideways on phones instead of overflowing the
@@ -103,21 +171,25 @@ export function SortableTable({
     // simply get a no-op nested container.
     <div className="overflow-x-auto">
     <table className={className}>
-      <thead>
+      <thead className={theadClassName || undefined}>
         <tr>
           {columns.map((col, i) => {
             const sortable = col.sortable !== false;
             const active = sort?.index === i;
             return (
-              <th key={i} className={`table-header ${alignClass(col.align)} ${col.thClassName ?? ""}`}>
+              <th
+                key={i}
+                aria-sort={active ? (sort!.dir === "asc" ? "ascending" : "descending") : undefined}
+                className={`table-header ${alignClass(col.align)} ${col.thClassName ?? ""}`}
+              >
                 {sortable ? (
                   <button
                     type="button"
                     onClick={() => toggle(i)}
-                    aria-sort={active ? (sort!.dir === "asc" ? "ascending" : "descending") : "none"}
+                    aria-label={typeof col.header === "string" ? `Sort by ${col.header}` : undefined}
                     className={`group inline-flex items-center gap-1 uppercase tracking-[inherit] hover:opacity-80 ${
                       col.align === "right" ? "flex-row-reverse" : ""
-                    }`}
+                    } ${active ? "text-cyan-300" : ""}`}
                   >
                     <span>{col.header}</span>
                     <span className="text-[9px] leading-none">
@@ -140,16 +212,11 @@ export function SortableTable({
             </td>
           </tr>
         )}
-        {sorted.map((row) => (
-          <tr key={row.key} className={row.className}>
-            {row.cells.map((cell, i) => (
-              <td key={i} className={`table-cell ${alignClass(columns[i]?.align)} ${cell.tdClassName ?? ""}`}>
-                {cell.node}
-              </td>
-            ))}
-          </tr>
-        ))}
+        {sorted.map(renderRow)}
       </tbody>
+      {footerRows && footerRows.length > 0 ? (
+        <tfoot className="divide-y divide-white/10 border-t border-white/10">{footerRows.map(renderRow)}</tfoot>
+      ) : null}
     </table>
     </div>
   );

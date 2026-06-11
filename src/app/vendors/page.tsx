@@ -5,6 +5,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { toNum } from "@/lib/money";
 
 type VendorRow = Awaited<ReturnType<typeof loadVendors>>[number];
 
@@ -35,15 +36,16 @@ export default async function VendorsPage() {
         </>
       ),
     },
-    { key: "trade", header: "Trade", render: (v) => v.trade ?? "—" },
-    { key: "prequal", header: "Prequal", render: (v) => <StatusBadge status={v.prequalStatus} /> },
-    { key: "score", header: "Score", cellClassName: "text-right", render: (v) => v.prequalScore ?? "—" },
-    { key: "emr", header: "EMR", cellClassName: "text-right", render: (v) => (v.emrRate ? v.emrRate.toFixed(2) : "—") },
-    { key: "bonding", header: "Bonding", cellClassName: "text-right", render: (v) => formatCurrency(v.bondingCapacity) },
-    { key: "expires", header: "Expires", cellClassName: "text-xs text-slate-400", render: (v) => formatDate(v.prequalExpires) },
+    { key: "trade", header: "Trade", sortValue: (v) => v.trade ?? "", render: (v) => v.trade ?? "—" },
+    { key: "prequal", header: "Prequal", sortValue: (v) => v.prequalStatus, render: (v) => <StatusBadge status={v.prequalStatus} /> },
+    { key: "score", header: "Score", cellClassName: "text-right", sortValue: (v) => v.prequalScore ?? null, render: (v) => v.prequalScore ?? "—" },
+    { key: "emr", header: "EMR", cellClassName: "text-right", sortValue: (v) => v.emrRate ?? null, render: (v) => (v.emrRate ? v.emrRate.toFixed(2) : "—") },
+    { key: "bonding", header: "Bonding", cellClassName: "text-right", sortValue: (v) => toNum(v.bondingCapacity), render: (v) => formatCurrency(v.bondingCapacity) },
+    { key: "expires", header: "Expires", cellClassName: "text-xs text-slate-400", sortValue: (v) => v.prequalExpires ?? null, render: (v) => formatDate(v.prequalExpires) },
     {
       key: "certs",
       header: "Certs",
+      sortValue: (v) => v.insuranceCerts.length,
       render: (v) => (
         <div className="flex flex-wrap gap-1">
           {v.insuranceCerts.map((c) => (
@@ -56,6 +58,7 @@ export default async function VendorsPage() {
       key: "activity",
       header: "Activity",
       cellClassName: "text-xs text-slate-400",
+      sortValue: (v) => v.subBids.length + v.subInvoices.length,
       render: (v) => `${v.subBids.length} bid${v.subBids.length === 1 ? "" : "s"} · ${v.subInvoices.length} invoice${v.subInvoices.length === 1 ? "" : "s"}`,
     },
   ];

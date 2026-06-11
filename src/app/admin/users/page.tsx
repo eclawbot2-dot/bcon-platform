@@ -65,6 +65,7 @@ export default async function AdminUsersListPage({ searchParams }: { searchParam
       key: "tenants",
       header: "Tenants",
       cellClassName: "text-xs",
+      sortValue: (u) => u.memberships.map((m) => m.tenant.slug).join(", "),
       render: (u) =>
         u.memberships.length > 0
           ? u.memberships.map((m) => `${m.tenant.slug}:${m.roleTemplate}`).join(", ")

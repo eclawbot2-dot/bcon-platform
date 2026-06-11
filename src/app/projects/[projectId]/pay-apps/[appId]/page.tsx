@@ -161,21 +161,26 @@ export default async function PayAppDetailPage({ params }: { params: Promise<{ p
                 { sort: toNum(l.retainage), node: formatCurrency(l.retainage) },
               ],
             }))}
+            footerRows={[
+              {
+                key: "totals",
+                className: "bg-white/5",
+                cells: [
+                  { node: <span className="text-slate-400">Total</span> },
+                  { node: null },
+                  { node: null },
+                  { node: formatCurrency(totalScheduled), tdClassName: "font-semibold text-white" },
+                  { node: null },
+                  { node: null },
+                  { node: null },
+                  { node: formatCurrency(totalCompleted), tdClassName: "font-semibold text-white" },
+                  { node: formatPercent(overallPct), tdClassName: "font-semibold text-white" },
+                  { node: formatCurrency(subtractMoney(totalScheduled, totalCompleted)), tdClassName: "font-semibold text-white" },
+                  { node: formatCurrency(app.retainageHeld), tdClassName: "font-semibold text-white" },
+                ],
+              },
+            ]}
           />
-          {/* Non-record totals row preserved as a separate summary table below the sortable data. */}
-          <table className="min-w-full divide-y divide-white/10">
-            <tbody>
-              <tr className="bg-white/5">
-                <td className="table-cell" colSpan={3}><span className="text-slate-400">Total</span></td>
-                <td className="table-cell font-semibold text-white">{formatCurrency(totalScheduled)}</td>
-                <td colSpan={3} className="table-cell" />
-                <td className="table-cell font-semibold text-white">{formatCurrency(totalCompleted)}</td>
-                <td className="table-cell font-semibold text-white">{formatPercent(overallPct)}</td>
-                <td className="table-cell font-semibold text-white">{formatCurrency(subtractMoney(totalScheduled, totalCompleted))}</td>
-                <td className="table-cell font-semibold text-white">{formatCurrency(app.retainageHeld)}</td>
-              </tr>
-            </tbody>
-          </table>
         </div>
       </section>
 

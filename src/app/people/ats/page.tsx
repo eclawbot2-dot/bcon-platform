@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formatDate } from "@/lib/utils";
+import { toNum } from "@/lib/money";
 import { Users } from "lucide-react";
 
 type CandidateRow = Awaited<ReturnType<typeof loadCandidates>>[number];
@@ -62,19 +63,20 @@ export default async function AtsPage() {
   });
 
   const candidateColumns: DataTableColumn<CandidateRow>[] = [
-    { key: "name", header: "Name", render: (c) => `${c.firstName} ${c.lastName}` },
+    { key: "name", header: "Name", sortValue: (c) => `${c.lastName} ${c.firstName}`, render: (c) => `${c.firstName} ${c.lastName}` },
     { key: "status", header: "Status", render: (c) => c.status },
-    { key: "labor", header: "Category", cellClassName: "text-xs", render: (c) => c.laborCategory ?? "—" },
-    { key: "skill", header: "Skill", cellClassName: "text-xs", render: (c) => c.primarySkill ?? "—" },
-    { key: "loc", header: "Location", cellClassName: "text-xs text-slate-400", render: (c) => [c.city, c.state].filter(Boolean).join(", ") || "—" },
+    { key: "labor", header: "Category", cellClassName: "text-xs", sortValue: (c) => c.laborCategory ?? "", render: (c) => c.laborCategory ?? "—" },
+    { key: "skill", header: "Skill", cellClassName: "text-xs", sortValue: (c) => c.primarySkill ?? "", render: (c) => c.primarySkill ?? "—" },
+    { key: "loc", header: "Location", cellClassName: "text-xs text-slate-400", sortValue: (c) => [c.city, c.state].filter(Boolean).join(", "), render: (c) => [c.city, c.state].filter(Boolean).join(", ") || "—" },
     {
       key: "rate",
       header: "Rate exp.",
       cellClassName: "text-xs text-right",
+      sortValue: (c) => (c.rateExpectation != null ? toNum(c.rateExpectation) : null),
       render: (c) => (c.rateExpectation ? `$${c.rateExpectation}` : "—"),
     },
-    { key: "subs", header: "Subs", cellClassName: "text-xs text-right", render: (c) => c._count.submissions },
-    { key: "placed", header: "Placed", cellClassName: "text-xs text-right", render: (c) => c._count.placements },
+    { key: "subs", header: "Subs", cellClassName: "text-xs text-right", sortValue: (c) => c._count.submissions, render: (c) => c._count.submissions },
+    { key: "placed", header: "Placed", cellClassName: "text-xs text-right", sortValue: (c) => c._count.placements, render: (c) => c._count.placements },
     { key: "updated", header: "Updated", cellClassName: "text-xs text-slate-400", render: (c) => formatDate(c.updatedAt) },
   ];
 
@@ -82,17 +84,19 @@ export default async function AtsPage() {
     { key: "reqNumber", header: "Req #", cellClassName: "font-mono text-xs", render: (r) => r.reqNumber },
     { key: "title", header: "Title", render: (r) => r.title },
     { key: "status", header: "Status", render: (r) => r.status },
-    { key: "manager", header: "Hiring mgr", cellClassName: "text-xs", render: (r) => r.hiringManager ?? "—" },
+    { key: "manager", header: "Hiring mgr", cellClassName: "text-xs", sortValue: (r) => r.hiringManager ?? "", render: (r) => r.hiringManager ?? "—" },
     {
       key: "project",
       header: "Project",
       cellClassName: "text-xs",
+      sortValue: (r) => r.project?.code ?? "",
       render: (r) => (r.project ? `${r.project.code}` : "—"),
     },
     {
       key: "rate",
       header: "Rate range",
       cellClassName: "text-xs text-right",
+      sortValue: (r) => (r.rateMin != null ? toNum(r.rateMin) : r.rateMax != null ? toNum(r.rateMax) : null),
       render: (r) =>
         r.rateMin || r.rateMax ? `$${r.rateMin ?? "?"} – $${r.rateMax ?? "?"}` : "—",
     },
@@ -100,9 +104,10 @@ export default async function AtsPage() {
       key: "fill",
       header: "Fill",
       cellClassName: "text-xs text-right",
+      sortValue: (r) => (r.openings > 0 ? r.filledCount / r.openings : 0),
       render: (r) => `${r.filledCount} / ${r.openings}`,
     },
-    { key: "subs", header: "Subs", cellClassName: "text-xs text-right", render: (r) => r._count.submissions },
+    { key: "subs", header: "Subs", cellClassName: "text-xs text-right", sortValue: (r) => r._count.submissions, render: (r) => r._count.submissions },
   ];
 
   const subColumns: DataTableColumn<SubmissionRow>[] = [
