@@ -42,7 +42,10 @@ export default async function BallInCourtPage() {
           <Tile label="Oldest" value={`${summary.oldestDays}d`} sub={`Avg ${summary.avgDaysOpen}d in court`} />
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2">
+        {/* grid-cols-1 keeps the implicit mobile column clamped to the
+            container (minmax(0,1fr)) so the 4-up aging strip can't widen
+            the page at 390px. */}
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="card p-6">
             <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Aging buckets</div>
             <p className="mt-1 text-xs text-slate-400">Open items by days in their current court.</p>

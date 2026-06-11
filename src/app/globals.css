@@ -139,6 +139,19 @@ html[data-sunlight="true"] .border-white\/20 {
   }
 }
 
+/* Page-level content grids ("grid gap-6" as the direct child of <main>)
+ * have an implicit auto column, which sizes to the MAX-CONTENT of the
+ * widest child. A wide tab strip or table therefore inflates the track
+ * past the viewport and stretches every sibling section with it
+ * (visually: page-wide horizontal overflow at 390px, +24px shift at
+ * 1440px). Clamp the implicit column to the container — equivalent to
+ * Tailwind's `grid-cols-1` (`minmax(0, 1fr)`) — so inner
+ * overflow-x-auto scrollers actually scroll instead of widening the
+ * page. Grids that declare their own column template are left alone. */
+main#main-content > .grid:not([class*="grid-cols"]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* Responsive table-to-cards. Add `data-mobile-cards` to a <table>
  * to stack each <tr> as a card on narrow viewports — header text
  * comes from the corresponding <th>, surfaced as a data-* attribute

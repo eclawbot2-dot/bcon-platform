@@ -21,11 +21,14 @@ export default async function JurisdictionSettingsPage() {
       description="Per-portal login info for the inspections cron. Credentials are encrypted at rest with BCON_VAULT_KEY (AES-256-GCM, derived per tenant) and never displayed back in plaintext."
     >
       <div className="grid gap-4">
+        {/* grid-cols-1 on each form clamps the implicit column so long
+            portal URLs can't widen the card past the viewport; min-w-0 on
+            the left header cell lets the truncate on the URL engage. */}
         {rows.map(({ portal, account }) => (
-          <form key={portal.id} action="/api/jurisdictions/save" method="post" className="panel p-5 grid gap-3">
+          <form key={portal.id} action="/api/jurisdictions/save" method="post" className="panel p-5 grid grid-cols-1 gap-3">
             <input type="hidden" name="portalId" value={portal.id} />
             <header className="flex items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <div className="text-base font-semibold text-slate-100">{portal.name}</div>
                 <div className="text-xs text-slate-400">{portal.platformNote}</div>
                 {portal.baseUrl ? (
