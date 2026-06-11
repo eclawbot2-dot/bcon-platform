@@ -51,7 +51,9 @@ export function ProjectTabs({ projectId, active, mode }: { projectId: string; ac
               key={tab.slug || "overview"}
               href={href}
               className={
-                "rounded-full px-3 py-1.5 font-medium whitespace-nowrap transition " +
+                // min-h on mobile keeps the tab strip at the 44px tap floor;
+                // desktop collapses back to the compact pill height.
+                "inline-flex min-h-[44px] items-center rounded-full px-3 py-1.5 font-medium whitespace-nowrap transition md:min-h-0 " +
                 (isActive ? "bg-cyan-500/20 text-cyan-100 border border-cyan-500/40" : "text-slate-400 hover:bg-white/5 hover:text-white")
               }
             >

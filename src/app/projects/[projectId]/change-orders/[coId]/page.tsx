@@ -139,6 +139,7 @@ export default async function ChangeOrderDetailPage({ params }: { params: Promis
               ],
             }))}
           />
+          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-white/10">
             <tbody className="divide-y divide-white/10 bg-slate-950/40">
               <tr className="bg-white/5">
@@ -155,6 +156,7 @@ export default async function ChangeOrderDetailPage({ params }: { params: Promis
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
       </section>
 

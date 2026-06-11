@@ -98,7 +98,7 @@ export default async function BidDraftDetailPage({ params }: { params: Promise<{
               </div>
             ))}
           </div>
-          <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
             <table className="min-w-full divide-y divide-white/10 text-sm">
               <thead className="bg-white/5">
                 <tr>

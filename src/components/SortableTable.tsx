@@ -97,6 +97,11 @@ export function SortableTable({
   }
 
   return (
+    // Self-contained horizontal scroll: wide tables (pay apps, COs,
+    // estimates) pan sideways on phones instead of overflowing the
+    // 390px viewport. Pages that already wrap in .overflow-x-auto
+    // simply get a no-op nested container.
+    <div className="overflow-x-auto">
     <table className={className}>
       <thead>
         <tr>
@@ -146,5 +151,6 @@ export function SortableTable({
         ))}
       </tbody>
     </table>
+    </div>
   );
 }

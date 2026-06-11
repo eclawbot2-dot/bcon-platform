@@ -56,7 +56,7 @@ export function FlashToast() {
       role="status"
       aria-live="polite"
       onClick={dismiss}
-      className={`fixed bottom-6 right-6 z-50 cursor-pointer rounded-lg border px-4 py-3 shadow-xl transition ${
+      className={`fixed bottom-6 left-4 right-4 z-50 cursor-pointer rounded-lg border px-4 py-3 shadow-xl backdrop-blur-md transition sm:left-auto sm:right-6 sm:max-w-md ${
         tone === "ok"
           ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
           : "border-rose-500/40 bg-rose-500/10 text-rose-100"

@@ -19,6 +19,17 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
     return () => document.removeEventListener("keydown", handleKey);
   }, [open, onClose]);
 
+  // Lock background scroll while the dialog is open (mobile especially —
+  // otherwise the page behind pans under your thumb mid-form).
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   if (!open) return null;
 
   const sizeClass = {
@@ -41,7 +52,7 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg p-1 transition focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg transition focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ color: "var(--faint)" }}
             onFocus={(e) => (e.currentTarget.style.outlineColor = "rgb(34 211 238)")}
           >

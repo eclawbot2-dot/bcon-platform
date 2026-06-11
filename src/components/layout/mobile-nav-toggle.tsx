@@ -20,6 +20,9 @@ export function MobileNavToggle() {
     if (typeof document === "undefined") return;
     if (open) document.body.setAttribute("data-mobile-nav", "open");
     else document.body.removeAttribute("data-mobile-nav");
+    // Never strand the body attribute (and its scroll lock) if this
+    // component unmounts while the drawer is open.
+    return () => document.body.removeAttribute("data-mobile-nav");
   }, [open]);
 
   // Close on route change.
@@ -43,7 +46,7 @@ export function MobileNavToggle() {
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
-        className="lg:hidden inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] p-2 text-white"
+        className="lg:hidden inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] p-2 text-white"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           {open ? (

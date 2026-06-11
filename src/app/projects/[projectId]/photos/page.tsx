@@ -34,12 +34,15 @@ export default async function ProjectPhotosPage({ params }: { params: Promise<{ 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Upload photos</div>
-              <p className="mt-1 text-xs text-slate-400">Multiple files at once. Mobile camera prompt enabled (capture=environment).</p>
+              <p className="mt-1 text-xs text-slate-400">Multiple files at once. On phones you can shoot with the camera or pick from the photo library.</p>
             </div>
             <Link href={`/projects/${projectId}`} className="btn-outline text-xs">← Project</Link>
           </div>
           <form action={`/api/projects/${projectId}/photos/upload`} method="post" encType="multipart/form-data" className="mt-4 grid gap-3 md:grid-cols-[2fr_1fr_1fr_auto]">
-            <input id="photo-file" type="file" name="file" multiple accept="image/*" capture="environment" className="form-input" aria-label="Choose photos to upload" />
+            {/* No `capture` attribute: iOS/Android treat capture as camera-only,
+                which blocks library picks and ignores `multiple`. Plain
+                accept=image/* gives field users the camera-or-library chooser. */}
+            <input id="photo-file" type="file" name="file" multiple accept="image/*" className="form-input" aria-label="Choose photos to upload" />
             <select id="photo-album" name="albumId" defaultValue="" className="form-select" aria-label="Album">
               <option value="">— no album —</option>
               {albums.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -65,13 +68,21 @@ export default async function ProjectPhotosPage({ params }: { params: Promise<{ 
           </div>
         </section>
 
-        <section className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
           {photos.map((p) => (
             <article key={p.id} className="card p-3">
-              <div className="aspect-square overflow-hidden rounded-lg bg-slate-900">
+              {/* Tap opens the full-resolution original — field users zoom into
+                  detail shots; the grid thumb alone is too small on a phone. */}
+              <a
+                href={p.fileUrl}
+                target="_blank"
+                rel="noopener"
+                className="block aspect-square overflow-hidden rounded-lg bg-slate-900"
+                aria-label={`Open full-size photo${p.caption ? `: ${p.caption}` : ""}`}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.thumbnailUrl ?? p.fileUrl} alt={p.caption || `Project photo${p.capturedAt ? ` from ${formatDateTime(p.capturedAt)}` : ""}`} loading="lazy" className="h-full w-full object-cover" />
-              </div>
+              </a>
               <div className="mt-2 text-xs">
                 <div className="text-white truncate">{p.caption ?? "(no caption)"}</div>
                 <div className="text-slate-500">{p.capturedAt ? formatDateTime(p.capturedAt) : "—"}</div>

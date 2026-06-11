@@ -44,6 +44,7 @@ export default async function CostCodesPage() {
         </section>
 
         <section className="card p-0 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-white/10 text-sm">
             <thead className="bg-white/5">
               <tr>
@@ -72,6 +73,7 @@ export default async function CostCodesPage() {
               {codes.length === 0 ? <tr><td colSpan={4} className="table-cell text-center text-slate-500 py-4">No cost codes yet — seed the CSI defaults above.</td></tr> : null}
             </tbody>
           </table>
+          </div>
         </section>
       </div>
     </AppLayout>
