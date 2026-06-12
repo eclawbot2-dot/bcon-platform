@@ -111,12 +111,29 @@ for (const route of PAGES) {
       // The INK rect of the text content — element rects do not grow when
       // text visibly overflows (overflow: visible), which is exactly how
       // the bug escaped earlier audits. A Range rect captures the real
-      // painted extent of the glyphs.
+      // laid-out extent of the glyphs; we then clamp it by every ancestor
+      // (including the element itself) that actually clips paint
+      // (overflow != visible), because truncate/overflow-hidden clip at
+      // paint time without changing the Range geometry.
       const inkRect = (el) => {
         const range = document.createRange();
         range.selectNodeContents(el);
-        const r = range.getBoundingClientRect();
-        return { x: r.x + window.scrollX, y: r.y + window.scrollY, w: r.width, h: r.height };
+        const rr = range.getBoundingClientRect();
+        let r = { x: rr.x + window.scrollX, y: rr.y + window.scrollY, w: rr.width, h: rr.height };
+        let node = el;
+        while (node && node !== document.body) {
+          const cs = getComputedStyle(node);
+          if (cs.overflowX !== "visible" || cs.overflowY !== "visible") {
+            const c = rect(node);
+            const x1 = Math.max(r.x, c.x);
+            const y1 = Math.max(r.y, c.y);
+            const x2 = Math.min(r.x + r.w, c.x + c.w);
+            const y2 = Math.min(r.y + r.h, c.y + c.h);
+            r = { x: x1, y: y1, w: Math.max(0, x2 - x1), h: Math.max(0, y2 - y1) };
+          }
+          node = node.parentElement;
+        }
+        return r;
       };
       const contains = (a, b, t) => b.x >= a.x - t && b.y >= a.y - t && b.x + b.w <= a.x + a.w + t && b.y + b.h <= a.y + a.h + t;
       const intersects = (a, b, t) => {

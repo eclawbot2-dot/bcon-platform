@@ -51,8 +51,8 @@ export default async function BallInCourtPage() {
             <p className="mt-1 text-xs text-slate-400">Open items by days in their current court.</p>
             <div className="mt-4 grid grid-cols-4 gap-3">
               {AGING_BUCKETS.map((b) => (
-                <div key={b} className="panel p-3 text-center">
-                  <div className={`text-2xl font-semibold ${BUCKET_TONE[b]}`}>{summary.byBucket[b]}</div>
+                <div key={b} className="panel min-w-0 overflow-hidden p-3 text-center">
+                  <div className={`min-w-0 truncate text-2xl font-semibold tabular-nums ${BUCKET_TONE[b]}`} title={String(summary.byBucket[b])}>{summary.byBucket[b]}</div>
                   <div className="mt-1 text-[0.65rem] uppercase tracking-wide text-slate-500">{b} days</div>
                 </div>
               ))}
