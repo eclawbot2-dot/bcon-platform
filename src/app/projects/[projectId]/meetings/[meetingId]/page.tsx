@@ -77,7 +77,7 @@ export default async function MeetingDetailPage({
         </section>
 
         {canEdit ? (
-          <section className="card p-5">
+          <section className="card p-5 min-w-0 overflow-hidden">
             <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Edit minutes</div>
             <form action={`/api/meetings/${meeting.id}/edit`} method="post" className="mt-3 grid gap-3 md:grid-cols-2">
               <div>

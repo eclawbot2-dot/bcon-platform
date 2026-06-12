@@ -92,7 +92,7 @@ export default async function WorkspaceTransparencyPage({
           ) : null}
         </section>
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Connect a provider</div>
           <p className="mt-1 text-xs text-slate-400">
             Choose ONE provider for this tenant. Secrets are encrypted at rest (AES-256-GCM, per-tenant key) and

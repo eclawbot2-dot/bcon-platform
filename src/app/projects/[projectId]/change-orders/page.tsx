@@ -87,9 +87,9 @@ export default async function ChangeOrdersPage({ params }: { params: Promise<{ p
 function Stat({ label, value, tone }: { label: string; value: string | number; tone?: "good" | "warn" | "bad" }) {
   const toneClass = tone === "good" ? "text-emerald-300" : tone === "warn" ? "text-amber-300" : tone === "bad" ? "text-rose-300" : "text-white";
   return (
-    <div className="panel p-4">
+    <div className="panel p-4 min-w-0 overflow-hidden">
       <div className="text-xs uppercase tracking-[0.16em] text-slate-400">{label}</div>
-      <div className={`mt-2 text-2xl font-semibold ${toneClass}`}>{value}</div>
+      <div className={`mt-2 min-w-0 truncate text-2xl font-semibold tabular-nums ${toneClass}`} title={String(value)}>{value}</div>
     </div>
   );
 }

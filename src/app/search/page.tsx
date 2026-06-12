@@ -33,7 +33,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       <div className="grid gap-6">
         <SearchForm initial={q} />
         {projects.length > 0 ? (
-          <section className="card p-5">
+          <section className="card p-5 min-w-0 overflow-hidden">
             <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Projects</div>
             <ul className="mt-3 grid gap-2 md:grid-cols-2">
               {projects.map((p) => (
@@ -43,7 +43,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           </section>
         ) : null}
         {vendors.length > 0 ? (
-          <section className="card p-5">
+          <section className="card p-5 min-w-0 overflow-hidden">
             <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Vendors</div>
             <ul className="mt-3 grid gap-2 md:grid-cols-2">
               {vendors.map((v) => (
@@ -77,7 +77,7 @@ function SearchForm({ initial }: { initial: string }) {
 
 function ResultSection({ title, items }: { title: string; items: Array<{ href: string; title: string; sub: string }> }) {
   return (
-    <section className="card p-5">
+    <section className="card p-5 min-w-0 overflow-hidden">
       <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">{title}</div>
       <ul className="mt-3 grid gap-2 md:grid-cols-2">
         {items.map((item, i) => (

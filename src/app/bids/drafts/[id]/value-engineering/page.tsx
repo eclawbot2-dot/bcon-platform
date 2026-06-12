@@ -37,7 +37,7 @@ export default async function VePage({ params }: { params: Promise<{ id: string 
             </div>
             <div className="text-right">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Savings</div>
-              <div className="text-xl font-semibold text-emerald-200">{formatCurrency(idea.savings)}</div>
+              <div className="min-w-0 truncate text-xl font-semibold tabular-nums text-emerald-200" title={formatCurrency(idea.savings)}>{formatCurrency(idea.savings)}</div>
             </div>
           </div>
           <p className="mt-3 text-sm text-slate-200 leading-6">{idea.description}</p>

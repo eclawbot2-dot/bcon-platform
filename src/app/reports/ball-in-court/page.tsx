@@ -151,9 +151,9 @@ export default async function BallInCourtPage() {
 
 function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
   return (
-    <div className="card p-5">
+    <div className="card p-5 min-w-0 overflow-hidden">
       <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</div>
-      <div className={`mt-2 text-2xl font-semibold ${tone ?? "text-white"}`}>{value}</div>
+      <div className={`mt-2 min-w-0 truncate text-2xl font-semibold tabular-nums ${tone ?? "text-white"}`} title={String(value)}>{value}</div>
       {sub ? <div className="mt-1 text-xs text-slate-500">{sub}</div> : null}
     </div>
   );

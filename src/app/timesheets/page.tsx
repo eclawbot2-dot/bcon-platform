@@ -94,7 +94,7 @@ export default async function TimesheetsRollupPage({ searchParams }: { searchPar
           </form>
         </section>
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">New time entry</div>
           <form action="/api/timesheets/create" method="post" className="mt-4 grid gap-3 md:grid-cols-4">
             <div className="md:col-span-1">

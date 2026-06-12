@@ -244,7 +244,7 @@ export default async function ProfitAuditPage({ params }: { params: Promise<{ pr
         </section>
 
         {/* Quick links to related views */}
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Drill in</div>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <Link href={`/projects/${project.id}/financials`} className="btn-outline">Financials (P&L)</Link>
@@ -264,9 +264,9 @@ export default async function ProfitAuditPage({ params }: { params: Promise<{ pr
 function Tile({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: "good" | "warn" | "bad" | "default" }) {
   const color = tone === "warn" ? "text-amber-300" : tone === "good" ? "text-emerald-300" : tone === "bad" ? "text-rose-300" : "text-white";
   return (
-    <div className="card p-5">
+    <div className="card p-5 min-w-0 overflow-hidden">
       <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</div>
-      <div className={`mt-2 text-2xl font-semibold ${color}`}>{value}</div>
+      <div className={`mt-2 min-w-0 truncate text-2xl font-semibold tabular-nums ${color}`} title={String(value)}>{value}</div>
       {sub ? <div className="mt-1 text-xs text-slate-500">{sub}</div> : null}
     </div>
   );

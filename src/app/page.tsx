@@ -157,7 +157,7 @@ export default async function Home() {
           {data.projectsByMode.map((group) => (
             <Link key={group.mode} href="/projects" className="card p-5 transition hover:border-cyan-500/40">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{modeLabel(group.mode)}</div>
-              <div className="mt-3 text-3xl font-semibold text-white">{group.count}</div>
+              <div className="mt-3 min-w-0 truncate text-3xl font-semibold tabular-nums text-white">{group.count}</div>
               <div className="mt-3 flex items-center justify-between text-sm text-slate-400">
                 <span>Avg health</span>
                 <span>{group.avgHealth}</span>
@@ -177,7 +177,7 @@ export default async function Home() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">{modeLabel(project.mode)}</div>
-                  <Link href={`/projects/${project.id}`} className="mt-1 block text-2xl font-semibold text-white hover:text-cyan-200">{project.name}</Link>
+                  <Link href={`/projects/${project.id}`} className="mt-1 block min-w-0 break-words text-2xl font-semibold text-white hover:text-cyan-200">{project.name}</Link>
                   <div className="mt-2 text-sm text-slate-400">{project.code} · {project.ownerName} · {project.contractType}</div>
                   <div className="mt-3 text-sm leading-6 text-slate-300">{project.latestSummary}</div>
                 </div>
@@ -194,13 +194,13 @@ export default async function Home() {
               </div>
 
               <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
-                <div className="panel p-4">
+                <div className="panel p-4 min-w-0 overflow-hidden">
                   <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Workspace tabs</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {project.tabs.map((tab) => <span key={tab} className="badge-blue">{tab}</span>)}
                   </div>
                 </div>
-                <div className="panel p-4">
+                <div className="panel p-4 min-w-0 overflow-hidden">
                   <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Recent engagement</div>
                   <div className="mt-3 space-y-2 text-sm text-slate-300">
                     {project.recentMessages.slice(0, 2).map((message) => (

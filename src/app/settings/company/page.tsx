@@ -68,7 +68,7 @@ export default async function CompanyCompliancePage() {
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
                 <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Company profile</div>
-                <h2 className="mt-1 text-xl font-semibold text-white">{profile.legalName}</h2>
+                <h2 className="mt-1 min-w-0 break-words text-xl font-semibold text-white">{profile.legalName}</h2>
                 {profile.dbaName ? <div className="text-sm text-slate-400">DBA: {profile.dbaName}</div> : null}
                 <div className="mt-2 grid gap-1 text-xs text-slate-400">
                   {profile.ein ? <div>EIN: <span className="font-mono">{profile.ein}</span></div> : null}
@@ -370,9 +370,9 @@ function CompanySection({ id, title, description, rows, createPath, createFields
 function Tile({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: "good" | "warn" }) {
   const color = tone === "warn" ? "text-amber-300" : tone === "good" ? "text-emerald-300" : "text-white";
   return (
-    <div className="card p-5">
+    <div className="card p-5 min-w-0 overflow-hidden">
       <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</div>
-      <div className={`mt-2 text-2xl font-semibold ${color}`}>{value}</div>
+      <div className={`mt-2 min-w-0 truncate text-2xl font-semibold tabular-nums ${color}`} title={String(value)}>{value}</div>
       {sub ? <div className="mt-1 text-xs text-slate-500">{sub}</div> : null}
     </div>
   );

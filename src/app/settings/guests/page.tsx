@@ -20,7 +20,7 @@ export default async function GuestsPage() {
   return (
     <AppLayout eyebrow="Settings · Collaborators" title="Guest accounts" description="Free named seats for owner / architect / inspector / sub. Magic-link sign-in; scoped read access.">
       <div className="grid gap-6">
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Invite guest</div>
           <form action="/api/tenant/guests/create" method="post" className="mt-3 grid gap-3 md:grid-cols-[2fr_2fr_1fr_auto]">
             <input name="email" type="email" required placeholder="email@example.com" className="form-input" />

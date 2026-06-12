@@ -108,9 +108,9 @@ export default async function ChangeOrderDetailPage({ params }: { params: Promis
         <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Cost breakdown</div>
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           {Object.entries(byCategory).map(([cat, amt]) => (
-            <div key={cat} className="panel p-4">
+            <div key={cat} className="panel p-4 min-w-0 overflow-hidden">
               <div className="text-xs uppercase tracking-[0.16em] text-slate-400">{cat}</div>
-              <div className="mt-2 text-xl font-semibold text-white">{formatCurrency(amt)}</div>
+              <div className="mt-2 min-w-0 truncate text-xl font-semibold tabular-nums text-white" title={formatCurrency(amt)}>{formatCurrency(amt)}</div>
             </div>
           ))}
         </div>

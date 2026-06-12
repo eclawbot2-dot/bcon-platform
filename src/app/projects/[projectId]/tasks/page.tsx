@@ -28,15 +28,15 @@ export default async function TasksPage({ params }: { params: Promise<{ projectI
         <ProjectTabs projectId={project.id} active="tasks" mode={project.mode} />
         <section className="grid gap-4 md:grid-cols-4">
           {(["TODO", "IN_PROGRESS", "BLOCKED", "COMPLETE"] as const).map((s) => (
-            <div key={s} className="panel p-4">
+            <div key={s} className="panel p-4 min-w-0 overflow-hidden">
               <div className="text-xs uppercase tracking-[0.16em] text-slate-400">{s.replaceAll("_", " ")}</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{byStatus[s].length}</div>
+              <div className="mt-2 min-w-0 truncate text-2xl font-semibold tabular-nums text-white">{byStatus[s].length}</div>
             </div>
           ))}
         </section>
         <section className="grid gap-4 xl:grid-cols-2">
           {(["TODO", "IN_PROGRESS", "BLOCKED", "COMPLETE"] as const).map((s) => (
-            <div key={s} className="card p-5">
+            <div key={s} className="card p-5 min-w-0 overflow-hidden">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{s.replaceAll("_", " ")}</div>
               <div className="mt-3 space-y-2">
                 {byStatus[s].map((t) => (

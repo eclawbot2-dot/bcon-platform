@@ -66,7 +66,7 @@ export default async function AutomationsPage({
           />
         </section>
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Workflows</div>
           <p className="mt-1 text-xs text-slate-400">
             A red NEEDS-LLM-KEY badge means the workflow cleanly skips until an OpenAI/Anthropic key is configured (Settings → AI keys).
@@ -148,7 +148,7 @@ export default async function AutomationsPage({
           </div>
         </section>
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Recent run history (last 50)</div>
           <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
             <SortableTable

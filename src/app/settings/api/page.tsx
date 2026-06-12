@@ -38,7 +38,7 @@ export default async function ApiTokensPage() {
           </div>
         ) : null}
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Issue API token</div>
           <form action="/api/tenant/api-tokens/create" method="post" className="mt-3 grid gap-3 md:grid-cols-[2fr_2fr_auto]">
             <input name="name" required placeholder="Token name (e.g. CI integration)" className="form-input" />
@@ -84,7 +84,7 @@ export default async function ApiTokensPage() {
           />
         </section>
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Webhook endpoints</div>
           <p className="mt-1 text-xs text-slate-400">Receive HMAC-signed POSTs when domain events fire (rfi.created, payapp.approved, listing.scored).</p>
           <form action="/api/tenant/webhooks/create" method="post" className="mt-3 grid gap-3 md:grid-cols-[2fr_2fr_auto]">

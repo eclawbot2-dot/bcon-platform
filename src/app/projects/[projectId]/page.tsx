@@ -93,7 +93,7 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
               />
             ) : null}
           </div>
-          <div className="card p-5">
+          <div className="card p-5 min-w-0 overflow-hidden">
             <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Required forms</div>
             <div className="mt-3 flex flex-wrap gap-2">
               {(project.mode === "SIMPLE"
@@ -104,7 +104,7 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
               ).map((item) => <span key={item} className="badge-blue">{item}</span>)}
             </div>
           </div>
-          <div className="card p-5">
+          <div className="card p-5 min-w-0 overflow-hidden">
             <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Tabs enabled</div>
             <div className="mt-3 flex flex-wrap gap-2">
               {project.tabs.map((item) => <span key={item} className="badge-gray">{item}</span>)}
@@ -194,7 +194,7 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
 
             {project.mode === "HEAVY_CIVIL" ? (
               <div className="grid gap-6 lg:grid-cols-2">
-                <div className="card p-5">
+                <div className="card p-5 min-w-0 overflow-hidden">
                   <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Installed quantities</div>
                   <div className="mt-4 space-y-3">
                     {project.quantityHighlights.map((item) => (
@@ -206,7 +206,7 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
                     ))}
                   </div>
                 </div>
-                <div className="card p-5">
+                <div className="card p-5 min-w-0 overflow-hidden">
                   <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Production records</div>
                   <div className="mt-4 space-y-3">
                     {project.productionHighlights.map((item) => (

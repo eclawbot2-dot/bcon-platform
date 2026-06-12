@@ -78,7 +78,7 @@ export default async function MeetingsPage({
           <Tile label="Completed" value={summary.done} tone="good" />
         </section>
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Log a meeting</div>
           <form action={`/api/projects/${projectId}/meetings/create`} method="post" className="mt-3 grid gap-3 md:grid-cols-2">
             <div>
@@ -177,9 +177,9 @@ export default async function MeetingsPage({
 function Tile({ label, value, tone }: { label: string; value: string | number; tone?: "good" | "bad" | "default" }) {
   const color = tone === "bad" ? "text-rose-300" : tone === "good" ? "text-emerald-300" : "text-white";
   return (
-    <div className="card p-5">
+    <div className="card p-5 min-w-0 overflow-hidden">
       <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</div>
-      <div className={`mt-2 text-2xl font-semibold ${color}`}>{value}</div>
+      <div className={`mt-2 min-w-0 truncate text-2xl font-semibold tabular-nums ${color}`} title={String(value)}>{value}</div>
     </div>
   );
 }

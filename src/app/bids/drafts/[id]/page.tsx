@@ -94,7 +94,7 @@ export default async function BidDraftDetailPage({ params }: { params: Promise<{
             {Object.entries(byCategory).map(([cat, amt]) => (
               <div key={cat} className="panel p-3">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{cat}</div>
-                <div className="mt-1 text-xl font-semibold text-white">{formatCurrency(amt)}</div>
+                <div className="mt-1 min-w-0 truncate text-xl font-semibold tabular-nums text-white" title={formatCurrency(amt)}>{formatCurrency(amt)}</div>
               </div>
             ))}
           </div>

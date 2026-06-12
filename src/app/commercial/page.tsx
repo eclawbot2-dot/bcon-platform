@@ -157,9 +157,9 @@ export default async function CommercialPage() {
 function Stat({ label, value, tone, href }: { label: string; value: string | number; tone?: "good" | "warn" | "bad"; href?: string }) {
   const toneClass = tone === "good" ? "text-emerald-300" : tone === "warn" ? "text-amber-300" : tone === "bad" ? "text-rose-300" : "text-white";
   const inner = (
-    <div className={`panel p-4 ${href ? "transition hover:border-cyan-500/40" : ""}`}>
+    <div className={`panel min-w-0 overflow-hidden p-4 ${href ? "transition hover:border-cyan-500/40" : ""}`}>
       <div className="text-xs uppercase tracking-[0.16em] text-slate-400">{label}</div>
-      <div className={`mt-2 text-2xl font-semibold ${toneClass}`}>{value}</div>
+      <div className={`mt-2 min-w-0 truncate text-2xl font-semibold tabular-nums ${toneClass}`} title={String(value)}>{value}</div>
       {href ? <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-cyan-300">View →</div> : null}
     </div>
   );

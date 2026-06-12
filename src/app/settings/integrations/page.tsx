@@ -247,7 +247,7 @@ function M365Section({
 
 function QboUnconfiguredSection({ env }: { env: ReturnType<typeof qboStatusForSettings> }) {
   return (
-    <section className="card p-5">
+    <section className="card p-5 min-w-0 overflow-hidden">
       <div className="text-xs uppercase tracking-[0.2em] text-emerald-300">QuickBooks Online (real integration)</div>
       <div className="mt-1 text-lg font-semibold text-white">Not configured</div>
       <p className="mt-2 text-sm text-slate-400">
@@ -392,7 +392,7 @@ function SyncHistorySection({
   jobs: Array<{ id: string; kind: string; status: string; recordsRead: number; recordsWritten: number; error: string | null; startedAt: Date; completedAt: Date | null }>;
 }) {
   return (
-    <section className="card p-5">
+    <section className="card p-5 min-w-0 overflow-hidden">
       <div className="text-xs uppercase tracking-[0.2em] text-slate-400">QuickBooks sync history</div>
       <div className="mt-3">
         <SortableTable
@@ -482,7 +482,7 @@ function PlatformIntegrations() {
   ];
 
   return (
-    <section className="card p-5">
+    <section className="card p-5 min-w-0 overflow-hidden">
       <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Platform integrations (deployment-wide, env-gated)</div>
       <p className="mt-2 text-xs text-slate-500">
         These apply to every tenant on this deployment and are configured by the platform operator via environment

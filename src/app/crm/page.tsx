@@ -15,15 +15,15 @@ export default async function CrmPage() {
         <section className="card p-6">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">CRM and contact network</div>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <div className="panel p-4">
+            <div className="panel p-4 min-w-0 overflow-hidden">
               <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Companies</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{data?.sharedServices.crm.companyCount ?? 0}</div>
+              <div className="mt-2 min-w-0 truncate text-3xl font-semibold tabular-nums text-white">{data?.sharedServices.crm.companyCount ?? 0}</div>
             </div>
-            <div className="panel p-4">
+            <div className="panel p-4 min-w-0 overflow-hidden">
               <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Contacts</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{data?.sharedServices.crm.contactCount ?? 0}</div>
+              <div className="mt-2 min-w-0 truncate text-3xl font-semibold tabular-nums text-white">{data?.sharedServices.crm.contactCount ?? 0}</div>
             </div>
-            <div className="panel p-4">
+            <div className="panel p-4 min-w-0 overflow-hidden">
               <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Markets</div>
               <div className="mt-2 text-sm text-slate-200">{data?.sharedServices.crm.markets.join(" · ") || "No markets seeded"}</div>
             </div>

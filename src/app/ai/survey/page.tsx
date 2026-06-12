@@ -22,7 +22,7 @@ export default async function SurveyPage({ searchParams }: { searchParams: Promi
         <>
           <section className="card p-6">
             <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">NPS score</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{result.npsScore}</div>
+            <div className="mt-2 min-w-0 truncate text-3xl font-semibold tabular-nums text-white">{result.npsScore}</div>
           </section>
           {result.themes.map((t, i) => (
             <section key={i} className="card p-6">

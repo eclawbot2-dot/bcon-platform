@@ -35,7 +35,7 @@ export function ProjectBurndown({ projectId }: { projectId: string }) {
   if (error) return null; // non-essential widget — disappear quietly on failure
   if (!data) {
     return (
-      <div className="card p-5">
+      <div className="card p-5 min-w-0 overflow-hidden">
         <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Financial burndown</div>
         <div className="mt-4 text-sm text-slate-500">Loading…</div>
       </div>
@@ -47,7 +47,7 @@ export function ProjectBurndown({ projectId }: { projectId: string }) {
   const overForecast = budget.varianceForecastVsCurrent > 0;
 
   return (
-    <div className="card p-5">
+    <div className="card p-5 min-w-0 overflow-hidden">
       <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Financial burndown</div>
       <div className="mt-4 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
         <div><span className="text-slate-500">Budget (current):</span> {fmt(budget.current)}</div>

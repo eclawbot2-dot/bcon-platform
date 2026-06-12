@@ -21,7 +21,7 @@ export default async function DocumentsRollupPage() {
           {Object.entries(byClass).map(([cls, count]) => (
             <div key={cls} className="panel p-4">
               <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{cls}</div>
-              <div className="mt-2 text-xl font-semibold text-white">{count}</div>
+              <div className="mt-2 min-w-0 truncate text-xl font-semibold tabular-nums text-white">{count}</div>
             </div>
           ))}
         </section>

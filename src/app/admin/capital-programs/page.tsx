@@ -34,12 +34,12 @@ export default async function CapitalProgramsPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">{p.ownerType ?? "PROGRAM"}</div>
-                  <h2 className="mt-1 text-xl font-semibold text-white">{p.name}</h2>
+                  <h2 className="mt-1 min-w-0 break-words text-xl font-semibold text-white">{p.name}</h2>
                   {p.description ? <p className="mt-2 text-sm text-slate-400 max-w-2xl">{p.description}</p> : null}
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Total budget</div>
-                  <div className="mt-1 text-2xl font-semibold text-white">{formatCurrency(p.totalBudget)}</div>
+                  <div className="mt-1 min-w-0 truncate text-2xl font-semibold tabular-nums text-white" title={formatCurrency(p.totalBudget)}>{formatCurrency(p.totalBudget)}</div>
                   <div className="mt-1 text-[10px] text-slate-500">{p.projects.length} project{p.projects.length === 1 ? "" : "s"}</div>
                 </div>
               </div>

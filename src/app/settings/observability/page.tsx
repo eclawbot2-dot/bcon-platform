@@ -145,7 +145,7 @@ export default async function ObservabilityPage({ searchParams }: { searchParams
           </div>
         </section>
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Notes</div>
           <ul className="mt-2 list-disc pl-5 text-xs text-slate-400 space-y-1">
             <li>State resets on process restart. For long-term forensics use the audit log and structured log stream.</li>

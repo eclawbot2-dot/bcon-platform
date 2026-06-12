@@ -95,7 +95,7 @@ export default async function SettingsPage() {
                       </div>
                       <div className="text-right">
                         <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Projects in this mode</div>
-                        <div className="mt-1 text-2xl font-semibold text-white">{count}</div>
+                        <div className="mt-1 min-w-0 truncate text-2xl font-semibold tabular-nums text-white">{count}</div>
                       </div>
                     </div>
                   </label>

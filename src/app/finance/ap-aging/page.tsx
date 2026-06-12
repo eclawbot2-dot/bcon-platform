@@ -49,7 +49,7 @@ export default async function ApAgingPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Total outstanding</div>
-              <div className="mt-1 text-3xl font-semibold text-white">{formatCurrency(totalOutstanding)}</div>
+              <div className="mt-1 min-w-0 truncate text-3xl font-semibold tabular-nums text-white" title={formatCurrency(totalOutstanding)}>{formatCurrency(totalOutstanding)}</div>
             </div>
             <div className="flex gap-2 text-xs text-slate-400">
               <Link href="/finance" className="btn-outline">Back to finance</Link>

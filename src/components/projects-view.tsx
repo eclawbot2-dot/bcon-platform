@@ -137,18 +137,18 @@ export function ProjectsView({ projects }: { projects: ProjectListItem[] }) {
                   <span>{modeShort(project.mode)}</span>
                   <span className="opacity-70">{modeLabel(project.mode)}</span>
                 </div>
-                <h2 className="mt-2 text-2xl font-semibold text-white">{project.name}</h2>
+                <h2 className="mt-2 min-w-0 break-words text-2xl font-semibold text-white">{project.name}</h2>
                 <div className="mt-2 text-sm text-slate-400">{project.code} · {project.contractType} · {project.address}</div>
                 <div className="mt-2 text-sm text-slate-400">Owner: {project.ownerName}</div>
               </div>
               <div className="grid grid-cols-2 gap-3 lg:min-w-[280px]">
-                <div className="panel p-4">
+                <div className="panel p-4 min-w-0 overflow-hidden">
                   <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Contract value</div>
-                  <div className="mt-2 text-xl font-semibold text-white">{formatCurrency(project.contractValue)}</div>
+                  <div className="mt-2 min-w-0 truncate text-xl font-semibold tabular-nums text-white" title={formatCurrency(project.contractValue)}>{formatCurrency(project.contractValue)}</div>
                 </div>
-                <div className="panel p-4">
+                <div className="panel p-4 min-w-0 overflow-hidden">
                   <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Progress</div>
-                  <div className="mt-2 text-xl font-semibold text-white">{formatPercent(project.progressPct)}</div>
+                  <div className="mt-2 min-w-0 truncate text-xl font-semibold tabular-nums text-white" title={formatPercent(project.progressPct)}>{formatPercent(project.progressPct)}</div>
                 </div>
               </div>
             </div>
@@ -160,7 +160,7 @@ export function ProjectsView({ projects }: { projects: ProjectListItem[] }) {
             </div>
 
             <div className="mt-6 grid gap-4 lg:grid-cols-3">
-              <div className="panel p-4">
+              <div className="panel p-4 min-w-0 overflow-hidden">
                 <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Upcoming tasks</div>
                 <div className="mt-3 space-y-3">
                   {project.upcomingTasks.map((task) => (
@@ -172,7 +172,7 @@ export function ProjectsView({ projects }: { projects: ProjectListItem[] }) {
                   {project.upcomingTasks.length === 0 ? <div className="text-xs text-slate-500">No upcoming tasks.</div> : null}
                 </div>
               </div>
-              <div className="panel p-4">
+              <div className="panel p-4 min-w-0 overflow-hidden">
                 <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Workflow channels</div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {project.channels.map((channel) => (
@@ -181,7 +181,7 @@ export function ProjectsView({ projects }: { projects: ProjectListItem[] }) {
                 </div>
                 <div className="mt-4 text-sm leading-6 text-slate-300">{project.latestSummary}</div>
               </div>
-              <div className="panel p-4">
+              <div className="panel p-4 min-w-0 overflow-hidden">
                 <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Workspace link</div>
                 <div className="mt-3 text-sm text-slate-300">Open the full project workspace with mode-specific tabs and engagement surfaces.</div>
                 <Link href={`/projects/${project.id}`} className="btn-primary mt-4">Open workspace</Link>

@@ -65,13 +65,13 @@ export default async function ProjectFinancialsPage({ params }: { params: Promis
           <div className="card p-5 text-sm text-slate-400">No P&L snapshot yet. Visit <Link href="/finance" className="text-cyan-300 hover:underline">/finance</Link> and sync Xero to populate.</div>
         )}
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Cost by cost code</div>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
             {Object.entries(costByCode).map(([code, amt]) => (
               <div key={code} className="panel p-3">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{code}</div>
-                <div className="mt-1 text-xl font-semibold text-white">{formatCurrency(amt)}</div>
+                <div className="mt-1 min-w-0 truncate text-xl font-semibold tabular-nums text-white" title={formatCurrency(amt)}>{formatCurrency(amt)}</div>
               </div>
             ))}
             {Object.keys(costByCode).length === 0 ? <div className="text-sm text-slate-500">No cost allocations yet.</div> : null}

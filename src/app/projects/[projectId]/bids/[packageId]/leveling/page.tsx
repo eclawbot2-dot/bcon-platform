@@ -36,7 +36,7 @@ export default async function LevelingPage({ params }: { params: Promise<{ proje
             <div className="text-right">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Raw / Adjusted</div>
               <div className="text-sm text-slate-400">{formatCurrency(n.bidAmount)}</div>
-              <div className="text-xl font-semibold text-white">{formatCurrency(n.adjustedAmount)}</div>
+              <div className="min-w-0 truncate text-xl font-semibold tabular-nums text-white" title={formatCurrency(n.adjustedAmount)}>{formatCurrency(n.adjustedAmount)}</div>
             </div>
           </div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">

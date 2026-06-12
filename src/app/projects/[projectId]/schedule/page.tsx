@@ -51,7 +51,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ proje
           <Stat label="Critical path" value={criticalCount} tone="bad" />
         </section>
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Gantt — {formatDate(minDate)} → {formatDate(maxDate)}</div>
           <div className="mt-4 space-y-2">
             {tasks.map((task) => {
@@ -86,7 +86,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ proje
 
         <ImportForm projectId={project.id} hasExisting />
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Milestones</div>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
             {milestones.map((m) => (
@@ -126,9 +126,9 @@ function ImportForm({ projectId, hasExisting }: { projectId: string; hasExisting
 function Stat({ label, value, tone }: { label: string; value: string | number; tone?: "good" | "warn" | "bad" }) {
   const toneClass = tone === "good" ? "text-emerald-300" : tone === "warn" ? "text-amber-300" : tone === "bad" ? "text-rose-300" : "text-white";
   return (
-    <div className="panel p-4">
+    <div className="panel p-4 min-w-0 overflow-hidden">
       <div className="text-xs uppercase tracking-[0.16em] text-slate-400">{label}</div>
-      <div className={`mt-2 text-2xl font-semibold ${toneClass}`}>{value}</div>
+      <div className={`mt-2 min-w-0 truncate text-2xl font-semibold tabular-nums ${toneClass}`} title={String(value)}>{value}</div>
     </div>
   );
 }

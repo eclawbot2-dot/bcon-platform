@@ -30,7 +30,7 @@ export default async function PricingAdvisorPage({ params }: { params: Promise<{
       </section>
       <section className="card p-6">
         <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Recommendation</div>
-        <div className="mt-2 text-2xl font-semibold text-white">{advice.direction}</div>
+        <div className="mt-2 min-w-0 truncate text-2xl font-semibold text-white">{advice.direction}</div>
         <p className="mt-3 text-sm leading-6 text-slate-200">{advice.rationale}</p>
         <p className="mt-3 text-xs text-slate-500">Heuristic today (Bayesian-smoothed win rate by client · mode · tenant). Flip <span className="font-mono">ENABLE_LLM_CALLS=true</span> to route through Claude.</p>
         <div className="mt-4 flex gap-2 items-center">

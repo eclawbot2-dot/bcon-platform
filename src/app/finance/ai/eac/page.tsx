@@ -35,7 +35,7 @@ export default async function EacPage({ searchParams }: { searchParams: Promise<
           </section>
           <section className="card p-6">
             <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Variance vs plan</div>
-            <div className={"mt-2 text-3xl font-semibold " + (forecast.variance > 0 ? "text-rose-200" : "text-emerald-200")}>{formatCurrency(forecast.variance)}</div>
+            <div className={"mt-2 min-w-0 truncate text-3xl font-semibold tabular-nums " + (forecast.variance > 0 ? "text-rose-200" : "text-emerald-200")} title={formatCurrency(forecast.variance)}>{formatCurrency(forecast.variance)}</div>
             <p className="mt-3 text-sm text-slate-200 leading-6">{forecast.narrative}</p>
             {runId ? (
               <div className="mt-4 flex gap-2 items-center">

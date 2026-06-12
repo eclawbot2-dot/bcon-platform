@@ -57,7 +57,7 @@ export default async function FinanceHubPage() {
           <a href="/api/export/ap-aging" className="btn-outline text-xs">Export AP CSV</a>
         </section>
 
-        <section className="card p-5">
+        <section className="card p-5 min-w-0 overflow-hidden">
           <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Data quality</div>
           <div className="mt-3 grid gap-3 md:grid-cols-4">
             <div className="panel p-3">
@@ -83,7 +83,7 @@ export default async function FinanceHubPage() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-3">
-          <div className="card p-5">
+          <div className="card p-5 min-w-0 overflow-hidden">
             <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Xero</div>
             <div className="mt-1 text-lg font-semibold text-white">{xero?.organizationName ?? "Not connected"}</div>
             <div className="text-xs text-slate-400">Status: <StatusBadge status={xero?.status ?? "DISCONNECTED"} /></div>
@@ -109,7 +109,7 @@ export default async function FinanceHubPage() {
             </div>
           </div>
 
-          <div className="card p-5">
+          <div className="card p-5 min-w-0 overflow-hidden">
             <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">QuickBooks Online</div>
             <div className="mt-1 text-lg font-semibold text-white">{qbo?.organizationName ?? "Not connected"}</div>
             <div className="text-xs text-slate-400">Status: <StatusBadge status={qbo?.status ?? "DISCONNECTED"} /></div>
@@ -137,7 +137,7 @@ export default async function FinanceHubPage() {
             <div className="mt-3 text-[10px] uppercase tracking-[0.18em] text-slate-500">Pulls JournalEntry + ProfitAndLoss reports · Class / Customer:Job → project</div>
           </div>
 
-          <div className="card p-5">
+          <div className="card p-5 min-w-0 overflow-hidden">
             <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">Invoice inbox</div>
             <div className="mt-1 text-lg font-semibold text-white">{inbox?.mailbox ?? "Not connected"}</div>
             <div className="text-xs text-slate-400">Status: <StatusBadge status={inbox?.status ?? "DISCONNECTED"} /></div>
