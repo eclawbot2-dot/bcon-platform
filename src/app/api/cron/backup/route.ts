@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { backupAllTenants } from "@/lib/backup";
 import { observeCronRun } from "@/lib/metrics";
 import { reportError } from "@/lib/report-error";
-import { runCronJob } from "@/lib/cron";
+import { authorizeCron, runCronJob } from "@/lib/cron";
 
 /**
  * Nightly backup endpoint — intended to be hit by Windows Task Scheduler
@@ -14,33 +14,13 @@ import { runCronJob } from "@/lib/cron";
  * The middleware excludes /api/cron/* from session-based auth.
  */
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return mismatch === 0;
-}
-
-function authorize(req: NextRequest): NextResponse | null {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    console.error("[cron/backup] CRON_SECRET not configured");
-    return NextResponse.json({ error: "Cron not configured" }, { status: 503 });
-  }
-  const header = req.headers.get("authorization") ?? "";
-  const expected = `Bearer ${secret}`;
-  if (!timingSafeEqual(header, expected)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return null;
-}
 
 export async function POST(req: NextRequest) {
   return runCronJob("backup", () => handlePost(req));
 }
 
 async function handlePost(req: NextRequest) {
-  const denied = authorize(req);
+  const denied = authorizeCron(req, "backup");
   if (denied) return denied;
   const start = Date.now();
   const results = await backupAllTenants();
@@ -81,7 +61,7 @@ async function handlePost(req: NextRequest) {
  * endpoint doesn't leak config state to anonymous callers.)
  */
 export async function GET(req: NextRequest) {
-  const denied = authorize(req);
+  const denied = authorizeCron(req, "backup");
   if (denied) return denied;
   return NextResponse.json({
     ok: true,

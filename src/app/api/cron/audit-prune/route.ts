@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { observeCronRun } from "@/lib/metrics";
-import { runCronJob } from "@/lib/cron";
+import { authorizeCron, runCronJob } from "@/lib/cron";
 
 /**
  * Audit-event retention cron. Deletes AuditEvent rows older than 365
@@ -16,29 +16,13 @@ import { runCronJob } from "@/lib/cron";
  * a misconfigured cron can't accidentally wipe recent activity.
  */
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return mismatch === 0;
-}
-
-function authorize(req: NextRequest): NextResponse | null {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return NextResponse.json({ error: "Cron not configured" }, { status: 503 });
-  const header = req.headers.get("authorization") ?? "";
-  if (!timingSafeEqual(header, `Bearer ${secret}`)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return null;
-}
 
 export async function POST(req: NextRequest) {
   return runCronJob("audit-prune", () => handlePost(req));
 }
 
 async function handlePost(req: NextRequest) {
-  const denied = authorize(req);
+  const denied = authorizeCron(req, "audit-prune");
   if (denied) return denied;
   const start = Date.now();
 
@@ -79,7 +63,7 @@ async function handlePost(req: NextRequest) {
 
 // GET is status-only and never runs the job — schedulers must POST.
 export async function GET(req: NextRequest) {
-  const denied = authorize(req);
+  const denied = authorizeCron(req, "audit-prune");
   if (denied) return denied;
   return NextResponse.json({ ok: true, status: "ready", note: "POST to run; GET is status-only." });
 }

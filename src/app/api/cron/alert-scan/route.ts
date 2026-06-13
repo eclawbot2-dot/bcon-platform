@@ -19,34 +19,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAlertScanAllTenants } from "@/lib/alerts";
 import { observeCronRun } from "@/lib/metrics";
-import { runCronJob } from "@/lib/cron";
+import { authorizeCron, runCronJob } from "@/lib/cron";
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return mismatch === 0;
-}
-
-function authorize(req: NextRequest): NextResponse | null {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json({ error: "Cron not configured" }, { status: 503 });
-  }
-  const header = req.headers.get("authorization") ?? "";
-  const expected = `Bearer ${secret}`;
-  if (!timingSafeEqual(header, expected)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return null;
-}
 
 export async function POST(req: NextRequest) {
   return runCronJob("alert-scan", () => handlePost(req));
 }
 
 async function handlePost(req: NextRequest) {
-  const denied = authorize(req);
+  const denied = authorizeCron(req, "alert-scan");
   if (denied) return denied;
   const start = Date.now();
   const summary = await runAlertScanAllTenants();
@@ -64,7 +45,7 @@ async function handlePost(req: NextRequest) {
 // (Previously GET aliased to POST, letting a "safe" verb trigger the
 // mutation as a side effect.)
 export async function GET(req: NextRequest) {
-  const denied = authorize(req);
+  const denied = authorizeCron(req, "alert-scan");
   if (denied) return denied;
   return NextResponse.json({ ok: true, status: "ready", note: "POST to run; GET is status-only." });
 }

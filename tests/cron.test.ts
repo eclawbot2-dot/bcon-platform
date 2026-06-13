@@ -7,9 +7,9 @@
  * monitor. A regression here turns a DR-critical failure (e.g. the nightly
  * backup throwing) invisible.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextResponse } from "next/server";
-import { runCronJob } from "@/lib/cron";
+import { runCronJob, authorizeCron } from "@/lib/cron";
 import { snapshot, __resetForTest } from "@/lib/metrics";
 
 describe("runCronJob", () => {
@@ -55,5 +55,40 @@ describe("runCronJob", () => {
     const res = await runCronJob("auth-job", async () => denied);
     expect(res.status).toBe(401);
     expect(snapshot().cronRuns.find((c) => c.name === "auth-job")).toBeUndefined();
+  });
+});
+
+describe("authorizeCron — shared bearer gate", () => {
+  const PRIOR = process.env.CRON_SECRET;
+  function req(auth?: string): Request {
+    return { headers: { get: (k: string) => (k.toLowerCase() === "authorization" ? auth ?? null : null) } } as unknown as Request;
+  }
+
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    if (PRIOR === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = PRIOR;
+    vi.restoreAllMocks();
+  });
+
+  it("fails CLOSED with 503 when CRON_SECRET is unset (never an open door)", () => {
+    delete process.env.CRON_SECRET;
+    const res = authorizeCron(req("Bearer anything"), "job");
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(503);
+  });
+
+  it("401s on a missing/wrong bearer token", () => {
+    process.env.CRON_SECRET = "s3cret";
+    expect(authorizeCron(req(undefined), "job")!.status).toBe(401);
+    expect(authorizeCron(req("Bearer wrong"), "job")!.status).toBe(401);
+    expect(authorizeCron(req("s3cret"), "job")!.status).toBe(401); // missing "Bearer " prefix
+  });
+
+  it("authorizes (null) on an exact bearer match", () => {
+    process.env.CRON_SECRET = "s3cret";
+    expect(authorizeCron(req("Bearer s3cret"), "job")).toBeNull();
   });
 });

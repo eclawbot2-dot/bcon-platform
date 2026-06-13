@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sweepAllSources } from "@/lib/rfp-autopilot";
 import { observeCronRun } from "@/lib/metrics";
-import { runCronJob } from "@/lib/cron";
+import { authorizeCron, runCronJob } from "@/lib/cron";
 
 // Scheduled sweep endpoint — intended to be hit by an external scheduler
 // (cron, Cloudflare Worker, GitHub Action) at least 6x per business day.
@@ -12,26 +12,6 @@ import { runCronJob } from "@/lib/cron";
 // trigger external scrapes (cost + abuse risk) and exposes the autopilot's
 // state across all tenants.
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return mismatch === 0;
-}
-
-function authorize(req: NextRequest): NextResponse | null {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    console.error("[cron/rfp-sweep] CRON_SECRET not configured");
-    return NextResponse.json({ error: "Cron not configured" }, { status: 503 });
-  }
-  const header = req.headers.get("authorization") ?? "";
-  const expected = `Bearer ${secret}`;
-  if (!timingSafeEqual(header, expected)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return null;
-}
 
 async function runSweep() {
   const start = Date.now();
@@ -51,7 +31,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function handlePost(req: NextRequest) {
-  const denied = authorize(req);
+  const denied = authorizeCron(req, "rfp-sweep");
   if (denied) return denied;
   const result = await runSweep();
   return NextResponse.json(result);
@@ -61,7 +41,7 @@ async function handlePost(req: NextRequest) {
 // Previously GET ran the full external scrape, so a "safe" verb triggered
 // outbound scraping cost as a side effect.
 export async function GET(req: NextRequest) {
-  const denied = authorize(req);
+  const denied = authorizeCron(req, "rfp-sweep");
   if (denied) return denied;
   return NextResponse.json({ ok: true, status: "ready", note: "POST to run the sweep; GET is status-only." });
 }

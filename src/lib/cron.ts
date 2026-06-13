@@ -2,6 +2,40 @@ import { NextResponse } from "next/server";
 import { observeCronRun } from "@/lib/metrics";
 import { reportError } from "@/lib/report-error";
 
+/** Constant-time string compare — avoids leaking the secret via timing. */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
+}
+
+/**
+ * Shared bearer-token gate for every /api/cron/* handler. The middleware
+ * matcher excludes /api/cron/* from session auth, so each cron route MUST
+ * authenticate itself with the shared CRON_SECRET.
+ *
+ * Fail-closed: a missing/blank secret returns 503 (never an open door), a
+ * mismatched/absent header returns 401. Returns `null` when authorized so
+ * callers can `const denied = authorizeCron(req, name); if (denied) return denied;`.
+ *
+ * This was previously copy-pasted (timingSafeEqual + authorize) into all
+ * nine cron route files; hoisting it removes that drift risk — a fix to the
+ * auth check now lands in exactly one place.
+ */
+export function authorizeCron(req: Request, name: string): NextResponse | null {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    console.error(`[cron/${name}] CRON_SECRET not configured`);
+    return NextResponse.json({ error: "Cron not configured" }, { status: 503 });
+  }
+  const header = req.headers.get("authorization") ?? "";
+  if (!timingSafeEqual(header, `Bearer ${secret}`)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return null;
+}
+
 /**
  * Top-level fault guard for cron route handlers.
  *

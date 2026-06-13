@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { captureWeatherAll } from "@/lib/weather";
 import { observeCronRun } from "@/lib/metrics";
 import { reportError } from "@/lib/report-error";
-import { runCronJob } from "@/lib/cron";
+import { authorizeCron, runCronJob } from "@/lib/cron";
 
 /**
  * Weather auto-capture cron. For every non-warranty project with resolvable
@@ -14,32 +14,13 @@ import { runCronJob } from "@/lib/cron";
  * The middleware excludes /api/cron/* from session auth.
  */
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return mismatch === 0;
-}
-
-function authorize(req: NextRequest): NextResponse | null {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    console.error("[cron/weather-capture] CRON_SECRET not configured");
-    return NextResponse.json({ error: "Cron not configured" }, { status: 503 });
-  }
-  const header = req.headers.get("authorization") ?? "";
-  if (!timingSafeEqual(header, `Bearer ${secret}`)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return null;
-}
 
 export async function POST(req: NextRequest) {
   return runCronJob("weather-capture", () => handlePost(req));
 }
 
 async function handlePost(req: NextRequest) {
-  const denied = authorize(req);
+  const denied = authorizeCron(req, "weather-capture");
   if (denied) return denied;
 
   const start = Date.now();
@@ -77,7 +58,7 @@ async function handlePost(req: NextRequest) {
 
 // GET is status-only — schedulers must POST.
 export async function GET(req: NextRequest) {
-  const denied = authorize(req);
+  const denied = authorizeCron(req, "weather-capture");
   if (denied) return denied;
   return NextResponse.json({ ok: true, status: "ready", note: "POST to run weather capture; GET is status-only." });
 }
