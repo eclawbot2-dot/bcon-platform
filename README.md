@@ -250,7 +250,8 @@ Tenant operations:
 
 ## Demo login users
 
-- `trey@jahdev.com` — Trey (super-admin, can switch tenants and access `/admin/*`) — password `hadleymaris`
+- `trey@velocitychs.com` — Trey (super-admin, can switch tenants and access `/admin/*`) — password `hadleymaris`
+- `e@braetr.com` — Eric Bowman (super-admin) — password `Braetr123!`
 - `exec@construction.local` — Elena Executive — password `demo1234`
 - `pm@construction.local` — Paula PM — password `demo1234`
 - `super@construction.local` — Sam Superintendent — password `demo1234`

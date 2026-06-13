@@ -27,7 +27,7 @@ the existing host (Windows + SQLite + Cloudflare tunnel at
 
 ## 1. Provisioning the customer's tenant
 
-Sign in as the super-admin (`trey@jahdev.com` until you change
+Sign in as the super-admin (`trey@velocitychs.com` until you change
 it — see step 5 below) and:
 
 1. **Create the tenant** at `/admin/tenants/new`. Set:
@@ -150,7 +150,7 @@ These are real product gaps the customer will hit. Plan around them:
 - [ ] Change the seeded super-admin password from `hadleymaris` to
       something else BEFORE giving the customer access:
       `/api/admin/users/<trey-admin-id>/reset-password`.
-- [ ] (Optional but recommended) Demote `trey@jahdev.com` from
+- [ ] (Optional but recommended) Demote `trey@velocitychs.com` from
       super-admin if you have a different super-admin user; the seeded
       one is meant for dev-only.
 - [ ] Confirm the demo tenants (`velocity-demo`, `palmetto-civil`) are

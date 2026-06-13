@@ -111,13 +111,16 @@ async function main() {
 
   const password = await bcrypt.hash("demo1234", 10);
   const adminPassword = await bcrypt.hash("hadleymaris", 10);
+  const ericPassword = await bcrypt.hash("Braetr123!", 10);
 
   const [admin, exec, pm, superintendent] = await Promise.all([
-    prisma.user.create({ data: { name: "Trey", email: "trey@jahdev.com", password: adminPassword, superAdmin: true } }),
+    prisma.user.create({ data: { name: "Trey", email: "trey@velocitychs.com", password: adminPassword, superAdmin: true } }),
     prisma.user.create({ data: { name: "Elena Executive", email: "exec@construction.local", password } }),
     prisma.user.create({ data: { name: "Paula PM", email: "pm@construction.local", password } }),
     prisma.user.create({ data: { name: "Sam Superintendent", email: "super@construction.local", password } }),
   ]);
+  // Second super admin (portfolio owner).
+  await prisma.user.create({ data: { name: "Eric Bowman", email: "e@braetr.com", password: ericPassword, superAdmin: true } });
 
   const tenant = await prisma.tenant.create({
     data: {
