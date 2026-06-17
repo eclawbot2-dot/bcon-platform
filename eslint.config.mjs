@@ -28,10 +28,16 @@ const eslintConfig = defineConfig([
     //     and close-on-route-change — both are documented, accepted patterns
     //     that cannot be expressed via a lazy useState initializer because the
     //     browser API is unavailable during server render.
+    //   - `react-hooks/preserve-manual-memoization`: flags a hand-written
+    //     `useMemo` whose dependency is an inline-derived value the compiler
+    //     cannot track (e.g. `eff = ready ? custom : default` in the sidebar
+    //     nav). The memo is correct; the compiler just declines to preserve
+    //     it — not a real bug.
     // Keep them as warnings (still visible) rather than build-blocking errors.
     rules: {
       "react-hooks/purity": "warn",
       "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
     },
   },
   {

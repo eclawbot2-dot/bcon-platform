@@ -135,12 +135,27 @@ export async function runCashflowForecast(ctx: WorkflowRunContext): Promise<Work
     }
     // Cash gap: money spent but not yet billed (underbilling) is a cash
     // drain; an EAC above contract means the remaining work erodes cash.
+    const contract = toNum(snap.totalContractValue) || toNum(snap.contractValue);
     const underbilled = costs - billed;
     if (underbilled > 0 && billed > 0 && underbilled / Math.max(1, billed) > 0.15) {
       out.push({
         title: `Cash-flow risk: ${p.code} underbilled`,
         body: `Costs-to-date exceed billings by $${Math.round(underbilled).toLocaleString()} (${Math.round((underbilled / Math.max(1, costs)) * 100)}% of cost). Accelerate billing to protect cash.`,
         severity: underbilled / Math.max(1, billed) > 0.3 ? "ALERT" : "WARN",
+        entityType: "AutomationCashflow",
+        entityId: p.id,
+        link: `/projects/${p.id}/financials`,
+        projectId: p.id,
+      });
+    }
+    // EAC overrun: forecast cost-at-completion exceeding the contract value
+    // means the remaining work is funded out of margin — a cash drain.
+    if (eacCost > 0 && contract > 0 && eacCost / contract > 1.02) {
+      const overrun = eacCost - contract;
+      out.push({
+        title: `Cash-flow risk: ${p.code} forecast overrun`,
+        body: `Forecast cost at completion ($${Math.round(eacCost).toLocaleString()}) exceeds the contract value ($${Math.round(contract).toLocaleString()}) by $${Math.round(overrun).toLocaleString()} (${Math.round((overrun / contract) * 100)}%). The remaining work erodes margin and cash.`,
+        severity: eacCost / contract > 1.08 ? "ALERT" : "WARN",
         entityType: "AutomationCashflow",
         entityId: p.id,
         link: `/projects/${p.id}/financials`,
