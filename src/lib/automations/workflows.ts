@@ -129,7 +129,11 @@ export async function runCashflowForecast(ctx: WorkflowRunContext): Promise<Work
     let eacCost = toNum(snap.forecastFinalCost);
     try {
       const f = await eacForecast(p.id, ctx.tenantId); // degrades to heuristic without a key
-      if (f.eacCost > 0) eacCost = f.eacCost;
+      // Only adopt the computed EAC when the forecast actually had cost signal.
+      // A "none"-confidence forecast neutrally returns eacCost = contract (no
+      // real data), so we must NOT let it drive an overrun alert — keep the
+      // snapshot's own forecastFinalCost (a real persisted number) instead.
+      if (f.confidence !== "none" && f.eacCost > 0) eacCost = f.eacCost;
     } catch {
       /* keep snapshot forecast */
     }
@@ -183,7 +187,20 @@ export async function runMarginFadeWarning(ctx: WorkflowRunContext): Promise<Wor
     let marginPct: number | null = null;
     try {
       const f = await eacForecast(p.id, ctx.tenantId);
-      marginPct = f.marginPct;
+      // A "none"-confidence forecast has no cost signal and neutrally returns
+      // marginPct = 0 — NOT a real forecast. Fall through to the persisted
+      // snapshot margin instead of flagging a fabricated full fade.
+      if (f.confidence !== "none") {
+        marginPct = f.marginPct;
+      } else {
+        const snap = await prisma.projectPnlSnapshot.findUnique({ where: { projectId: p.id } });
+        if (snap) {
+          const rev = toNum(snap.totalContractValue) || toNum(snap.contractValue);
+          const forecastCost = toNum(snap.forecastFinalCost);
+          // Only derive a margin when the snapshot carries a real forecast cost.
+          marginPct = rev > 0 && forecastCost > 0 ? ((rev - forecastCost) / rev) * 100 : null;
+        }
+      }
     } catch {
       const snap = await prisma.projectPnlSnapshot.findUnique({ where: { projectId: p.id } });
       if (snap) {

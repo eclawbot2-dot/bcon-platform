@@ -270,6 +270,116 @@ describe("bid-benchmark historical outlier detection", () => {
   });
 });
 
+describe("cashflow-forecast EAC overrun alert (C3 + idempotency)", () => {
+  // Seed a snapshot whose REAL persisted forecastFinalCost exceeds the
+  // contract value, with NO cost signal for the heuristic EAC (committedCost 0,
+  // %-complete 0, no journals) so eacForecast returns confidence "none" and the
+  // workflow keeps the snapshot's own number. The overrun alert must therefore
+  // fire off a real figure, never a fabricated contract*0.9.
+  it("raises an AutomationCashflow overrun alert from a real forecastFinalCost > contract, at the right severity, idempotently", async () => {
+    const t = await freshTenant("eac-overrun");
+    const proj = await makeProject(t.id, "EAC");
+    await prisma.projectPnlSnapshot.create({
+      data: {
+        projectId: proj.id,
+        totalContractValue: 1_000_000,
+        contractValue: 1_000_000,
+        billedToDate: 0,
+        costsToDate: 0,
+        committedCost: 0,
+        percentComplete: 0,
+        forecastFinalCost: 1_150_000, // 15% over contract → ALERT (>1.08)
+      },
+    });
+
+    const out = await engine.runWorkflowForTenant(t.id, "cashflow-forecast", "manual:test");
+    expect(out.status).toBe("SUCCESS");
+
+    const overruns = await prisma.alertEvent.findMany({
+      where: { tenantId: t.id, entityType: "AutomationCashflow", title: { contains: "forecast overrun" } },
+    });
+    expect(overruns.length).toBe(1);
+    expect(overruns[0].entityId).toBe(proj.id);
+    // 15% over contract crosses the 1.08 threshold → ALERT severity.
+    expect(overruns[0].severity).toBe("ALERT");
+    // The body must reflect the REAL forecast figure, not a fabricated 0.9.
+    expect(overruns[0].body).toContain("1,150,000");
+
+    // Idempotent: a second run must NOT create a duplicate (reconcile keeps the
+    // existing unacked alert in place).
+    const out2 = await engine.runWorkflowForTenant(t.id, "cashflow-forecast", "manual:test");
+    expect(out2.status).toBe("SUCCESS");
+    const after = await prisma.alertEvent.findMany({
+      where: { tenantId: t.id, entityType: "AutomationCashflow", title: { contains: "forecast overrun" } },
+    });
+    expect(after.length).toBe(1);
+    expect(after[0].id).toBe(overruns[0].id);
+  });
+
+  // C3 regression: with no cost data at all and a zero persisted forecast, the
+  // old code fabricated eacCost = contract*0.9 and would never (0.9 < 1.02) —
+  // but more importantly any baseline-variance / forecast it surfaced was
+  // invented. Assert NO overrun alert is produced from the no-data path.
+  it("produces NO fabricated overrun alert when there is no cost data (C3)", async () => {
+    const t = await freshTenant("eac-nodata");
+    const proj = await makeProject(t.id, "NOD");
+    await prisma.projectPnlSnapshot.create({
+      data: {
+        projectId: proj.id,
+        totalContractValue: 1_000_000,
+        contractValue: 1_000_000,
+        billedToDate: 0,
+        costsToDate: 0,
+        committedCost: 0,
+        percentComplete: 0,
+        forecastFinalCost: 0, // no real forecast persisted
+      },
+    });
+
+    const out = await engine.runWorkflowForTenant(t.id, "cashflow-forecast", "manual:test");
+    expect(out.status).toBe("SUCCESS");
+
+    const overruns = await prisma.alertEvent.findMany({
+      where: { tenantId: t.id, entityType: "AutomationCashflow", title: { contains: "forecast overrun" } },
+    });
+    expect(overruns.length).toBe(0);
+  });
+
+  // And the EAC forecast itself flags confidence "none" + a clear narrative
+  // instead of inventing contract*0.9 / contract*0.85 numbers.
+  it("eacForecast returns confidence 'none' with an explicit 'insufficient data' narrative when no cost signal exists", async () => {
+    const finance = await import("@/lib/finance-ai");
+    const t = await freshTenant("eac-conf");
+    const proj = await makeProject(t.id, "CNF");
+    await prisma.projectPnlSnapshot.create({
+      data: { projectId: proj.id, totalContractValue: 500_000, contractValue: 500_000, percentComplete: 0 },
+    });
+    const f = await finance.eacForecast(proj.id, t.id);
+    expect(f.confidence).toBe("none");
+    expect(f.eacCost).toBe(500_000); // neutral = contract, not 450_000 (0.9)
+    expect(f.variance).toBe(0);
+    expect(f.narrative.toLowerCase()).toContain("insufficient data");
+  });
+});
+
+describe("margin-fade-warning no-data guard (C3 sibling)", () => {
+  // A no-cost-signal project must NOT produce a fabricated margin-fade alert.
+  // eacForecast returns confidence "none" → the workflow must fall through to
+  // the snapshot (which has no real forecast cost) and skip, not flag a full
+  // 15-pt fade off a neutral marginPct of 0.
+  it("produces NO margin-fade alert when the forecast has no cost signal and no real snapshot forecast", async () => {
+    const t = await freshTenant("mf-nodata");
+    const proj = await makeProject(t.id, "MFN");
+    await prisma.projectPnlSnapshot.create({
+      data: { projectId: proj.id, totalContractValue: 1_000_000, contractValue: 1_000_000, forecastFinalCost: 0, forecastGrossMargin: 0, percentComplete: 0 },
+    });
+    const out = await engine.runWorkflowForTenant(t.id, "margin-fade-warning", "manual:test");
+    expect(out.status).toBe("SUCCESS");
+    const alerts = await prisma.alertEvent.findMany({ where: { tenantId: t.id, entityType: "AutomationMarginFade" } });
+    expect(alerts.length).toBe(0);
+  });
+});
+
 describe("LLM workflows: skip-vs-generate branch", () => {
   it("narrative-drafting and nl-copilot-digest SKIP cleanly with no_llm_key when no key is configured", async () => {
     const prev = process.env.ENABLE_LLM_CALLS;

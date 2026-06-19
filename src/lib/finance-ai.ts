@@ -449,12 +449,28 @@ export type EacForecast = {
   marginPct: number;
   variance: number;
   narrative: string;
+  /**
+   * Forecast confidence. "none" means we had NO cost signal (no committed
+   * cost, no meaningful %-complete, no journal burn) and therefore could not
+   * compute a real EAC — eacCost is set neutrally to contract and callers MUST
+   * NOT treat it as an overrun/variance signal. Previously this path silently
+   * fabricated `contract * 0.9`, presenting an invented number as a forecast.
+   */
+  confidence: "none" | "low" | "medium";
 };
 
 export async function eacForecast(projectId: string, tenantId: string): Promise<EacForecast> {
-  const project = await prisma.project.findFirst({ where: { id: projectId, tenantId } });
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, tenantId },
+    include: { budgets: { include: { lines: { select: { budgetAmount: true } } } } },
+  });
   if (!project) throw new Error("project not found");
   const snap = await prisma.projectPnlSnapshot.findUnique({ where: { projectId } });
+  // Real planned-cost baseline: sum of budget lines if the project has a
+  // budget. There is no single "planned cost" column, so the budget is the
+  // only honest source. When absent we omit the baseline-variance sentence
+  // entirely rather than invent one from a contract*0.85 assumption.
+  const plannedCost = project.budgets.flatMap((b) => b.lines).reduce((s, l) => s + toNum(l.budgetAmount), 0);
 
   // Pull real monthly journal burn to detect a trend.
   const journals = await prisma.journalEntryRow.findMany({
@@ -497,21 +513,51 @@ export async function eacForecast(projectId: string, tenantId: string): Promise<
       const wPct = pctComplete > 10 ? 0.35 : 0.1;
       const wBurn = recentAvgBurn > 0 ? 0.35 : 0;
       const wSum = wCommitted + wPct + wBurn;
-      const eacCost = wSum > 0
-        ? (wCommitted * eacCommitted + wPct * eacPct + wBurn * eacBurn) / wSum
-        : contract * 0.9; // blind fallback
       const eacRevenue = contract;
+
+      // Real cost signal = any of: committed cost, actual cost posted with a
+      // meaningful %-complete, or journal burn history. The pct-complete weight
+      // carries a 0.1 floor so wSum is never 0; that floor must NOT count as
+      // signal on its own (an all-zero snapshot with %-complete 0 has none).
+      const hasSignal = committed > 0 || recentAvgBurn > 0 || (actual > 0 && pctComplete > 5);
+
+      // No cost signal at all. We CANNOT forecast. Return a neutral result
+      // flagged confidence "none": eacCost = contract so eacMargin/variance are
+      // zero rather than a fabricated overrun. Callers must not raise
+      // overrun/variance alerts off a no-confidence forecast.
+      if (!hasSignal) {
+        return {
+          projectId,
+          eacCost: contract,
+          eacRevenue,
+          eacMargin: 0,
+          marginPct: 0,
+          variance: 0,
+          narrative: "Insufficient data to forecast: no committed cost, meaningful percent-complete, or journal burn history is available for this project. Capture budget commitments and post project costs to enable an EAC.",
+          confidence: "none",
+        };
+      }
+
+      const eacCost = (wCommitted * eacCommitted + wPct * eacPct + wBurn * eacBurn) / wSum;
       const eacMargin = eacRevenue - eacCost;
       const marginPct = eacRevenue > 0 ? (eacMargin / eacRevenue) * 100 : 0;
-      const originalCost = contract * 0.85; // assumed 15% margin plan
-      const variance = eacCost - originalCost;
+      // Baseline variance only when we have a REAL planned cost (sum of budget
+      // lines). Without a budget we omit the baseline-variance sentence rather
+      // than invent an originalCost from a contract*0.85 margin assumption.
+      const hasBaseline = plannedCost > 0;
+      const variance = hasBaseline ? eacCost - plannedCost : 0;
+      // Confidence: medium when committed-cost or strong %-complete drives it,
+      // low when only one weak signal (e.g. early burn) is present.
+      const confidence: "low" | "medium" = wCommitted > 0 || wPct >= 0.35 ? "medium" : "low";
 
       const parts: string[] = [];
       if (months.length > 0) parts.push(`${months.length} months of journal burn data reviewed.`);
       if (recentAvgBurn > 0) parts.push(`Trailing-3-month burn ≈ $${Math.round(recentAvgBurn).toLocaleString()}/mo.`);
       if (Math.abs(burnTrend) > 0.15) parts.push(`Burn rate ${burnTrend > 0 ? "accelerating" : "decelerating"} ${(Math.abs(burnTrend) * 100).toFixed(0)}% vs prior 3 months.`);
-      if (variance > 0) parts.push(`EAC trending $${Math.abs(variance).toLocaleString()} over baseline (${((variance / Math.max(1, originalCost)) * 100).toFixed(1)}%). Commit review + scope verification recommended.`);
-      else parts.push(`EAC trending $${Math.abs(variance).toLocaleString()} under baseline. Potential margin recapture; reforecast recommended.`);
+      if (hasBaseline) {
+        if (variance > 0) parts.push(`EAC trending $${Math.abs(variance).toLocaleString()} over budget baseline (${((variance / Math.max(1, plannedCost)) * 100).toFixed(1)}%). Commit review + scope verification recommended.`);
+        else parts.push(`EAC trending $${Math.abs(variance).toLocaleString()} under budget baseline. Potential margin recapture; reforecast recommended.`);
+      }
       parts.push(`Blended forecast weights: committed ${Math.round(wCommitted / Math.max(wSum, 0.01) * 100)}% · pct-complete ${Math.round(wPct / Math.max(wSum, 0.01) * 100)}% · burn-rate ${Math.round(wBurn / Math.max(wSum, 0.01) * 100)}%.`);
 
       return {
@@ -522,6 +568,7 @@ export async function eacForecast(projectId: string, tenantId: string): Promise<
         marginPct,
         variance,
         narrative: parts.join(" "),
+        confidence,
       };
     },
   });
