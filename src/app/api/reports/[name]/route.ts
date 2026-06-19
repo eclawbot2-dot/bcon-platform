@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenant } from "@/lib/tenant";
+import { requireManager } from "@/lib/permissions";
+import { recordAudit } from "@/lib/audit";
 import { csvField } from "@/lib/csv";
 import {
   wipReport,
@@ -26,12 +28,26 @@ import {
  */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ name: string }> }) {
   const tenant = await requireTenant();
+  // Financial/operational reports expose company-wide P&L, WIP, win-rate and
+  // bonding data — manager-class authority required (not just any tenant member).
+  const actor = await requireManager(tenant.id);
   const { name } = await ctx.params;
   const url = new URL(req.url);
   const format = (url.searchParams.get("format") ?? "json").toLowerCase();
 
   const data = await runReport(name, tenant.id, url);
   if (data === null) return NextResponse.json({ error: "unknown report" }, { status: 404 });
+
+  await recordAudit({
+    tenantId: tenant.id,
+    actorId: actor.userId,
+    actorName: actor.userName,
+    entityType: "Report",
+    entityId: name,
+    action: format === "csv" ? "EXPORT_CSV" : "READ",
+    after: { rowCount: countRows(data), format },
+    source: "api.reports",
+  });
 
   if (format === "csv") {
     const csv = toCsvFromArray(data);
@@ -43,6 +59,20 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ name: strin
     });
   }
   return NextResponse.json({ data });
+}
+
+/** Best-effort row count for the audit record, mirroring toCsvFromArray's
+ *  notion of "the exported rows" for each report shape. */
+function countRows(data: unknown): number {
+  if (Array.isArray(data)) return data.length;
+  if (data && typeof data === "object") {
+    for (const key of ["byOwner", "items", "rows"]) {
+      const v = (data as Record<string, unknown>)[key];
+      if (Array.isArray(v)) return v.length;
+    }
+    return 1;
+  }
+  return data == null ? 0 : 1;
 }
 
 /**

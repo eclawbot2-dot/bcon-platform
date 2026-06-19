@@ -1,9 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
+import { requireManager } from "@/lib/permissions";
+import { recordAudit } from "@/lib/audit";
 import { csvResponse, toCsv } from "@/lib/csv";
 
 export async function GET(req: Request) {
   const tenant = await requireTenant();
+  // General-ledger journal export is financial data — manager-class only.
+  const actor = await requireManager(tenant.id);
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
   const rows = await prisma.journalEntryRow.findMany({
@@ -14,6 +18,16 @@ export async function GET(req: Request) {
     include: { project: true },
     orderBy: { entryDate: "desc" },
     take: 5000,
+  });
+  await recordAudit({
+    tenantId: tenant.id,
+    actorId: actor.userId,
+    actorName: actor.userName,
+    entityType: "JournalExport",
+    entityId: projectId ?? "all",
+    action: "EXPORT_CSV",
+    after: { rowCount: rows.length, projectId: projectId ?? null },
+    source: "api.export.journal",
   });
   const out = rows.map((r) => ({
     date: r.entryDate.toISOString().slice(0, 10),
