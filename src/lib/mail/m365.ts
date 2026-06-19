@@ -28,6 +28,32 @@ import type {
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
+/** Per-request timeout and retry budget for Graph reads. */
+const GRAPH_TIMEOUT_MS = Number(process.env.M365_GRAPH_TIMEOUT_MS ?? 20_000);
+const GRAPH_MAX_RETRIES = Number(process.env.M365_GRAPH_MAX_RETRIES ?? 3);
+const GRAPH_BACKOFF_BASE_MS = 500;
+const GRAPH_BACKOFF_CAP_MS = 30_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Exponential backoff with full jitter, capped. */
+function backoffMs(attempt: number): number {
+  const exp = Math.min(GRAPH_BACKOFF_CAP_MS, GRAPH_BACKOFF_BASE_MS * 2 ** attempt);
+  return Math.round(exp / 2 + Math.random() * (exp / 2));
+}
+
+/** Honor a Retry-After header (seconds) when present, else exponential backoff. */
+function retryAfterMs(res: Response, attempt: number): number {
+  const ra = res.headers.get("retry-after");
+  if (ra) {
+    const secs = Number(ra);
+    if (Number.isFinite(secs) && secs >= 0) return Math.min(GRAPH_BACKOFF_CAP_MS, secs * 1000);
+  }
+  return backoffMs(attempt);
+}
+
 /**
  * Graph APPLICATION permissions an admin must grant + consent for the full
  * workspace-transparency set. Rendered in the connect/settings UI.
@@ -80,15 +106,52 @@ export class M365MailProvider implements MailProvider {
     return tok.access_token;
   }
 
+  /**
+   * Single Graph GET with a per-request timeout and bounded exponential
+   * backoff. Graph throttles aggressively (429) and has transient 503s; a
+   * naked fetch with no timeout can also hang a mailbox ingest indefinitely.
+   *
+   *   - AbortController caps each attempt at GRAPH_TIMEOUT_MS.
+   *   - 429/503 retry up to GRAPH_MAX_RETRIES with exponential backoff,
+   *     honoring a Retry-After header (seconds) when present.
+   *   - Network/timeout errors retry the same way.
+   * Non-retryable HTTP errors (4xx other than 429) throw immediately.
+   */
   private async graph<T>(path: string): Promise<T> {
-    const token = await this.token();
     const url = path.startsWith("http") ? path : `${GRAPH}${path}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      throw new Error(`graph ${url} ${res.status}: ${t.slice(0, 400)}`);
+    let lastErr: unknown;
+    for (let attempt = 0; attempt <= GRAPH_MAX_RETRIES; attempt++) {
+      const token = await this.token();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), GRAPH_TIMEOUT_MS);
+      try {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal });
+        if (res.ok) return (await res.json()) as T;
+
+        const retryable = res.status === 429 || res.status === 503;
+        if (retryable && attempt < GRAPH_MAX_RETRIES) {
+          await sleep(retryAfterMs(res, attempt));
+          continue;
+        }
+        const t = await res.text().catch(() => "");
+        throw new Error(`graph ${url} ${res.status}: ${t.slice(0, 400)}`);
+      } catch (err) {
+        lastErr = err;
+        // Abort (timeout) and network errors are transient — back off + retry.
+        // A thrown HTTP error from above is an Error with the status baked in;
+        // only retry transient (abort/network) failures, not deterministic 4xx.
+        const isAbort = err instanceof Error && err.name === "AbortError";
+        const isNetwork = err instanceof TypeError; // fetch network failures
+        if ((isAbort || isNetwork) && attempt < GRAPH_MAX_RETRIES) {
+          await sleep(backoffMs(attempt));
+          continue;
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
     }
-    return (await res.json()) as T;
+    throw lastErr instanceof Error ? lastErr : new Error(`graph ${url} failed after retries`);
   }
 
   async verify(): Promise<void> {
