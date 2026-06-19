@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkProdSecrets, DEV_VAULT_KEY_DEFAULT } from "../src/lib/env-guard";
+import { checkProdSecrets, assertDeliveryTransports, DEV_VAULT_KEY_DEFAULT } from "../src/lib/env-guard";
 
 /**
  * Production secret guard. In production the app must refuse to boot when
@@ -47,13 +47,50 @@ describe("env-guard checkProdSecrets", () => {
     ).toThrow(/too short/);
   });
 
-  it("passes in production when both secrets are strong + non-default (NEXTAUTH_SECRET)", () => {
+  it("passes in production when secrets are strong AND delivery transports are real", () => {
     expect(() =>
       checkProdSecrets({
         NODE_ENV: "production",
         BCON_VAULT_KEY: "a".repeat(40),
         NEXTAUTH_SECRET: "b".repeat(40),
+        EMAIL_TRANSPORT: "resend",
+        NOTIFY_TRANSPORT: "email",
       } as NodeJS.ProcessEnv),
     ).not.toThrow();
+  });
+
+  it("throws in production when EMAIL_TRANSPORT is log/unset (mail silently dropped)", () => {
+    expect(() =>
+      checkProdSecrets({
+        NODE_ENV: "production",
+        BCON_VAULT_KEY: "a".repeat(40),
+        NEXTAUTH_SECRET: "b".repeat(40),
+        NOTIFY_TRANSPORT: "email",
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/EMAIL_TRANSPORT/);
+  });
+});
+
+describe("env-guard assertDeliveryTransports", () => {
+  it("is a no-op outside production", () => {
+    expect(() => assertDeliveryTransports({ NODE_ENV: "test" } as NodeJS.ProcessEnv)).not.toThrow();
+  });
+
+  it("throws when NOTIFY_TRANSPORT resolves to console in production", () => {
+    expect(() =>
+      assertDeliveryTransports({ NODE_ENV: "production", EMAIL_TRANSPORT: "resend", NOTIFY_TRANSPORT: "console" } as NodeJS.ProcessEnv),
+    ).toThrow(/NOTIFY_TRANSPORT/);
+  });
+
+  it("a RESEND_API_KEY makes NOTIFY_TRANSPORT default to email (no throw)", () => {
+    expect(() =>
+      assertDeliveryTransports({ NODE_ENV: "production", EMAIL_TRANSPORT: "resend", RESEND_API_KEY: "re_x" } as NodeJS.ProcessEnv),
+    ).not.toThrow();
+  });
+
+  it("unset NOTIFY_TRANSPORT with no RESEND_API_KEY throws (resolves to console)", () => {
+    expect(() =>
+      assertDeliveryTransports({ NODE_ENV: "production", EMAIL_TRANSPORT: "m365" } as NodeJS.ProcessEnv),
+    ).toThrow(/console/);
   });
 });

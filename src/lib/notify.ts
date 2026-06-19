@@ -30,6 +30,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getQueue } from "@/lib/queue";
+import { sendEmail } from "@/lib/email";
 import type { AlertEvent, Watcher } from "@prisma/client";
 
 export type NotificationPayload = {
@@ -92,6 +93,53 @@ class NoopTransport implements Transport {
   }
 }
 
+/**
+ * Real email transport. Delivers each notification to the recipient's email
+ * via the shared transactional sender (src/lib/email.ts — Resend / M365 /
+ * SendGrid / SMTP, selected by EMAIL_TRANSPORT). This is the adapter the
+ * module doc promised: with NOTIFY_TRANSPORT=email (or =resend) plus a
+ * configured EMAIL_TRANSPORT, computed alerts actually reach a human.
+ *
+ * A recipient without an email is skipped (logged) rather than silently
+ * dropped. sendEmail never throws (returns ok:false on failure); we surface
+ * a non-ok result so the queue handler logs it.
+ */
+class EmailTransport implements Transport {
+  name = "email";
+  async send(recipient: Recipient, payload: NotificationPayload): Promise<void> {
+    if (!recipient.email) {
+      console.warn(`[notify:${this.name}] recipient ${recipient.userId} has no email; skipping`);
+      return;
+    }
+    const sev = payload.severity ?? "INFO";
+    const linkLine = payload.link ? `\n\nOpen: ${absoluteLink(payload.link)}` : "";
+    const text = `${payload.body}${linkLine}`;
+    const html =
+      `<p>${escapeHtml(payload.body).replace(/\n/g, "<br>")}</p>` +
+      (payload.link ? `<p><a href="${escapeHtml(absoluteLink(payload.link))}">Open in bcon</a></p>` : "");
+    const res = await sendEmail({
+      to: recipient.email,
+      subject: `[bcon${sev !== "INFO" ? ` ${sev}` : ""}] ${payload.subject}`,
+      text,
+      html,
+    });
+    if (!res.ok) {
+      throw new Error(`email transport delivery failed (${res.transport}): ${res.error ?? "unknown"}`);
+    }
+  }
+}
+
+/** Resolve a possibly-relative link to an absolute URL for emails. */
+function absoluteLink(link: string): string {
+  if (/^https?:\/\//i.test(link)) return link;
+  const base = (process.env.APP_URL ?? process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
+  return base ? `${base}${link.startsWith("/") ? "" : "/"}${link}` : link;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 let activeTransport: Transport = new ConsoleTransport();
 
 /**
@@ -104,16 +152,50 @@ export function setNotifyTransport(transport: Transport): void {
 }
 
 /**
- * Resolve transport from env at module load. Future: detect Resend /
- * Postmark / SES configuration and instantiate the matching adapter.
+ * Resolve the active transport from env.
+ *
+ * NOTIFY_TRANSPORT selects the adapter:
+ *   - "email" / "resend" / "m365" / "smtp" / "sendgrid" → real email delivery
+ *     via src/lib/email.ts (which itself picks the provider from
+ *     EMAIL_TRANSPORT). Any of these aliases routes through EmailTransport so
+ *     operators can set NOTIFY_TRANSPORT=email and configure the provider once
+ *     via EMAIL_TRANSPORT.
+ *   - "noop" → silent (testing).
+ *   - "console" (default) → stderr only; dev/CI safe, never reaches a human.
+ *
+ * Convenience: if NOTIFY_TRANSPORT is unset but RESEND_API_KEY is present, we
+ * default to the real email transport — a configured key is a strong signal
+ * the operator wants delivery, not console.
+ *
+ * Production guard: in production the console transport means computed alerts
+ * never reach a human. Mirror queue.ts — refuse to boot with a no-delivery
+ * transport in production so a misconfiguration fails loud at startup instead
+ * of silently swallowing every notification.
  */
-function bootstrapTransport(): void {
-  const choice = (process.env.NOTIFY_TRANSPORT ?? "console").toLowerCase();
-  if (choice === "noop") {
-    activeTransport = new NoopTransport();
+export function resolveNotifyTransportFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): Transport {
+  let choice = (env.NOTIFY_TRANSPORT ?? "").toLowerCase();
+  if (!choice) choice = env.RESEND_API_KEY ? "email" : "console";
+
+  const emailAliases = new Set(["email", "resend", "m365", "smtp", "sendgrid"]);
+  let transport: Transport;
+  if (emailAliases.has(choice)) transport = new EmailTransport();
+  else if (choice === "noop") transport = new NoopTransport();
+  else transport = new ConsoleTransport();
+
+  if (nodeEnv === "production" && (transport.name === "console" || transport.name === "noop")) {
+    throw new Error(
+      `[notify] NOTIFY_TRANSPORT resolves to "${transport.name}" in production — computed alerts would never reach a human. ` +
+        `Set NOTIFY_TRANSPORT=email (and configure EMAIL_TRANSPORT + provider creds), or NOTIFY_TRANSPORT=resend with RESEND_API_KEY.`,
+    );
   }
-  // "resend" / "postmark" / "ses" wiring goes here once the adapter
-  // packages are installed. For now those modes fall through to console.
+  return transport;
+}
+
+function bootstrapTransport(): void {
+  activeTransport = resolveNotifyTransportFromEnv();
 }
 
 bootstrapTransport();

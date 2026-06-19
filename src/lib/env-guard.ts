@@ -60,6 +60,34 @@ export function checkProdSecrets(env: NodeJS.ProcessEnv): void {
   assertStrong("BCON_VAULT_KEY", env.BCON_VAULT_KEY);
   // NextAuth secret — accept either env name (NextAuth v5 reads both).
   assertStrong("AUTH_SECRET/NEXTAUTH_SECRET", env.AUTH_SECRET ?? env.NEXTAUTH_SECRET);
+  // Delivery transports must not be no-op in production: a "log" email
+  // transport silently drops password resets/invites, and a "console" notify
+  // transport means computed alerts never reach a human.
+  assertDeliveryTransports(env);
+}
+
+/**
+ * Refuse to boot in production with a no-delivery email or notification
+ * transport. Kept here (no imports of email.ts/notify.ts) to avoid pulling
+ * those modules — and their side effects — into the boot guard.
+ */
+export function assertDeliveryTransports(env: NodeJS.ProcessEnv): void {
+  if (env.NODE_ENV !== "production") return;
+  const emailTransport = (env.EMAIL_TRANSPORT ?? "log").toLowerCase();
+  if (emailTransport === "log") {
+    throw new Error(
+      "[env-guard] EMAIL_TRANSPORT is 'log' (or unset) in production — emails (password resets, invites, alerts) " +
+        "would be silently dropped. Set EMAIL_TRANSPORT to resend/m365/sendgrid/smtp and configure its credentials.",
+    );
+  }
+  let notifyTransport = (env.NOTIFY_TRANSPORT ?? "").toLowerCase();
+  if (!notifyTransport) notifyTransport = env.RESEND_API_KEY ? "email" : "console";
+  if (notifyTransport === "console" || notifyTransport === "noop") {
+    throw new Error(
+      `[env-guard] NOTIFY_TRANSPORT resolves to '${notifyTransport}' in production — computed alerts would never reach a human. ` +
+        "Set NOTIFY_TRANSPORT=email (or =resend with RESEND_API_KEY).",
+    );
+  }
 }
 
 let ran = false;

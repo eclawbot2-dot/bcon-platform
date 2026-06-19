@@ -28,6 +28,24 @@ export type EmailMessage = {
   replyTo?: string;
 };
 
+/**
+ * In production the default "log" transport silently DROPS every email —
+ * password resets, guest/portal invites, alert notifications — while reporting
+ * success. That is a data-loss / lockout class of bug. This module defends
+ * against it on two layers:
+ *   - boot/CI: src/lib/env-guard.ts `assertDeliveryTransports` throws if
+ *     EMAIL_TRANSPORT is log (or unset) in production (runs at import, so a
+ *     misconfigured prod build fails fast). env-guard owns boot enforcement so
+ *     this module isn't pulled into the guard's import graph.
+ *   - runtime: sendEmail() (below) returns ok:false for a log send in
+ *     production so a caller (e.g. password reset) surfaces a real failure
+ *     instead of pretending the mail went out.
+ * Both are no-ops outside production so dev/CI keep their log-only default.
+ */
+export function isLogTransport(transport: string): boolean {
+  return transport === "log";
+}
+
 export async function sendEmail(msg: EmailMessage): Promise<{ ok: boolean; transport: string; id?: string; error?: string }> {
   const transport = (process.env.EMAIL_TRANSPORT ?? "log").toLowerCase();
   const from = process.env.EMAIL_FROM ?? "no-reply@bcon.local";
@@ -36,6 +54,16 @@ export async function sendEmail(msg: EmailMessage): Promise<{ ok: boolean; trans
     if (transport === "sendgrid") return await sendViaSendgrid(msg, from);
     if (transport === "m365") return await sendViaM365(msg);
     if (transport === "smtp") return await sendViaSmtp(msg, from);
+    // log-only transport (explicit "log" or any unrecognized value). In
+    // production this is a misconfiguration — the email is NOT sent — so fail
+    // loud (ok:false) rather than report a false success.
+    if (!isLogTransport(transport)) {
+      log.warn("unknown EMAIL_TRANSPORT; falling back to log behavior", { module: "email", transport });
+    }
+    if (process.env.NODE_ENV === "production") {
+      log.error("email NOT sent: log-only transport in production", { module: "email", to: msg.to, subject: msg.subject });
+      return { ok: false, transport: "log", error: "EMAIL_TRANSPORT=log drops mail in production; configure a real transport" };
+    }
     log.info("email (log-only transport)", { module: "email", to: msg.to, subject: msg.subject });
     return { ok: true, transport: "log" };
   } catch (err) {

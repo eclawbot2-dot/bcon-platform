@@ -41,6 +41,14 @@ jobs:
       NEXTAUTH_SECRET: ci-strong-nextauth-secret-0123456789abcdef0123456789abcdef
       AUTH_SECRET: ci-strong-auth-secret-0123456789abcdef0123456789abcdef
       BCON_VAULT_KEY: ci-strong-vault-key-0123456789abcdef0123456789abcdef
+      # Delivery transports: env-guard refuses to boot in production with a
+      # no-op email/notify transport (a "log" email transport silently drops
+      # password resets/invites; a "console" notify transport never reaches a
+      # human). The production `next build` evaluates env-guard, so configure
+      # real transport names here. No provider creds are present, so nothing is
+      # actually sent during CI — only the transport selection is exercised.
+      EMAIL_TRANSPORT: resend
+      NOTIFY_TRANSPORT: email
     steps:
       - uses: actions/checkout@v4
 
