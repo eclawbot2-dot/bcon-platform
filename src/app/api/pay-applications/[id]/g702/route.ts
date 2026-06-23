@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
+import { requireManager } from "@/lib/permissions";
 import { sumMoney, subtractMoney, addMoney, toNum, type MoneyLike } from "@/lib/money";
 
 /**
@@ -19,6 +20,11 @@ import { sumMoney, subtractMoney, addMoney, toNum, type MoneyLike } from "@/lib/
  */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const tenant = await requireTenant();
+  // The G702/G703 leaks full AIA progress-billing financials (contract sum,
+  // change orders, completed/stored, retainage, current payment due, full
+  // schedule of values) — manager-class authority required, not just any
+  // tenant member.
+  await requireManager(tenant.id);
   const { id } = await ctx.params;
   const payApp = await prisma.payApplication.findFirst({
     where: { id, project: { tenantId: tenant.id } },

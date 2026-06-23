@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireManager } from "@/lib/permissions";
 import { toNum, sumMoney } from "@/lib/money";
 import { noStore } from "@/lib/http-cache";
 
@@ -41,6 +42,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
   if (!membership && !session.superAdmin) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+
+  // Burndown exposes per-project P&L/WIP (contract value, margin, budgets,
+  // forecast variance, billed, retainage, balance-to-finish) — the same
+  // financial data class the WIP/reports endpoints gate behind manager-class
+  // authority. Any tenant member must not be able to pull it.
+  await requireManager(project.tenantId);
 
   const [budgets, payAppLines] = await Promise.all([
     prisma.budget.findMany({
