@@ -26,19 +26,19 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.8.0",
+    "better-sqlite3": "^12.11.1",
     "clsx": "^2.1.1",
-    "dotenv": "^17.3.1",
-    "lucide-react": "^1.0.1",
-    "next": "16.2.6",
+    "dotenv": "^17.4.2",
+    "lucide-react": "^1.22.0",
+    "next": "16.2.9",
     "next-auth": "^5.0.0-beta.30",
     "node-html-parser": "^7.1.0",
-    "pg": "^8.21.0",
+    "pg": "^8.22.0",
     "prisma": "^7.5.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "tailwind-merge": "^3.5.0",
-    "zod": "^4.3.6"
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -47,10 +47,10 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
-    "tsx": "^4.21.0",
+    "tsx": "^4.22.4",
     "typescript": "^5",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.9"
   }
 }
